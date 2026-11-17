@@ -2,16 +2,16 @@
 
 Casualties Unknown 的客户端背包物品终端。阶段 1 聚焦后端、兼容性边界和可验证的测试窗口。
 
-## 阶段 1 已交付
+## 阶段 2 已交付
 
-- 只读取本地玩家的 `GetAllItemsThorough()` 物品实例，按实例身份去重。
-- `All items (merged)` 按精确物品 ID 汇总数量；`By container` 按容器身份分组。
-- 保留原生物品引用、当前名称和 Sprite，搜索扩展接口可被拼音 mod 注册。
-- CCL 独立设置分类：终端按键（默认 F7）、按容器显示、拼音 provider 开关。
-- 游戏内 IMGUI 测试窗口、`PlayerCamera.HandleInput` 输入门、Together 聊天输入可选门。
+- 只读取本地玩家的真实物品实例，按实例身份去重；不复制物品、不修改真实容器层级。
+- AE2 风格平铺网格按精确物品 ID（或容器 + ID）聚合数量，并保留一个真实实例作为原生交互代表。
+- 每个聚合格使用游戏原版 `ContainerItem` / `InvButton` 外观和引用，点击、拖动、电池、容器、组合与装备操作继续进入原版处理管线。
+- 搜索、按容器显示、拼音 provider 和 CCL 独立设置继续可用；交互前后都会校验本地物品归属。
+- 输入遮罩会阻止终端下方的世界拾取与释放回退，并在关闭、失焦、死亡或角色切换时恢复移动、鼠标和原生 Canvas 状态。
 - 客机侧软集成 Together，不添加自定义网络消息，不要求主机安装本 mod。
 
-阶段 1 的测试窗口只选中真实物品实例并做本地归属二次校验；“Original item menu”和拖拽按钮目前是原版交互桥接占位，完整原版 UI 交互在阶段 2 完成，见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+原版 Canvas、`ContainerItem` prefab、Harmony 输入钩子以及 Together 主客机链路仍需在目标游戏版本中实机验收；自动化测试只覆盖核心投影和搜索逻辑，见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 ## 构建
 
