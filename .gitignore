@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+dist/
+research/
+TestResults/
+.vs/
+*.user
+*.suo
+*.log
+*.dll
+*.pdb
+.env
