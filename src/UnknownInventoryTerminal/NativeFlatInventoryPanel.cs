@@ -50,7 +50,9 @@ namespace UnknownInventoryTerminal
         private InventoryViewMode _mode;
         private bool _visible, _dirty = true, _prefabWarning;
 
-        internal NativeFlatInventoryPanel(ManualLogSource log) { _log = log; }
+        private readonly ContainerPlacementPanel _placement;
+
+        internal NativeFlatInventoryPanel(ManualLogSource log) { _log = log; _placement = new ContainerPlacementPanel(log); }
 
         internal bool Contains(GameObject target) => _root && target &&
             (target.transform == _root!.transform || target.transform.IsChildOf(_root.transform));
@@ -82,6 +84,7 @@ namespace UnknownInventoryTerminal
                 EnsureRoot();
                 ApplyLayout();
                 Synchronize();
+                _placement.Refresh();
             }
             if (_root) _root!.SetActive(ready);
         }
@@ -131,7 +134,8 @@ namespace UnknownInventoryTerminal
             viewportRect.anchorMin = Vector2.zero;
             viewportRect.anchorMax = Vector2.one;
             viewportRect.offsetMin = new Vector2(6, 6);
-            viewportRect.offsetMax = new Vector2(-6, -42);
+            // Reserve fixed space so starting a drag cannot move the source tiles.
+            viewportRect.offsetMax = new Vector2(-6, -120);
             viewport.GetComponent<Image>().color = Color.clear;
 
             var content = new GameObject("Native item groups", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -165,7 +169,8 @@ namespace UnknownInventoryTerminal
             _empty.rectTransform.anchorMin = Vector2.zero;
             _empty.rectTransform.anchorMax = Vector2.one;
             _empty.rectTransform.offsetMin = new Vector2(12, 12);
-            _empty.rectTransform.offsetMax = new Vector2(-12, -12);
+            _empty.rectTransform.offsetMax = new Vector2(-12, -120);
+            _placement.Attach(panel.transform);
             _dirty = true;
             ApplyLayout();
         }
@@ -377,6 +382,7 @@ namespace UnknownInventoryTerminal
 
         public void Dispose()
         {
+            _placement.Dispose();
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
             _panel = null;

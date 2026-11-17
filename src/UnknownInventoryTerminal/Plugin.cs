@@ -22,8 +22,8 @@ namespace UnknownInventoryTerminal
         public const string PluginGuid = "com.unknown.inventoryterminal";
         /// <summary>Human-readable plugin name.</summary>
         public const string PluginName = "Unknown Inventory Terminal";
-        /// <summary>Stage-two plugin version.</summary>
-        public const string PluginVersion = "0.2.0";
+        /// <summary>Plugin version.</summary>
+        public const string PluginVersion = "0.3.0";
         internal static Plugin? Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; } = null!;
         internal static bool IsVisible => Instance?._window?.Visible == true;
@@ -45,6 +45,7 @@ namespace UnknownInventoryTerminal
         {
             Instance = this; Log = Logger;
             SettingsBridge.Initialize(Config);
+            ContainerPlacement.Initialize(Config);
             _harmony = new Harmony(PluginGuid);
             _inputReady = GamePatches.Apply(_harmony, Logger);
             _shield = new InputShield();
@@ -235,6 +236,8 @@ namespace UnknownInventoryTerminal
         {
             if (!hit.gameObject || !PlayerCamera.main) return false;
             var camera = PlayerCamera.main;
+            var placement = hit.gameObject.GetComponent<ContainerPlacementTarget>();
+            if (placement && !placement.IsValid(camera)) return false;
             if (camera.containerMenu && hit.gameObject.transform.IsChildOf(camera.containerMenu.transform) &&
                 (!camera.currentContainer || !GameInventoryAdapter.Owns(camera.body, camera.currentContainer.GetComponent<Item>()))) return false;
             var button = hit.gameObject.GetComponent<InvButton>();
@@ -457,23 +460,41 @@ namespace UnknownInventoryTerminal
         }
         private static IEnumerable<Item> EnumerateItems(Body body)
         {
-            var pending = new Stack<Item>(body.GetSurfaceInventoryItems());
-            var surfaceContainers = new HashSet<int>();
-            foreach (var root in pending)
-                if (root && root.container) surfaceContainers.Add(root.GetInstanceID());
+            // Body.GetAllItemsThorough() is the game's inventory projection: it
+            // includes each held-slot/wearable root plus the ordinary Item children
+            // directly inside those containers. GetSurfaceInventoryItems() identifies
+            // the roots, so only a container that is itself in a body slot/wearable
+            // slot is filtered out; ordinary slot items remain visible.
+            var surfaceRoots = body.GetSurfaceInventoryItems();
+            var hiddenContainerShells = new HashSet<int>();
+            foreach (var root in surfaceRoots)
+                if (root && root.container) hiddenContainerShells.Add(root.GetInstanceID());
+
             var visited = new HashSet<int>();
+            foreach (var item in body.GetAllItemsThorough())
+            {
+                if (!item || !visited.Add(item.GetInstanceID())) continue;
+                if (!hiddenContainerShells.Contains(item.GetInstanceID())) yield return item;
+            }
+
+            // The stock thorough projection is one level deep. Preserve the
+            // terminal's nested-container support by walking only real Container
+            // children, while keeping the same root-shell filtering above.
+            var pending = new Stack<Item>();
+            foreach (var root in surfaceRoots)
+                if (root && root.container) pending.Push(root);
             while (pending.Count > 0)
             {
-                var item = pending.Pop();
-                if (!item || !visited.Add(item.GetInstanceID())) continue;
-                // Surface items include held slots and wearables. Hide only their
-                // container shells, while still traversing all contained items.
-                if (!surfaceContainers.Contains(item.GetInstanceID())) yield return item;
-                // Only direct Item children of real Containers are inventory edges.
-                if (!item.container) continue;
-                foreach (Transform child in item.transform)
-                    if (child.TryGetComponent<Item>(out var contained) && contained.TryGetParentContainer(out var parent) && parent == item.container)
-                        pending.Push(contained);
+                var containerItem = pending.Pop();
+                if (!containerItem || !containerItem.container) continue;
+                foreach (Transform child in containerItem.transform)
+                {
+                    if (!child.TryGetComponent<Item>(out var contained) ||
+                        !contained.TryGetParentContainer(out var parent) || parent != containerItem.container ||
+                        !visited.Add(contained.GetInstanceID())) continue;
+                    if (!hiddenContainerShells.Contains(contained.GetInstanceID())) yield return contained;
+                    if (contained.container) pending.Push(contained);
+                }
             }
         }
         private static string Key(UnityEngine.Object value) => value.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
