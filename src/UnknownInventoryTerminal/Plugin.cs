@@ -204,19 +204,30 @@ namespace UnknownInventoryTerminal
             if (!IsVisible) return hits;
             var result = new List<RaycastResult>();
             var plugin = Instance!;
-            bool? nativeSurface = null;
+            RaycastResult blocker = default;
+            bool hasBlocker = false;
+            bool? inventorySurface = null;
             foreach (var hit in hits)
             {
                 if (!hit.gameObject) continue;
-                if (plugin._shield?.IsBlocker(hit.gameObject) == true) { result.Add(hit); break; }
+                // The full-screen shield is deliberately below native inventory canvases.
+                // Unity can still report it first when canvases have different raycasters;
+                // defer it until we know no native/terminal surface is under the pointer.
+                if (plugin._shield?.IsBlocker(hit.gameObject) == true)
+                {
+                    if (!hasBlocker) { blocker = hit; hasBlocker = true; }
+                    continue;
+                }
                 var native = plugin._shield?.IsNativeControl(hit.gameObject) == true;
                 var terminal = plugin._nativePanel?.Contains(hit.gameObject) == true;
-                // Only the foremost inventory surface receives manual raycasts.
+                // Only the foremost inventory surface receives manual raycasts. Unknown UI
+                // remains opaque so clicks cannot leak through the modal terminal.
                 if (!native && !terminal) break;
-                if (nativeSurface.HasValue && nativeSurface.Value != native) continue;
-                nativeSurface = native;
+                if (inventorySurface.HasValue && inventorySurface.Value != native) continue;
+                inventorySurface = native;
                 if (ValidHit(hit)) result.Add(hit);
             }
+            if (result.Count == 0 && !inventorySurface.HasValue && hasBlocker) result.Add(blocker);
             return result;
         }
         internal static bool ValidHit(RaycastResult hit)
@@ -440,12 +451,17 @@ namespace UnknownInventoryTerminal
         private static IEnumerable<Item> EnumerateItems(Body body)
         {
             var pending = new Stack<Item>(body.GetSurfaceInventoryItems());
+            var surfaceContainers = new HashSet<int>();
+            foreach (var root in pending)
+                if (root && root.container) surfaceContainers.Add(root.GetInstanceID());
             var visited = new HashSet<int>();
             while (pending.Count > 0)
             {
                 var item = pending.Pop();
                 if (!item || !visited.Add(item.GetInstanceID())) continue;
-                yield return item;
+                // Surface items include held slots and wearables. Hide only their
+                // container shells, while still traversing all contained items.
+                if (!surfaceContainers.Contains(item.GetInstanceID())) yield return item;
                 // Only direct Item children of real Containers are inventory edges.
                 if (!item.container) continue;
                 foreach (Transform child in item.transform)
