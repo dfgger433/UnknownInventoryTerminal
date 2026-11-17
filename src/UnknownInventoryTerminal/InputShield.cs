@@ -10,6 +10,13 @@ namespace UnknownInventoryTerminal
     {
         private GameObject? _root;
         private readonly List<CanvasLease> _nativeCanvases = new List<CanvasLease>();
+        private bool _inventoryInteraction;
+
+        internal void SetNativeInventoryInteraction(bool active)
+        {
+            _inventoryInteraction = active;
+            if (_root && _root!.activeSelf) SetVisible(true);
+        }
 
         internal void SetVisible(bool visible)
         {
@@ -38,6 +45,7 @@ namespace UnknownInventoryTerminal
             if (visible && camera)
             {
                 Lift(camera.radialMenu ? camera.radialMenu.gameObject : null, true);
+                if (_inventoryInteraction) Lift(camera.mainCanvas ? camera.mainCanvas.gameObject : null, true);
                 // A container opened before the terminal may belong to another body.
                 var container = camera.currentContainer;
                 if (container && GameInventoryAdapter.Owns(camera.body, container.GetComponent<Item>()))

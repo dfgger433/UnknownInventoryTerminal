@@ -199,6 +199,7 @@ namespace UnknownInventoryTerminal
             if (camera.dragImage) camera.dragImage.enabled = false;
         }
         internal static bool CanInteract(PlayerCamera camera) => IsVisible && Instance!.SessionValid() && camera == Instance._sessionCamera;
+        internal static void SetNativeInventoryInteraction(bool active) => Instance?._shield?.SetNativeInventoryInteraction(active);
         internal static List<RaycastResult> FilterHits(List<RaycastResult> hits)
         {
             if (!IsVisible) return hits;
@@ -269,7 +270,7 @@ namespace UnknownInventoryTerminal
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromWorld", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformWorldActions", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromUI", nameof(PickupPrefix), log, nameof(PickupPostfix));
-            ready &= Patch(harmony, typeof(PlayerCamera), "HandleReleaseDragging", nameof(ReleasePrefix), log);
+            ready &= Patch(harmony, typeof(PlayerCamera), "HandleReleaseDragging", nameof(ReleasePrefix), log, nameof(ReleasePostfix));
             ready &= Patch(harmony, typeof(UIUtil), "GetEventSystemRaycastResults", null, log, nameof(RaycastPostfix));
             Patch(harmony, AccessTools.TypeByName("Together.Chat"), "Update", nameof(ChatPrefix), log);
             return ready;
@@ -323,6 +324,8 @@ namespace UnknownInventoryTerminal
                 Plugin.ReleaseSearchFocus();
             }
             if (__instance.dragItem && !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem)) Plugin.CancelDrag(__instance);
+            // Once a terminal item is picked up, expose the original inventory canvas as a drop target.
+            Plugin.SetNativeInventoryInteraction(__instance.dragItem);
             // Keep Together's world-hover branch from acquiring another body.
             __instance.radialOpen = true;
             return true;
@@ -364,6 +367,10 @@ namespace UnknownInventoryTerminal
             // into the world underneath the modal window.
             Plugin.CancelDrag(__instance);
             return false;
+        }
+        private static void ReleasePostfix(PlayerCamera __instance)
+        {
+            if (Plugin.IsVisible) Plugin.SetNativeInventoryInteraction(false);
         }
         private static bool WorldPrefix() => !Plugin.BlocksGameplay;
         private static bool ChatPrefix() => !Plugin.BlocksGameplay;

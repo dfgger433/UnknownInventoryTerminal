@@ -5,6 +5,7 @@ using System.Linq;
 using BepInEx.Logging;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnknownInventoryTerminal.Core;
 
@@ -23,14 +24,28 @@ namespace UnknownInventoryTerminal
             { Root = root; Button = button; Count = count; Caption = caption; InstanceKey = instanceKey; }
         }
 
+        // A grouped tile is a normal UI hit target, not an item action. Its click opens
+        // the instance picker; picker tiles use the original InvButton path instead.
+        private sealed class GroupClickTarget : MonoBehaviour, IPointerClickHandler
+        {
+            internal NativeFlatInventoryPanel Owner = null!;
+            internal (string Type, string Parent) Key = (string.Empty, string.Empty);
+            public void OnPointerClick(PointerEventData eventData)
+            {
+                if (eventData.button == PointerEventData.InputButton.Left) Owner.OpenSelection(Key);
+            }
+        }
+
         private readonly ManualLogSource _log;
         private readonly Dictionary<(string Type, string Parent), Tile> _tiles = new Dictionary<(string, string), Tile>();
         private GameObject? _root;
         private RectTransform? _panel, _content;
         private GridLayoutGroup? _grid;
         private ScrollRect? _scroll;
-        private TextMeshProUGUI? _empty;
+        private TextMeshProUGUI? _empty, _backLabel;
+        private Button? _backButton;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
+        private (string Type, string Parent)? _selectionKey;
         private Rect _bounds = new Rect(84, 164, 872, 426);
         private InventoryViewMode _mode;
         private bool _visible, _dirty = true, _prefabWarning;
@@ -60,6 +75,7 @@ namespace UnknownInventoryTerminal
         internal void SetVisible(bool visible)
         {
             _visible = visible;
+            if (!visible) _selectionKey = null;
             var ready = visible && PlayerCamera.main && PlayerCamera.main.body;
             if (ready)
             {
@@ -90,6 +106,24 @@ namespace UnknownInventoryTerminal
             _panel.pivot = new Vector2(0, 1);
             panel.GetComponent<Image>().color = new Color(0.12f, 0.14f, 0.16f, 0.98f);
 
+            var back = new GameObject("Back to item groups", typeof(RectTransform), typeof(Image), typeof(Button));
+            back.layer = panel.layer;
+            back.transform.SetParent(panel.transform, false);
+            var backRect = back.GetComponent<RectTransform>();
+            backRect.anchorMin = new Vector2(0, 1);
+            backRect.anchorMax = new Vector2(0, 1);
+            backRect.pivot = new Vector2(0, 1);
+            backRect.anchoredPosition = new Vector2(8, -8);
+            backRect.sizeDelta = new Vector2(260, 30);
+            back.GetComponent<Image>().color = new Color(0.24f, 0.29f, 0.34f, 1);
+            _backButton = back.GetComponent<Button>();
+            _backButton.onClick.AddListener(CloseSelection);
+            _backLabel = CreateText(back.transform, "Back label", 14, TextAlignmentOptions.Center);
+            _backLabel.rectTransform.anchorMin = Vector2.zero;
+            _backLabel.rectTransform.anchorMax = Vector2.one;
+            _backLabel.rectTransform.offsetMin = Vector2.zero;
+            _backLabel.rectTransform.offsetMax = Vector2.zero;
+
             var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewport.layer = panel.layer;
             viewport.transform.SetParent(panel.transform, false);
@@ -97,7 +131,7 @@ namespace UnknownInventoryTerminal
             viewportRect.anchorMin = Vector2.zero;
             viewportRect.anchorMax = Vector2.one;
             viewportRect.offsetMin = new Vector2(6, 6);
-            viewportRect.offsetMax = new Vector2(-6, -6);
+            viewportRect.offsetMax = new Vector2(-6, -42);
             viewport.GetComponent<Image>().color = Color.clear;
 
             var content = new GameObject("Native item groups", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -144,6 +178,23 @@ namespace UnknownInventoryTerminal
             _grid!.constraintCount = Mathf.Max(1, Mathf.FloorToInt((_bounds.width - 14) / 94));
         }
 
+        private (string Type, string Parent) RowKey(InventoryRow row) =>
+            (row.First.TypeId, _mode == InventoryViewMode.ByContainer ? row.First.ContainerKey : "");
+
+        private void OpenSelection((string Type, string Parent) key)
+        {
+            _selectionKey = key;
+            _dirty = true;
+            Synchronize();
+        }
+
+        private void CloseSelection()
+        {
+            _selectionKey = null;
+            _dirty = true;
+            Synchronize();
+        }
+
         private static bool InteractionInProgress() => PlayerCamera.main &&
             (PlayerCamera.main.dragItem || Input.GetKey(KeyBinds.GetBind("iteminteract")));
 
@@ -154,7 +205,6 @@ namespace UnknownInventoryTerminal
             if (!_content || !_empty) return;
             var rows = InventoryProjection.Build(_entries.Where(e => e.NativeItem is Item item && item),
                 _mode, SearchApi.Matchers, "");
-            var liveKeys = new HashSet<(string, string)>();
             var prefab = Resources.Load<GameObject>("ContainerItem");
             if (!prefab)
             {
@@ -164,36 +214,67 @@ namespace UnknownInventoryTerminal
                 _empty.gameObject.SetActive(true);
                 return;
             }
-            int index = 0;
-            foreach (var row in rows)
+            var liveKeys = new HashSet<(string Type, string Parent)>();
+            var selection = _selectionKey.HasValue
+                ? rows.FirstOrDefault(row => RowKey(row) == _selectionKey.Value) : null;
+            if (_selectionKey.HasValue && selection == null) _selectionKey = null;
+            if (_selectionKey.HasValue && selection != null)
             {
-                var key = (row.First.TypeId, _mode == InventoryViewMode.ByContainer ? row.First.ContainerKey : "");
-                liveKeys.Add(key);
-                try
+                _backButton!.gameObject.SetActive(true);
+                _backLabel!.text = "Back  |  " + selection.First.DisplayName + " (" + selection.Count.ToString(CultureInfo.InvariantCulture) + ")";
+                int index = 0;
+                foreach (var entry in selection.Instances)
                 {
-                    if (!_tiles.TryGetValue(key, out var tile) || !tile.Root || !tile.Button)
+                    var key = (Type: entry.InstanceKey, Parent: "selection");
+                    liveKeys.Add(key);
+                    try
                     {
-                        if (tile != null && tile.Root) DestroyTile(tile);
-                        tile = CreateTile(prefab, row.First);
-                        _tiles[key] = tile;
+                        if (!_tiles.TryGetValue(key, out var tile) || !tile.Root || !tile.Button)
+                        {
+                            if (tile != null && tile.Root) DestroyTile(tile);
+                            tile = CreateTile(prefab, entry, false);
+                            _tiles[key] = tile;
+                        }
+                        tile.Button.refItem = (Item)entry.NativeItem;
+                        tile.Button.slot = -1;
+                        tile.Button.UpdateRefs();
+                        tile.Button.UpdateGraphic();
+                        tile.InstanceKey = entry.InstanceKey;
+                        tile.Root.transform.SetSiblingIndex(index++);
+                        tile.Count.text = "1";
+                        tile.Caption.text = entry.DisplayName + "\n" + entry.ContainerName;
                     }
-                    // Preserve the chosen identity while it is still in the filtered group.
-                    var representative = row.Instances.FirstOrDefault(e => e.InstanceKey == tile.InstanceKey &&
-                        ReferenceEquals(e.NativeItem, tile.Button.refItem)) ?? row.First;
-                    if (!ReferenceEquals(tile.Button.refItem, representative.NativeItem))
-                    {
-                        tile.Button.refItem = (Item)representative.NativeItem;
-                        tile.InstanceKey = representative.InstanceKey;
-                    }
-                    if (tile.Root.transform.GetSiblingIndex() != index) tile.Root.transform.SetSiblingIndex(index);
-                    index++;
-                    tile.Count.text = row.Count.ToString(CultureInfo.InvariantCulture);
-                    tile.Caption.text = representative.DisplayName + (_mode == InventoryViewMode.ByContainer ? "\n" + representative.ContainerName : "");
+                    catch (Exception ex) { _log.LogWarning("Native item instance creation failed: " + ex.Message); }
                 }
-                catch (Exception ex)
+            }
+            else
+            {
+                _backButton!.gameObject.SetActive(false);
+                int index = 0;
+                foreach (var row in rows)
                 {
-                    if (_tiles.TryGetValue(key, out var failed)) { DestroyTile(failed); _tiles.Remove(key); }
-                    _log.LogWarning("Native item group creation failed for " + row.First.TypeId + ": " + ex.Message);
+                    var key = RowKey(row);
+                    liveKeys.Add(key);
+                    try
+                    {
+                        if (!_tiles.TryGetValue(key, out var tile) || !tile.Root || !tile.Button)
+                        {
+                            if (tile != null && tile.Root) DestroyTile(tile);
+                            tile = CreateTile(prefab, row.First, row.Count > 1, key);
+                            _tiles[key] = tile;
+                        }
+                        var representative = row.Instances.FirstOrDefault(e => e.InstanceKey == tile.InstanceKey &&
+                            ReferenceEquals(e.NativeItem, tile.Button.refItem)) ?? row.First;
+                        tile.Button.refItem = (Item)representative.NativeItem;
+                        tile.Button.slot = -1;
+                        tile.Button.UpdateRefs();
+                        tile.Button.UpdateGraphic();
+                        tile.InstanceKey = representative.InstanceKey;
+                        tile.Root.transform.SetSiblingIndex(index++);
+                        tile.Count.text = row.Count.ToString(CultureInfo.InvariantCulture);
+                        tile.Caption.text = representative.DisplayName + (_mode == InventoryViewMode.ByContainer ? "\n" + representative.ContainerName : "");
+                    }
+                    catch (Exception ex) { _log.LogWarning("Native item group creation failed for " + row.First.TypeId + ": " + ex.Message); }
                 }
             }
             foreach (var key in _tiles.Keys.Where(key => !liveKeys.Contains(key)).ToArray())
@@ -207,13 +288,21 @@ namespace UnknownInventoryTerminal
             _dirty = false;
         }
 
-        private Tile CreateTile(GameObject prefab, InventoryEntry entry)
+        private Tile CreateTile(GameObject prefab, InventoryEntry entry, bool grouped,
+            (string Type, string Parent)? groupKey = null)
         {
-            var root = new GameObject("Item group " + entry.TypeId, typeof(RectTransform), typeof(Image));
+            var root = new GameObject((grouped ? "Item group " : "Item ") + entry.TypeId,
+                typeof(RectTransform), typeof(Image));
             root.layer = _root!.layer;
             root.transform.SetParent(_content, false);
             root.GetComponent<Image>().color = new Color(0.20f, 0.23f, 0.26f, 1);
-            root.GetComponent<Image>().raycastTarget = false;
+            root.GetComponent<Image>().raycastTarget = grouped;
+            if (grouped && groupKey.HasValue)
+            {
+                var target = root.AddComponent<GroupClickTarget>();
+                target.Owner = this;
+                target.Key = groupKey.Value;
+            }
             try
             {
                 var native = UnityEngine.Object.Instantiate(prefab, root.transform);
@@ -236,7 +325,7 @@ namespace UnknownInventoryTerminal
                 // PlayerCamera looks for InvButton on the exact raycast hit, not on its parent.
                 foreach (var child in native.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = root.layer;
                 foreach (var graphic in native.GetComponentsInChildren<Graphic>(true))
-                    graphic.raycastTarget = graphic.gameObject == native;
+                    graphic.raycastTarget = !grouped && graphic.gameObject == native;
 
                 var count = CreateText(native.transform, "Matching count", 19, TextAlignmentOptions.BottomRight);
                 count.rectTransform.anchorMin = Vector2.zero;
