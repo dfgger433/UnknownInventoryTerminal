@@ -1,0 +1,107 @@
+# UnknownInventoryTerminal 阶段 1 兼容性依据
+
+本文件记录本机静态核对结果；没有调用 REA MCP，也没有进行运行时联机实测。反编译结果来自本机 `ilspycmd 10.1.1.8388`（普通工具结果），以游戏目录 DLL 为准。
+
+## 目标 DLL 身份
+
+| 文件 | AssemblyVersion | 长度 | SHA-256 |
+|---|---:|---:|---|
+| `BepInEx/plugins/CUCoreLib.dll` | `1.1.0.0` | `1,222,144` | `C0F064260B2671D02BF802C460AA346C6B858EC9269F2FF93439EBABAA940AA3` |
+| `BepInEx/plugins/Together/CasualtiesMP.dll` | `5.5.3.0` | `2,546,176` | `880A8E4E190E38DF2625D303A504EF20263D7B27A31DD1F01A91512F9B6481A7` |
+
+哈希来自 `Get-FileHash -Algorithm SHA256`；版本来自 `AssemblyName.GetAssemblyName`。Together 上游仓库可供概念参考，但本表和下文均以本机 DLL / 本机反编译为证据。
+
+## CCL 设置与按键 API
+
+本机 `CUCoreLib` 确认以下可编译签名：
+
+```csharp
+namespace CUCoreLib.Data;
+public sealed class ModOptionDefinition
+{
+    public static ModOptionDefinition Bool(
+        string id, string label, string description, string category,
+        bool defaultValue, Action<bool> apply = null);
+
+    public static ModOptionDefinition Keybind(
+        string id, string label, string description, string category,
+        UnityEngine.KeyCode defaultValue,
+        Action<UnityEngine.KeyCode> apply = null);
+}
+
+namespace CUCoreLib.Registries;
+public static class ModOptionsRegistry
+{
+    public static bool Register(ModOptionDefinition option);
+}
+
+namespace CUCoreLib.Helpers;
+public static class CUCoreUtils
+{
+    public static CUCoreUtils.FriendlyKeybind GetFriendlyKeyBind(string friendlyKeybindName);
+    public static bool AllowKeybindRebind(
+        string friendlyKeybindName,
+        string descriptionToShowInSettingsKeybindMenu);
+}
+public sealed class CUCoreUtils.FriendlyKeybind
+{
+    public UnityEngine.KeyCode KeyCode { get; }
+    public bool disableInInputFields { get; set; }
+    public bool disableInMainMenu { get; set; }
+    public bool disableInHealthPanel { get; set; }
+    public bool disableInInventory { get; set; }
+    public bool IsPressed();
+}
+```
+
+`FriendlyKeybind.IsPressed()` 先调用 `Input.GetKeyDown(KeyCode)`，再应用 CCL 阻断条件。已确认的阻断检查包括：主菜单、伤口/医疗面板、`PlayerCamera.main.craftingPanel.activeSelf`、原版控制台输入框、原版配方过滤输入框、Together 的 `Together.Chat.CHAT_textbox_input_focused`，以及当前 EventSystem 选中的 `TMP_InputField.isFocused`。
+
+阶段 1 应将 `ConfigEntry<KeyCode>` / `ConfigEntry<bool>` 作为 BepInEx 配置存储，再用独立且稳定的 option id 调用 `ModOptionDefinition.Keybind/Bool`。`ModOptionsRegistry.Register` 会拒绝重复 option id；不要同时为同一按键注册 CCL FriendlyKeybind option 和另一个相同语义的显式 option。当前 DLL 中 `BepInExConfigAutoRegistrar.RunOnce()` 反编译为空，不能把自动注册当作可靠行为；显式注册是本版本更可审计的路径。
+
+## 输入门边界
+
+### 已核对的原版入口
+
+UEI 的既有兼容实现使用：
+
+```csharp
+[HarmonyPatch(typeof(PlayerCamera), "HandleInput")]
+internal static class PlayerCameraInputPatch
+{
+    private static bool Prefix() => !TerminalVisible;
+}
+```
+
+本项目的 Prefix 在返回 `false` 前还会把本地 `Body.moveDir` 清零、关闭蹲伏/跳跃输入并保持 `forceNoMovement`，关闭终端时恢复原值；否则跳过原方法会绕过原版先行清零逻辑。仅在 `Event.current.Use()` 上调用不足以阻止这些每帧逻辑。透明全屏 UGUI `Image` + `GraphicRaycaster` 可阻止 EventSystem UI 点击，但不能阻止 `Update()` 中的 `Input.GetKey*`。
+
+### Together 独立输入
+
+本机 `Together.Chat.Update()` 每帧直接读取：
+
+```csharp
+Input.GetKeyDown(KeyBinds.GetBind("casualtiestogether_chat"))
+```
+
+所以终端显示期间，即使跳过 `PlayerCamera.HandleInput`，Together 聊天快捷键仍可能被读取。若阶段 1 需要“终端期间完全不抢按键”，需另加可选的 `Together.Chat.Update` Harmony Prefix gate；不要依赖某个 postfix 来阻止原方法已经执行的输入副作用。此 gate 只应暂停聊天快捷键/预览，不应触碰网络状态。
+
+## 原版物品 UI 与 Together 同步路径
+
+终端只应展示快照，并把实际菜单/拖拽交还原版对象；不要在终端中直接复制网络写入协议。
+
+本机 Together 反编译确认：
+
+1. `Together.PlayerCamera_TryPerformInventoryAction_MultiplayerPatch` patch `PlayerCamera.TryPerformInventoryAction(PlayerCamera, ref bool, RaycastResult, List<RaycastResult>)`。它验证 `InvButton` 与 UI overlap，再处理电池操作、容器装入/倒入、组合、装备槽交换等路径。
+2. `Container.LoadItem(Item)` 的 Together postfix 在 `PlayerCamera_TryPerformInventoryAction_MultiplayerPatch.is_inside_TryPerformInventoryAction` 为真且有 `ItemSync` 信息时加入 `ItemSync.ItemContainerChanged`。
+3. `Container.UnloadItem(Item, Body)` 的 Together prefix 同样在上述 inventory-action 作用域内登记 `ItemSync.ItemContainerChanged`。
+4. `ItemSync.Client_AnnounceContainerChange(SyncInfo)` 批量发送容器变更；`ItemSync.ItemGetContainerInfo(Item)` 将物品映射为身体槽、穿戴、表面库存或普通 `Container`，并携带 `syncId` / container version 等信息。
+5. Together 的 `ItemSync.SafeUnloadItem` 在卸载后若当前打开的容器相同，会调用 `PlayerCamera.main.RepopulateContainer()`；原版 `Container.LoadItem/UnloadItem` 和 `PlayerCamera.RepopulateContainer` 是 UI 状态的安全边界。
+
+因此“Original item menu”和“Drag with original controls”必须最终调用原版 `PlayerCamera`/`InvButton`/`Container` 路径（或在主线程模拟同一原版调用），不得从终端直接修改 transform、parent 或仅修改本地列表来宣称已同步。主机无需安装额外 mod 的前提是：客户端动作仍进入 Together 已有的原版 inventory-action patch 与 `ItemSync` 路径；本终端本身不新增网络消息。
+
+## 本次未实测 / 风险
+
+- 未启动游戏、未进入主机/客户端会话，未验证不同 Together 规则、容器损坏/休眠袋、距离限制和物品权限。
+- 未验证 `PlayerCamera.HandleInput` 在当前游戏版本是否被其他 mod 改写；Harmony patch 顺序可能影响最终输入门。
+- 未验证透明 UGUI blocker 与 IMGUI `GUI.Window` 在所有分辨率、EventSystem 配置和暂停状态下的交互；它只能作为 UI 点击层，不能替代 `HandleInput` Prefix。
+- 未验证 Together `Chat.Update` gate 与聊天框已聚焦时的恢复体验；关闭终端前后应确保不清除或伪造 Together 的网络聊天状态。
+- 未验证 CCL 设置菜单的旧配置迁移；option id 一旦发布应保持稳定，配置 key 与 CCL option id 不应在小版本中无意改名。
