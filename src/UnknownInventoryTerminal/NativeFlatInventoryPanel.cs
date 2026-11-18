@@ -57,6 +57,12 @@ namespace UnknownInventoryTerminal
         internal bool Contains(GameObject target) => _root && target &&
             (target.transform == _root!.transform || target.transform.IsChildOf(_root.transform));
 
+        internal bool ContainsScreenPoint(Vector2 screenPoint) => _panel != null && _root != null && _root.activeInHierarchy &&
+            RectTransformUtility.RectangleContainsScreenPoint(_panel, screenPoint, null);
+
+        internal InvButton? ResolveDrop(PlayerCamera camera, IReadOnlyList<RaycastResult> hits) =>
+            _placement.ResolveDrop(camera, hits);
+
         internal void SetEntries(IEnumerable<InventoryEntry> entries)
         {
             _entries = entries?.Where(e => e.NativeItem is Item item && item)
@@ -66,14 +72,16 @@ namespace UnknownInventoryTerminal
             if (_visible) Synchronize();
         }
 
-        internal void FocusInstance(string instanceKey)
+        internal bool TryFocusInstance(InventoryEntry entry)
         {
-            if (string.IsNullOrEmpty(instanceKey)) return;
-            var entry = _entries.FirstOrDefault(candidate => candidate.InstanceKey == instanceKey);
-            if (entry == null) return;
-            _selectionKey = (entry.TypeId, _mode == InventoryViewMode.ByContainer ? entry.ContainerKey : "");
+            if (!_visible || InteractionInProgress() || !_entries.Any(candidate => ReferenceEquals(candidate, entry))) return false;
+            var previous = _selectionKey;
+            OpenSelection((entry.TypeId, _mode == InventoryViewMode.ByContainer ? entry.ContainerKey : ""));
+            if (!_dirty && _tiles.TryGetValue((entry.InstanceKey, "selection"), out var tile) &&
+                tile.Root && tile.Button && ReferenceEquals(tile.Button.refItem, entry.NativeItem)) return true;
+            _selectionKey = previous;
             _dirty = true;
-            if (_visible) Synchronize();
+            return false;
         }
 
         // Bounds use IMGUI's top-left pixel coordinates; the overlay canvas uses bottom-left coordinates.
@@ -145,7 +153,7 @@ namespace UnknownInventoryTerminal
             viewportRect.anchorMax = Vector2.one;
             viewportRect.offsetMin = new Vector2(6, 6);
             // Reserve fixed space so starting a drag cannot move the source tiles.
-            viewportRect.offsetMax = new Vector2(-6, -120);
+            viewportRect.offsetMax = new Vector2(-6, -(ContainerPlacementPanel.Height + ContainerPlacementPanel.BottomGap + 4));
             viewport.GetComponent<Image>().color = Color.clear;
 
             var content = new GameObject("Native item groups", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -179,7 +187,7 @@ namespace UnknownInventoryTerminal
             _empty.rectTransform.anchorMin = Vector2.zero;
             _empty.rectTransform.anchorMax = Vector2.one;
             _empty.rectTransform.offsetMin = new Vector2(12, 12);
-            _empty.rectTransform.offsetMax = new Vector2(-12, -120);
+            _empty.rectTransform.offsetMax = new Vector2(-12, -(ContainerPlacementPanel.Height + ContainerPlacementPanel.BottomGap + 4));
             _placement.Attach(panel.transform);
             _dirty = true;
             ApplyLayout();

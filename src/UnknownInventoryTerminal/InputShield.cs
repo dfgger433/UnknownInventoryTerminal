@@ -10,6 +10,9 @@ namespace UnknownInventoryTerminal
     {
         private GameObject? _root;
         private readonly List<CanvasLease> _nativeCanvases = new List<CanvasLease>();
+        private CanvasGroup? _radialGroup;
+        private float _radialAlpha = 1f;
+        private bool _radialBlocksRaycasts = true, _radialInteractable = true;
         private bool _inventoryInteraction;
 
         internal void SetNativeInventoryInteraction(bool active)
@@ -40,11 +43,31 @@ namespace UnknownInventoryTerminal
                 image.raycastTarget = true;
             }
             if (_root) _root!.SetActive(visible);
+            if (!visible && _radialGroup)
+            {
+                var radialGroup = _radialGroup!;
+                radialGroup.alpha = _radialAlpha;
+                radialGroup.blocksRaycasts = _radialBlocksRaycasts;
+                radialGroup.interactable = _radialInteractable;
+            }
             var camera = PlayerCamera.main;
             foreach (var lease in _nativeCanvases) lease.Wanted = false;
             if (visible && camera)
             {
-                Lift(camera.radialMenu ? camera.radialMenu.gameObject : null, true);
+                var radialRoot = camera.radialMenu ? camera.radialMenu.gameObject : null;
+                Lift(radialRoot, true);
+                if (radialRoot)
+                {
+                    if (_radialGroup && _radialGroup!.gameObject != radialRoot) _radialGroup = null;
+                    var root = radialRoot!;
+                    var radialGroup = _radialGroup ?? (_radialGroup = root.GetComponent<CanvasGroup>() ?? root.AddComponent<CanvasGroup>());
+                    var inTerminal = Plugin.IsTerminalPoint(Input.mousePosition);
+                    var dragging = camera.dragItem;
+                    var showRadial = !Plugin.IsVisible || (!inTerminal && dragging);
+                    radialGroup.alpha = showRadial ? _radialAlpha : 0f;
+                    radialGroup.blocksRaycasts = showRadial && _radialBlocksRaycasts;
+                    radialGroup.interactable = showRadial && _radialInteractable;
+                }
                 if (_inventoryInteraction) Lift(camera.mainCanvas ? camera.mainCanvas.gameObject : null, true);
                 // A container opened before the terminal may belong to another body.
                 var container = camera.currentContainer;

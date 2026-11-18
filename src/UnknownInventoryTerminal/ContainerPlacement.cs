@@ -8,13 +8,14 @@ using CUCoreLib.Data;
 using CUCoreLib.Registries;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace UnknownInventoryTerminal
 {
     internal enum ContainerPlacementMode { BestFit, WeightReduction, Manual }
 
-    // Recommendations only: no item parenting, LoadItem calls, or network state is changed here.
+    // Select a destination only. The native release path performs the actual transfer.
     internal static class ContainerPlacement
     {
         private const string Category = "UnknownInventoryTerminal";
@@ -24,16 +25,13 @@ namespace UnknownInventoryTerminal
             get => Enum.IsDefined(typeof(ContainerPlacementMode), _mode.Value) ? _mode.Value : ContainerPlacementMode.BestFit;
             set => _mode.Value = value;
         }
-        internal static string ModeLabel => Mode == ContainerPlacementMode.BestFit ? "Place: smallest remaining capacity" :
-            Mode == ContainerPlacementMode.WeightReduction ? "Place: highest weight reduction" : "Place: choose container manually";
 
         internal static void Initialize(ConfigFile config)
         {
             _mode = config.Bind(Category, "ContainerPlacement", ContainerPlacementMode.BestFit,
-                "Terminal container targets: BestFit (least free capacity after insertion), WeightReduction (largest encumbrance decrease), or Manual. Drop on the displayed native container icon to confirm.");
+                "Default destination for an item dropped on the terminal. A drop on a container card targets that container.");
             ModOptionsRegistry.Register(ModOptionDefinition.Dropdown(Category + ".ContainerPlacement", "Container placement",
-                "Choose how the terminal recommends a container. All transfers use the original inventory controls.", Category,
-                (int)Mode, new[] {
+                "Choose the default destination for a drop on the terminal.", Category, (int)Mode, new[] {
                     new ModDropdownChoice("BestFit", "Smallest remaining capacity"),
                     new ModDropdownChoice("WeightReduction", "Highest weight reduction"),
                     new ModDropdownChoice("Manual", "Choose container manually")
@@ -48,27 +46,33 @@ namespace UnknownInventoryTerminal
             { Item = item; RemainingCapacity = remainingCapacity; WeightReduction = weightReduction; }
         }
 
+        internal static IReadOnlyList<Item> Containers(Body body) => body.GetSurfaceInventoryItems()
+            .Where(item => item && item.container && !item.TryGetParentContainer(out _))
+            .GroupBy(item => item.GetInstanceID()).Select(group => group.First())
+            .OrderBy(item => item.fullName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.GetInstanceID()).ToArray();
+
         internal static IReadOnlyList<Candidate> Candidates(Body body, Item source)
         {
             if (!body || !source || !GameInventoryAdapter.Owns(body, source)) return Array.Empty<Candidate>();
             var sourceMultiplier = source.TryGetParentContainer(out var parent) ? parent.encumberanceMult : 1f;
-            var seen = new HashSet<int>();
             var candidates = new List<Candidate>();
-            // Native LoadItem disallows inserting into a container which is itself contained.
-            foreach (var item in body.GetSurfaceInventoryItems())
+            foreach (var item in Containers(body))
             {
-                if (!item || !seen.Add(item.GetInstanceID()) || !CanPlace(body, source, item)) continue;
+                if (!CanPlace(body, source, item)) continue;
                 var container = item.container;
-                candidates.Add(new Candidate(item, container.maxWeight - container.GetHoldingWeight() - source.totalWeight,
+                candidates.Add(new Candidate(item,
+                    container.maxWeight - container.GetHoldingWeight() - source.totalWeight,
                     source.totalWeight * (sourceMultiplier - container.encumberanceMult)));
             }
-            // Stable tie-breakers avoid moving the recommended target when the inventory refreshes.
-            return (Mode == ContainerPlacementMode.WeightReduction
-                ? candidates.OrderByDescending(c => c.WeightReduction).ThenBy(c => c.RemainingCapacity)
+
+            var ordered = Mode == ContainerPlacementMode.WeightReduction
+                ? candidates.OrderByDescending(candidate => candidate.WeightReduction).ThenBy(candidate => candidate.RemainingCapacity)
                 : Mode == ContainerPlacementMode.Manual
-                    ? candidates.OrderBy(c => c.Item.Stats.fullName, StringComparer.Ordinal).ThenBy(c => c.RemainingCapacity)
-                    : candidates.OrderBy(c => c.RemainingCapacity).ThenByDescending(c => c.WeightReduction))
-                .ThenBy(c => c.Item.GetInstanceID()).ToArray();
+                    ? candidates.OrderBy(candidate => candidate.Item.fullName, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(candidate => candidate.RemainingCapacity)
+                    : candidates.OrderBy(candidate => candidate.RemainingCapacity).ThenByDescending(candidate => candidate.WeightReduction);
+            return ordered.ThenBy(candidate => candidate.Item.GetInstanceID()).ToArray();
         }
 
         internal static bool CanPlace(Body body, Item source, Item destination)
@@ -77,160 +81,234 @@ namespace UnknownInventoryTerminal
                 !GameInventoryAdapter.Owns(body, source) || !GameInventoryAdapter.Owns(body, destination)) return false;
             if (destination.TryGetParentContainer(out _) || destination.transform.IsChildOf(source.transform) ||
                 source.transform.parent == destination.transform) return false;
-            // Match Container.LoadItem's stacking/range rules in addition to CanHoldItem's
-            // total weight, per-item weight, and tag restrictions. No hypothetical mutations.
             if (source.container && source.container.GetHoldingWeight() > 0f) return false;
             if (Vector2.Distance(source.transform.position, destination.transform.position) >= 10f) return false;
-            // The battery branch precedes the container branch in the native action handler.
             if (destination.battery && (source.Stats.HasTag("tool") || source.Stats.HasTag("battery"))) return false;
             return destination.container.CanHoldItem(source);
         }
     }
 
-    // Attached to the exact native InvButton hit object. Rechecked at raycast/release time,
-    // because a displayed recommendation can outlive a capacity or ownership change.
+    // Revalidated every frame and again at release; each hit remains a native InvButton.
     internal sealed class ContainerPlacementTarget : MonoBehaviour
     {
         internal Item Source = null!;
         internal bool IsValid(PlayerCamera camera)
         {
             var button = GetComponent<InvButton>();
-            return camera && camera.body && camera.dragItem == Source && button &&
+            return camera && camera.body && Source && camera.dragItem == Source && button &&
                 !Input.GetKey(KeyBinds.GetBind("expanddesc")) &&
                 ContainerPlacement.CanPlace(camera.body, Source, button.GetItem());
         }
     }
 
+    internal sealed class ContainerPlacementCard : MonoBehaviour, IPointerClickHandler
+    {
+        internal ContainerPlacementPanel Owner = null!;
+        internal Item Item = null!;
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left && PlayerCamera.main && !PlayerCamera.main.dragItem)
+                Owner.Select(Item);
+        }
+    }
+
     internal sealed class ContainerPlacementPanel : IDisposable
     {
+        internal const float Height = 108;
+        internal const float BottomGap = 8;
+
         private sealed class Target
         {
             internal readonly GameObject Root;
-            internal readonly InvButton Button;
+            internal readonly Button CardButton;
+            internal readonly InvButton ItemButton;
             internal readonly ContainerPlacementTarget Marker;
             internal readonly TextMeshProUGUI Label;
-            internal Target(GameObject root, InvButton button, ContainerPlacementTarget marker, TextMeshProUGUI label)
-            { Root = root; Button = button; Marker = marker; Label = label; }
+            internal Target(GameObject root, Button cardButton, InvButton itemButton,
+                ContainerPlacementTarget marker, TextMeshProUGUI label)
+            { Root = root; CardButton = cardButton; ItemButton = itemButton; Marker = marker; Label = label; }
         }
+
         private readonly ManualLogSource _log;
         private readonly List<Target> _targets = new List<Target>();
         private GameObject? _root;
         private RectTransform? _content;
-        private TextMeshProUGUI? _modeLabel, _hint;
-        private Button? _modeButton;
-        private ScrollRect? _scroll;
+        private TextMeshProUGUI? _hint;
+        private Item? _selected;
         private bool _warned;
 
         internal ContainerPlacementPanel(ManualLogSource log) { _log = log; }
+        internal void ClearSelection() => _selected = null;
 
         internal void Attach(Transform parent)
         {
             if (_root) return;
-            _root = new GameObject("Container placement targets", typeof(RectTransform));
+            _root = new GameObject("Container storage targets", typeof(RectTransform));
             _root.layer = parent.gameObject.layer;
             _root.transform.SetParent(parent, false);
             var rect = _root.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0, 1); rect.anchorMax = Vector2.one;
-            rect.pivot = new Vector2(0.5f, 1); rect.sizeDelta = new Vector2(-16, 108);
+            rect.pivot = new Vector2(0.5f, 1); rect.sizeDelta = new Vector2(-16, Height);
             rect.anchoredPosition = new Vector2(0, -8);
 
-            var mode = new GameObject("Choose container rule", typeof(RectTransform), typeof(Image), typeof(Button));
-            mode.layer = _root.layer; mode.transform.SetParent(_root.transform, false);
-            var modeRect = mode.GetComponent<RectTransform>();
-            modeRect.anchorMin = new Vector2(0, 1); modeRect.anchorMax = Vector2.one;
-            modeRect.pivot = new Vector2(0.5f, 1);
-            modeRect.offsetMin = new Vector2(270, -30); modeRect.offsetMax = Vector2.zero;
-            mode.GetComponent<Image>().color = new Color(0.24f, 0.29f, 0.34f, 1);
-            _modeButton = mode.GetComponent<Button>();
-            _modeButton.onClick.AddListener(() => ContainerPlacement.Mode = (ContainerPlacementMode)(((int)ContainerPlacement.Mode + 1) % 3));
-            _modeLabel = Text(mode.transform, "Placement rule", 13);
-            Stretch(_modeLabel.rectTransform, new Vector2(6, 2), new Vector2(-6, -2));
+            var heading = Text(_root.transform, "Containers heading", 13);
+            heading.text = "CONTAINERS  ·  DROP AN ITEM ANYWHERE IN STORAGE";
+            heading.rectTransform.anchorMin = new Vector2(0, 1);
+            heading.rectTransform.anchorMax = Vector2.one;
+            heading.rectTransform.offsetMin = new Vector2(0, -24);
+            heading.rectTransform.offsetMax = Vector2.zero;
 
-            var viewport = new GameObject("Container targets viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+            var viewport = new GameObject("Container cards viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             viewport.layer = _root.layer; viewport.transform.SetParent(_root.transform, false);
             var viewportRect = viewport.GetComponent<RectTransform>();
-            Stretch(viewportRect, Vector2.zero, new Vector2(0, -36));
-            viewport.GetComponent<Image>().color = new Color(0.15f, 0.20f, 0.24f, 1);
-            var content = new GameObject("Native container targets", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
+            Stretch(viewportRect, Vector2.zero, new Vector2(0, -28));
+            viewport.GetComponent<Image>().color = new Color(0.12f, 0.17f, 0.19f, 0.8f);
+            var content = new GameObject("Container cards", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(ContentSizeFitter));
             content.layer = _root.layer; content.transform.SetParent(viewport.transform, false);
             _content = content.GetComponent<RectTransform>();
             _content.anchorMin = _content.anchorMax = new Vector2(0, 1);
-            _content.pivot = new Vector2(0, 1); _content.sizeDelta = new Vector2(0, 72);
+            _content.pivot = new Vector2(0, 1); _content.sizeDelta = new Vector2(0, Height - 30);
             var layout = content.GetComponent<HorizontalLayoutGroup>();
             layout.childControlWidth = false; layout.childControlHeight = false;
             layout.childForceExpandWidth = false; layout.childForceExpandHeight = false;
-            layout.spacing = 8;
+            layout.spacing = 6; layout.padding = new RectOffset(2, 2, 2, 2);
             content.GetComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-            _scroll = viewport.GetComponent<ScrollRect>();
-            _scroll.viewport = viewportRect; _scroll.content = _content;
-            _scroll.horizontal = true; _scroll.vertical = false; _scroll.inertia = false;
-            _scroll.scrollSensitivity = 30; _scroll.movementType = ScrollRect.MovementType.Clamped;
-            _hint = Text(viewport.transform, "Placement instructions", 13);
-            Stretch(_hint.rectTransform, new Vector2(8, 2), new Vector2(-8, -2));
+            var scroll = viewport.GetComponent<ScrollRect>();
+            scroll.viewport = viewportRect; scroll.content = _content;
+            scroll.horizontal = true; scroll.vertical = false; scroll.inertia = false;
+            scroll.scrollSensitivity = 30; scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            _hint = Text(_root.transform, "Container status", 11);
+            _hint.rectTransform.anchorMin = new Vector2(0, 0);
+            _hint.rectTransform.anchorMax = new Vector2(1, 0);
+            _hint.rectTransform.pivot = new Vector2(0.5f, 0);
+            _hint.rectTransform.offsetMin = new Vector2(4, 0);
+            _hint.rectTransform.offsetMax = new Vector2(-4, 16);
+        }
+
+        internal InvButton? ResolveDrop(PlayerCamera camera, IReadOnlyList<RaycastResult> hits)
+        {
+            var source = camera.dragItem;
+            if (!source || Input.GetKey(KeyBinds.GetBind("expanddesc"))) return null;
+            try
+            {
+                foreach (var hit in hits)
+                {
+                    if (!hit.gameObject) continue;
+                    var target = _targets.FirstOrDefault(candidate => hit.gameObject.transform == candidate.Root.transform ||
+                        hit.gameObject.transform.IsChildOf(candidate.Root.transform));
+                    if (target != null && ContainerPlacement.CanPlace(camera.body, source, target.ItemButton.refItem))
+                        return target.ItemButton;
+                }
+
+                var recommended = Recommended(camera.body, source);
+                var chosen = _targets.FirstOrDefault(target => target.Root.activeInHierarchy && target.ItemButton.refItem == recommended);
+                return chosen != null && chosen.Marker.IsValid(camera) ? chosen.ItemButton : null;
+            }
+            catch (Exception ex)
+            {
+                Warn(ex);
+                return null;
+            }
+        }
+
+        private Item? Recommended(Body body, Item source)
+        {
+            if (ContainerPlacement.Mode == ContainerPlacementMode.Manual && _selected &&
+                ContainerPlacement.CanPlace(body, source, _selected!)) return _selected;
+            return ContainerPlacement.Candidates(body, source).FirstOrDefault()?.Item;
         }
 
         internal void Refresh()
         {
-            if (!_root || !_hint || !_modeLabel || !PlayerCamera.main || !PlayerCamera.main.body) return;
-            _modeLabel!.text = ContainerPlacement.ModeLabel + "  >";
+            if (!_root || !_hint || !PlayerCamera.main || !PlayerCamera.main.body) return;
             var camera = PlayerCamera.main;
             var source = camera.dragItem;
             try
             {
-                var candidates = source ? ContainerPlacement.Candidates(camera.body, source) : Array.Empty<ContainerPlacement.Candidate>();
-                var count = ContainerPlacement.Mode == ContainerPlacementMode.Manual ? candidates.Count : Math.Min(1, candidates.Count);
-                _hint!.text = !source ? "Drag an item onto a container icon here. Manual mode lists every compatible container (scroll horizontally)." :
-                    Input.GetKey(KeyBinds.GetBind("expanddesc")) ? "Release the expanded-description key to place a single item." :
-                    count == 0 ? "No compatible container: check capacity, item tags, and container nesting." : "";
-                _hint.gameObject.SetActive(_hint.text.Length > 0);
-                if (Input.GetKey(KeyBinds.GetBind("expanddesc"))) count = 0;
-                for (var index = 0; index < count; index++)
+                var containers = ContainerPlacement.Containers(camera.body);
+                if (_selected && !containers.Contains(_selected!)) _selected = null;
+                var blocked = source && Input.GetKey(KeyBinds.GetBind("expanddesc"));
+                var recommended = source && !blocked ? Recommended(camera.body, source) : null;
+                _hint!.text = containers.Count == 0 ? "No carried containers" : blocked ? "Release expanded-description key to place one item" :
+                    source && !recommended ? "No compatible container for this item" :
+                    ContainerPlacement.Mode == ContainerPlacementMode.Manual && !source ? "Select a container, then drop items anywhere in storage" : "";
+                _hint.gameObject.SetActive(!string.IsNullOrEmpty(_hint.text));
+
+                for (var index = 0; index < containers.Count; index++)
                 {
-                    var candidate = candidates[index];
+                    var item = containers[index];
                     var target = index < _targets.Count ? _targets[index] : CreateTarget();
-                    // Source remains a real reference; count/merged groups never become item actions.
+                    target.CardButton.GetComponent<ContainerPlacementCard>().Item = item;
+                    target.ItemButton.refItem = item;
                     target.Marker.Source = source;
-                    target.Button.refItem = candidate.Item;
+                    target.CardButton.interactable = !source;
                     target.Root.SetActive(true);
-                    target.Button.UpdateGraphic();
-                    target.Label.text = candidate.Item.fullName + "\nFree after: " + Number(candidate.RemainingCapacity) +
-                        "  |  Reduction: " + Number(candidate.WeightReduction);
+                    target.ItemButton.UpdateGraphic();
+                    var container = item.container;
+                    target.Label.text = item.fullName + "\n" + Number(container.GetHoldingWeight()) + "/" +
+                        Number(container.maxWeight) + "u   ·   Weight x" + Number(container.encumberanceMult);
+                    var highlighted = source ? recommended == item : ContainerPlacement.Mode == ContainerPlacementMode.Manual && _selected == item;
+                    target.Root.GetComponent<Image>().color = highlighted
+                        ? new Color(0.26f, 0.47f, 0.44f, 1) : new Color(0.20f, 0.25f, 0.29f, 1);
+                    target.Marker.enabled = source && !blocked && ContainerPlacement.CanPlace(camera.body, source, item);
                 }
-                for (var index = count; index < _targets.Count; index++) _targets[index].Root.SetActive(false);
+                for (var index = containers.Count; index < _targets.Count; index++) _targets[index].Root.SetActive(false);
             }
             catch (Exception ex)
             {
                 foreach (var target in _targets) if (target.Root) target.Root.SetActive(false);
-                _hint!.text = "Container targets are unavailable. Check the BepInEx log.";
+                _hint!.text = "Containers unavailable; check the BepInEx log.";
                 _hint.gameObject.SetActive(true);
-                if (!_warned) _log.LogWarning("Container target creation failed: " + ex.Message);
-                _warned = true;
+                Warn(ex);
             }
+        }
+
+        internal void Select(Item item)
+        {
+            if (item && item.container) _selected = item;
+            Refresh();
         }
 
         private Target CreateTarget()
         {
             var prefab = Resources.Load<GameObject>("ContainerItem");
             if (!prefab) throw new InvalidOperationException("Native ContainerItem prefab is unavailable.");
-            var root = new GameObject("Container drop target", typeof(RectTransform));
+            var root = new GameObject("Container card", typeof(RectTransform), typeof(Image), typeof(Button));
             root.layer = _root!.layer; root.transform.SetParent(_content, false);
-            root.GetComponent<RectTransform>().sizeDelta = new Vector2(280, 72);
+            root.GetComponent<Image>().color = new Color(0.20f, 0.25f, 0.29f, 1);
+            var rootRect = root.GetComponent<RectTransform>(); rootRect.sizeDelta = new Vector2(210, Height - 34);
+            var cardButton = root.GetComponent<Button>();
+            cardButton.onClick.AddListener(() =>
+            {
+                var card = root.GetComponent<ContainerPlacementCard>();
+                if (card) Select(card.Item);
+            });
+            var card = root.AddComponent<ContainerPlacementCard>(); card.Owner = this;
+
             var native = UnityEngine.Object.Instantiate(prefab, root.transform);
             var button = native.GetComponent<InvButton>();
-            button.slot = -1; button.centerButtons = false; button.woundView = false; button.maxImageSize = 50;
+            if (!button) throw new InvalidOperationException("ContainerItem has no InvButton.");
+            button.slot = -1; button.centerButtons = false; button.woundView = false; button.maxImageSize = 46;
             var nativeRect = native.GetComponent<RectTransform>();
             nativeRect.anchorMin = nativeRect.anchorMax = new Vector2(0, 0.5f);
-            nativeRect.pivot = new Vector2(0, 0.5f); nativeRect.anchoredPosition = new Vector2(4, 0);
-            nativeRect.sizeDelta = new Vector2(64, 64);
+            nativeRect.pivot = new Vector2(0, 0.5f); nativeRect.anchoredPosition = new Vector2(5, 0);
+            nativeRect.sizeDelta = new Vector2(58, 58);
             foreach (var child in native.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = root.layer;
             foreach (var graphic in native.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = graphic.gameObject == native;
             var marker = native.AddComponent<ContainerPlacementTarget>();
-            var label = Text(root.transform, "Container capacity and reduction", 12);
-            label.richText = true;
-            Stretch(label.rectTransform, new Vector2(76, 2), new Vector2(-4, -2));
-            var target = new Target(root, button, marker, label);
-            _targets.Add(target);
-            return target;
+            var label = Text(root.transform, "Container name and capacity", 11);
+            label.raycastTarget = false;
+            Stretch(label.rectTransform, new Vector2(68, 3), new Vector2(-5, -3));
+            return AddTarget(new Target(root, cardButton, button, marker, label));
+        }
+
+        private Target AddTarget(Target target) { _targets.Add(target); return target; }
+        private void Warn(Exception ex)
+        {
+            if (_warned) return;
+            _warned = true;
+            _log.LogWarning("Container card creation or refresh failed: " + ex.Message);
         }
 
         private static string Number(float value) => value.ToString("0.##", CultureInfo.InvariantCulture);
@@ -244,15 +322,14 @@ namespace UnknownInventoryTerminal
             text.font = PlayerCamera.main && PlayerCamera.main.containerText ? PlayerCamera.main.containerText.font : TMP_Settings.defaultFontAsset;
             text.fontSize = size; text.color = new Color(0.90f, 0.93f, 0.95f, 1);
             text.alignment = TextAlignmentOptions.MidlineLeft; text.raycastTarget = false; text.richText = false;
-            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.overflowMode = TextOverflowModes.Ellipsis; text.enableWordWrapping = false;
             return text;
         }
 
         public void Dispose()
         {
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
-            _root = null; _content = null; _modeLabel = null; _hint = null;
-            _modeButton = null; _scroll = null; _targets.Clear();
+            _root = null; _content = null; _hint = null; _targets.Clear(); _selected = null;
         }
     }
 }

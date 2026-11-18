@@ -28,6 +28,7 @@ namespace UnknownInventoryTerminal
         internal IReadOnlyList<InventoryEntry> Snapshot => _snapshot;
         internal IReadOnlyList<InventoryRow> Rows => _rows;
         internal string Status => _status;
+        internal string ProjectedQuery => _lastQuery;
         internal event Action? StateChanged;
 
         internal TerminalWindow(Func<IReadOnlyList<InventoryEntry>> capture,
@@ -72,8 +73,11 @@ namespace UnknownInventoryTerminal
                 _snapshot = Array.Empty<InventoryEntry>();
                 _rows = Array.Empty<InventoryRow>();
                 _publishNativeEntries(Array.Empty<InventoryEntry>());
+                _lastQuery = SearchApi.Query;
+                _lastMode = Mode;
                 _status = "Inventory could not be read. Check BepInEx log, then refresh.";
                 _report(ex);
+                StateChanged?.Invoke();
             }
         }
         private void Rebuild()

@@ -74,7 +74,7 @@ namespace UnknownInventoryTerminal.Core
         /// <param name="source">Snapshot of native item projections.</param>
         /// <param name="mode">Merged or by-container view.</param>
         /// <param name="search">Search matcher registry.</param>
-        /// <param name="query">Query; all whitespace-separated terms must match.</param>
+        /// <param name="query">Search expression; whitespace separates AND terms and | separates alternatives.</param>
         /// <returns>Read-only deterministic display rows, preserving native instances.</returns>
         public static IReadOnlyList<InventoryRow> Build(IEnumerable<InventoryEntry> source,
             InventoryViewMode mode, SearchRegistry search, string? query)
@@ -82,7 +82,8 @@ namespace UnknownInventoryTerminal.Core
             if (source == null) throw new ArgumentNullException(nameof(source));
             if (search == null) throw new ArgumentNullException(nameof(search));
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            var entries = source.Where(e => seen.Add(e.InstanceKey) && search.Matches(e, query));
+            var matches = search.Compile(query);
+            var entries = source.Where(e => seen.Add(e.InstanceKey) && matches(e));
             return Array.AsReadOnly(entries.GroupBy(e => new { e.TypeId, Parent = mode == InventoryViewMode.ByContainer ? e.ContainerKey : "" })
                 .Select(g => new InventoryRow(g.OrderBy(e => e.InstanceKey, StringComparer.Ordinal)))
                 .OrderBy(r => mode == InventoryViewMode.ByContainer ? r.First.ContainerName : "", StringComparer.OrdinalIgnoreCase)

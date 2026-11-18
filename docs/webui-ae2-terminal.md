@@ -1,6 +1,6 @@
 # WebUI / OreUI / AE2 风格终端设计记录
 
-> 本文记录本次 UnknownInventoryTerminal 的终端 UI 设计与验收方案。WebUI release 提供可选的外部宿主，OreUI 与 AE2 提供交互/视觉参考；本项目随插件发布自己的网页资源，不依赖测试版 showcase，也没有复制 AE2 的源码、贴图或品牌资产。OreUI 的固定源码、字体和图标仅作为本地构建参考并按 MPL-2.0 保留其许可证。
+> 下文保留原生窗口设计与早期 WebUI 的历史记录。当前项目不再提供网页前端；文中的 WebUI 安装与验收内容仅供历史参考。
 
 ## 1. 目标、范围与非目标
 
@@ -168,7 +168,7 @@ dotnet test .\tests\UnknownInventoryTerminal.Tests\UnknownInventoryTerminal.Test
 ## 5. 许可证与归属说明
 
 - 当前检查到的仓库树中没有 `LICENSE`/`LICENSE.txt` 等项目许可证文件；因此不能替项目源代码或文档推断 MIT、GPL、Apache 等许可证。对外发布前应由项目作者补充明确许可证或书面授权。
-- 本文和本次实现不复制 WebUI release 或 AE2 的源码、布局文件、贴图、图标、字体或品牌资产。项目随网页前端 vendored 了 OreUI 固定 revision 的源码、字体和图标，保留 [`web/vendor/OreUI/LICENSE`](../web/vendor/OreUI/LICENSE) 与 README，并在构建后的 Web 目录复制其许可证说明；这些内容按 OreUI 的 MPL-2.0 使用。参考项目的名称、截图、文档和商标仍归各自权利人所有，若未来加入其他实际资产，必须单独核对其许可证、归属和再分发条件。
+- 早期网页前端曾随附 OreUI 源码、字体和图标，并按 MPL-2.0 保留相应许可证。这些资源已随网页前端从当前工作区移除。参考项目的名称、截图、文档和商标仍归各自权利人所有，若未来加入其他实际资产，必须单独核对其许可证、归属和再分发条件。
 - 游戏、Unity/Unity UI、TextMeshPro、BepInEx、Harmony、CUCoreLib、Together、JustUnknownCharacters 及其 DLL 均不因本插件而改变许可证。插件只按其公开/本机 API 进行引用、反射或 Harmony patch；不修改、重新打包或分发这些上游 DLL。
 - MSTest、FluentAssertions 及其他测试 NuGet 包只属于开发/测试链路；应按各自包许可证保留归属，不能把测试输出当作游戏插件依赖。
 - `dist/` 中的插件 DLL 是构建产物，不代表第三方依赖的许可证被转授；发布压缩包应附上本项目许可证（待补）和必要的第三方归属清单。

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using BepInEx;
 using BepInEx.Logging;
 
@@ -20,6 +21,23 @@ namespace UnknownInventoryTerminal
         private bool _disposed;
 
         internal WebUiBridge(ManualLogSource log) { _log = log; }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
+
+        // WebUI is an HWND child of the game. Unity can lose keyboard focus while
+        // its top-level window remains foreground (e.g. while typing into WebView2).
+        internal static bool IsGameForeground()
+        {
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return false;
+            var window = GetForegroundWindow();
+            return window != IntPtr.Zero && GetWindowThreadProcessId(window, out var processId) != 0 &&
+                processId == GetCurrentProcessId();
+        }
 
         internal bool IsAvailable => _panel != null;
         internal bool Visible

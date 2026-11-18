@@ -114,6 +114,17 @@ public sealed class InventoryProjectionTests
     }
 
     [TestMethod]
+    public void Search_AllowsOrBetweenAndGroupsAndRestrictsStarToTypeId()
+    {
+        var entry = Entry("a", "food.apple", "Green Apple", containerName: "Kitchen bag");
+        var search = new SearchRegistry();
+
+        search.Matches(entry, "red apple | green *FOOD").Should().BeTrue();
+        search.Matches(entry, "green *kitchen | red apple").Should().BeFalse();
+        search.Matches(entry, "missing | ").Should().BeFalse();
+    }
+
+    [TestMethod]
     public void Search_ExternalMatcherCanMatchTermsAndUnregistersOnDispose()
     {
         var entry = Entry("a", "item.42", "Unknown item");

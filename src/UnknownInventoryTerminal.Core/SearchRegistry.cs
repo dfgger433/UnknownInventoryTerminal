@@ -24,31 +24,39 @@ namespace UnknownInventoryTerminal.Core
             return registration;
         }
 
-        /// <summary>Tests name, exact ID text, container path and optional providers using AND between terms.</summary>
+        /// <summary>Tests name, ID, container and optional providers. Use | for OR and whitespace for AND.</summary>
         /// <param name="entry">Item projection to test.</param>
-        /// <param name="query">Case-insensitive whitespace-delimited terms; empty matches all.</param>
-        /// <returns>True if every term matches at least one built-in field or external matcher.</returns>
-        public bool Matches(InventoryEntry entry, string? query)
+        /// <param name="query">Case-insensitive terms. An empty query matches all. Prefix a term with * to search only IDs.</param>
+        /// <returns>True if every term in at least one alternative matches.</returns>
+        public bool Matches(InventoryEntry entry, string? query) => Compile(query)(entry);
+
+        internal Func<InventoryEntry, bool> Compile(string? query)
         {
-            if (entry == null) throw new ArgumentNullException(nameof(entry));
-            var terms = (query ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var term in terms)
+            var alternatives = (query ?? "").Split('|')
+                .Select(part => part.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                .Where(terms => terms.Length != 0).ToArray();
+            return entry =>
             {
-                if (Contains(entry.DisplayName, term) || Contains(entry.TypeId, term) || Contains(entry.ContainerName, term)) continue;
-                bool matched = false;
-                foreach (var provider in _matchers.ToArray())
+                if (entry == null) throw new ArgumentNullException(nameof(entry));
+                return alternatives.Length == 0 || alternatives.Any(terms => terms.All(term => MatchesTerm(entry, term)));
+            };
+        }
+
+        private bool MatchesTerm(InventoryEntry entry, string term)
+        {
+            if (term[0] == '*') return Contains(entry.TypeId, term.Substring(1));
+            if (Contains(entry.DisplayName, term) || Contains(entry.TypeId, term) || Contains(entry.ContainerName, term)) return true;
+            foreach (var provider in _matchers.ToArray())
+            {
+                if (provider.Disabled) continue;
+                try { if (provider.Matcher(entry, term)) return true; }
+                catch (Exception ex)
                 {
-                    if (provider.Disabled) continue;
-                    try { if (provider.Matcher(entry, term)) { matched = true; break; } }
-                    catch (Exception ex)
-                    {
-                        provider.Disabled = true;
-                        _onFailure?.Invoke(ex);
-                    }
+                    provider.Disabled = true;
+                    _onFailure?.Invoke(ex);
                 }
-                if (!matched) return false;
             }
-            return true;
+            return false;
         }
 
         private static bool Contains(string value, string term) => value.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0;

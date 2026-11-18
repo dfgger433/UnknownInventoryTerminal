@@ -37,8 +37,11 @@ namespace UnknownInventoryTerminal
         private InputShield? _shield;
         private Harmony? _harmony;
         private IDisposable? _pinyin;
+        private const int MaxSnapshotIconChars = 128 * 1024;
         private WebUiBridge? _webUi;
-        private bool _webUiRequested;
+        private WebUiSpriteIcons? _webUiIcons;
+        private JObject? _lastWebUiSnapshot;
+        private bool _webUiRequested, _webUiReady, _checkFocusLoss, _ackWebUiChange;
         private float _nextWebUiProbe;
         private bool _inputReady, _sessionActive, _configuredByContainer, _textInputFocused, _clearGuiFocus;
         private PlayerCamera? _sessionCamera;
@@ -50,9 +53,9 @@ namespace UnknownInventoryTerminal
         private void Awake()
         {
             Instance = this; Log = Logger;
-            SettingsBridge.Initialize(Config);
-            ContainerPlacement.Initialize(Config);
             _harmony = new Harmony(PluginGuid);
+            SettingsBridge.Initialize(Config, _harmony, Logger);
+            ContainerPlacement.Initialize(Config);
             _inputReady = GamePatches.Apply(_harmony, Logger);
             _shield = new InputShield();
             _nativePanel = new NativeFlatInventoryPanel(Logger);
@@ -64,9 +67,14 @@ namespace UnknownInventoryTerminal
             _configuredByContainer = SettingsBridge.ByContainer.Value;
             _window.Mode = _configuredByContainer ? InventoryViewMode.ByContainer : InventoryViewMode.Merged;
             _webUi = new WebUiBridge(Logger);
+            _webUiIcons = new WebUiSpriteIcons(Logger);
             _webUi.EventReceived += HandleWebUiEvent;
             _webUi.Closed += HandleWebUiClosed;
-            _window.StateChanged += PublishWebUiState;
+            _window.StateChanged += () =>
+            {
+                PublishWebUiState(force: _ackWebUiChange);
+                _ackWebUiChange = false;
+            };
             _pinyin = PinyinBridge.Register(() => SettingsBridge.Pinyin.Value, Logger);
             Logger.LogInfo(PluginName + " " + PluginVersion + " loaded; native inventory bridge " + (_inputReady ? "ready." : "disabled: required input hooks unavailable."));
         }
@@ -80,13 +88,18 @@ namespace UnknownInventoryTerminal
                     _webUiRequested = true;
                     if (IsVisible)
                     {
-                        _webUi.Visible = true;
-                        PublishWebUiState();
+                        ShowWebUi();
                     }
                 }
             }
             if (_webUi?.Visible == true && !_sessionActive && _window != null && CanToggle()) Open();
+            if (_checkFocusLoss && (!IsVisible || !WebUiBridge.IsGameForeground()))
+            {
+                _checkFocusLoss = false;
+                if (IsVisible) Close();
+            }
             UpdateTerminal();
+            if (_webUi?.Visible == true) _webUiIcons?.Update();
         }
 
         private void UpdateTerminal()
@@ -97,7 +110,7 @@ namespace UnknownInventoryTerminal
             {
                 if (IsVisible)
                 {
-                    if (_webUi?.IsAvailable == true && !_webUi.Visible) _webUi.Visible = true;
+                    if (_webUi?.IsAvailable == true && !_webUi.Visible) ShowWebUi();
                     else Close();
                 }
                 else Open();
@@ -108,8 +121,9 @@ namespace UnknownInventoryTerminal
                 _window.Mode = _configuredByContainer ? InventoryViewMode.ByContainer : InventoryViewMode.Merged;
             }
             _window.Update();
+            if (_ackWebUiChange) { PublishWebUiState(force: true); _ackWebUiChange = false; }
             // The close button closes inside TerminalWindow.Update, bypassing Toggle.
-            if (!_window.Visible && _sessionActive) EndSession();
+            if (!_window.Visible && _sessionActive) Close();
             else if (_window.Visible)
             {
                 var byContainer = _window.Mode == InventoryViewMode.ByContainer;
@@ -135,60 +149,98 @@ namespace UnknownInventoryTerminal
             var json = payload as JToken;
             switch (name)
             {
+                case "webui.ready":
+                    _webUiReady = true;
+                    PublishWebUiState(force: true);
+                    break;
                 case "close":
                 case "uit.close":
                     if (IsVisible) Close();
                     break;
                 case "refresh":
                 case "uit.refresh":
-                    _window?.RefreshNow();
+                    if (IsVisible) { _window?.RefreshNow(); PublishWebUiState(force: true); }
                     break;
                 case "query":
                 case "uit.query":
-                    SearchApi.Query = json?.Type == JTokenType.String ? json.Value<string>() ?? "" : json?["query"]?.Value<string>() ?? "";
+                    if (_webUi?.Visible == true && IsVisible)
+                    {
+                        var query = ReadWebString(json, "query") ?? "";
+                        SearchApi.Query = query.Length > 256 ? query.Substring(0, 256) : query;
+                        _ackWebUiChange = true;
+                    }
                     break;
                 case "mode":
                 case "uit.mode":
-                    var mode = json?.Type == JTokenType.String ? json.Value<string>() : json?["mode"]?.Value<string>();
+                    if (_webUi?.Visible != true || !IsVisible) break;
+                    var mode = ReadWebString(json, "mode");
                     if (string.Equals(mode, "container", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "byContainer", StringComparison.OrdinalIgnoreCase))
                         SettingsBridge.ByContainer.Value = true;
                     else if (string.Equals(mode, "merged", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase))
                         SettingsBridge.ByContainer.Value = false;
+                    _ackWebUiChange = true;
                     break;
                 case "interaction":
                 case "uit.interaction":
-                    var instanceKey = json?["instanceKey"]?.Value<string>();
-                    if (string.Equals(json?["action"]?.Value<string>(), "select", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _nativePanel?.FocusInstance(instanceKey ?? "");
-                        // The external WebView cannot receive Unity's native InvButton raycasts.
-                        // Hide it after a selection so the real picker becomes the active surface.
-                        if (_webUi != null) _webUi.Visible = false;
-                    }
-                    Logger.LogDebug("WebUI interaction: " + (json?.ToString(Newtonsoft.Json.Formatting.None) ?? "null"));
+                    if (json is JObject interaction && ReadWebString(interaction, "action") == "select")
+                        SelectWebItem(ReadWebString(interaction, "instanceKey"));
                     break;
                 case "uit.native":
-                    if (_webUi != null) _webUi.Visible = false;
-                    Logger.LogDebug("WebUI native interaction: " + (json?.ToString(Newtonsoft.Json.Formatting.None) ?? "null"));
+                    if (_webUi?.Visible == true && SessionValid()) _webUi.Visible = false;
                     break;
             }
         }
 
-        private void PublishWebUiState()
+        private static string? ReadWebString(JToken? payload, string field)
         {
-            if (_webUi == null || !_webUi.IsAvailable || _window == null) return;
-            var snapshot = _window.Rows.Select(row => new
+            var value = payload is JObject obj ? obj[field] : payload;
+            return value?.Type == JTokenType.String ? value.Value<string>() : null;
+        }
+
+        private void SelectWebItem(string? instanceKey)
+        {
+            if (string.IsNullOrEmpty(instanceKey) || _webUi?.Visible != true || _window == null || !SessionValid()) return;
+            var entry = _window.Rows.FirstOrDefault(row => row.First.InstanceKey == instanceKey)?.First;
+            if (entry?.NativeItem is not Item item || !item || item.id != entry.TypeId ||
+                !item.TryGetParentContainer(out var parent) || !parent ||
+                parent.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture) != entry.ContainerKey ||
+                !GameInventoryAdapter.Owns(_sessionBody, item)) return;
+            // Leave the WebView visible unless there is a real native item button to hand off to.
+            if (_nativePanel?.TryFocusInstance(entry) == true) _webUi.Visible = false;
+        }
+
+        private void ShowWebUi()
+        {
+            if (_webUi?.IsAvailable != true) return;
+            _webUi.Visible = true;
+            PublishWebUiState(force: true);
+        }
+
+        private void PublishWebUiState(bool force = false)
+        {
+            if (_webUi?.Visible != true || !_webUiReady || _window?.Visible != true) return;
+            var iconBudget = MaxSnapshotIconChars;
+            var snapshot = _window.Rows.Select(row =>
             {
-                instanceKey = row.First.InstanceKey,
-                typeId = row.First.TypeId,
-                displayName = row.First.DisplayName,
-                containerKey = row.First.ContainerKey,
-                containerName = row.First.ContainerName,
-                count = row.Count
+                var icon = _webUiIcons?.GetOrQueue(row.First.Icon);
+                if (icon != null && icon.Length > iconBudget) icon = null;
+                iconBudget -= icon?.Length ?? 0;
+                return new
+                {
+                    instanceKey = row.First.InstanceKey,
+                    typeId = row.First.TypeId,
+                    displayName = row.First.DisplayName,
+                    containerKey = row.First.ContainerKey,
+                    containerName = row.First.ContainerName,
+                    count = row.Count,
+                    icon
+                };
             }).ToArray();
             var mode = _window.Mode == InventoryViewMode.ByContainer ? "container" : "merged";
-            var payload = new { items = snapshot, total = _window.Snapshot.Count, groups = _window.Rows.Count, mode, status = _window.Status };
-            _webUi.SendEvent("uit.snapshot", payload);
+            var payload = JObject.FromObject(new { items = snapshot, total = _window.Snapshot.Count, groups = _window.Rows.Count,
+                mode, query = _window.ProjectedQuery, status = _window.Status });
+            if (!force && JToken.DeepEquals(payload, _lastWebUiSnapshot)) return;
+            if (_webUi.SendEvent("uit.snapshot", payload)) _lastWebUiSnapshot = payload;
             _webUi.SendEvent("inventory.snapshot", payload);
             var statusPayload = new { text = _window.Status, count = _window.Snapshot.Count, groups = _window.Rows.Count };
             _webUi.SendEvent("uit.status", statusPayload);
@@ -218,6 +270,10 @@ namespace UnknownInventoryTerminal
         internal static bool SearchFocused => Instance?._textInputFocused == true;
         internal static bool IsInventorySurface(GameObject target) =>
             Instance?._nativePanel?.Contains(target) == true || Instance?._shield?.IsNativeControl(target) == true;
+        internal static bool IsTerminalPoint(Vector2 screenPoint) =>
+            Instance?._nativePanel?.ContainsScreenPoint(screenPoint) == true;
+        internal static InvButton? ResolveTerminalDrop(PlayerCamera camera, IReadOnlyList<RaycastResult> hits) =>
+            Instance?._nativePanel?.ResolveDrop(camera, hits);
         internal static void ReleaseSearchFocus()
         {
             if (Instance == null) return;
@@ -256,8 +312,7 @@ namespace UnknownInventoryTerminal
             HoldInput();
             _shield?.SetVisible(true);
             _window.Open();
-            if (_webUi != null) _webUi.Visible = true;
-            PublishWebUiState();
+            ShowWebUi();
             _nativePanel?.SetVisible(true);
         }
         private static bool NativeModalOpen(PlayerCamera camera) => PauseHandler.paused ||
@@ -324,6 +379,7 @@ namespace UnknownInventoryTerminal
             RaycastResult blocker = default;
             bool hasBlocker = false;
             bool? inventorySurface = null;
+            var terminalPoint = IsTerminalPoint(Input.mousePosition);
             foreach (var hit in hits)
             {
                 if (!hit.gameObject) continue;
@@ -337,6 +393,10 @@ namespace UnknownInventoryTerminal
                 }
                 var native = plugin._shield?.IsNativeControl(hit.gameObject) == true;
                 var terminal = plugin._nativePanel?.Contains(hit.gameObject) == true;
+                // The terminal storage area owns the pointer while it is under the cursor;
+                // this prevents the hidden radial canvas from winning the release raycast.
+                if (terminalPoint && native && !terminal) continue;
+                if (!terminalPoint && terminal) continue;
                 // Only the foremost inventory surface receives manual raycasts. Unknown UI
                 // remains opaque so clicks cannot leak through the modal terminal.
                 if (!native && !terminal) break;
@@ -351,7 +411,8 @@ namespace UnknownInventoryTerminal
         {
             if (!hit.gameObject || !PlayerCamera.main) return false;
             var camera = PlayerCamera.main;
-            var placement = hit.gameObject.GetComponent<ContainerPlacementTarget>();
+            var placement = hit.gameObject.GetComponent<ContainerPlacementTarget>() ??
+                hit.gameObject.GetComponentInParent<ContainerPlacementTarget>();
             if (placement && !placement.IsValid(camera)) return false;
             if (camera.containerMenu && hit.gameObject.transform.IsChildOf(camera.containerMenu.transform) &&
                 (!camera.currentContainer || !GameInventoryAdapter.Owns(camera.body, camera.currentContainer.GetComponent<Item>()))) return false;
@@ -366,7 +427,11 @@ namespace UnknownInventoryTerminal
             var label = hit.gameObject.GetComponent<ItemLabel>();
             return !label || GameInventoryAdapter.Owns(PlayerCamera.main.body, label.refItem);
         }
-        private void OnApplicationFocus(bool focused) { if (!focused) Close(); }
+        private void OnApplicationFocus(bool focused)
+        {
+            _checkFocusLoss = !focused && IsVisible && _webUi?.Visible == true;
+            if (!focused && !_checkFocusLoss) Close();
+        }
         private void OnDisable() => Close();
         private void OnDestroy()
         {
@@ -469,6 +534,29 @@ namespace UnknownInventoryTerminal
         {
             if (!Plugin.BlocksGameplay) return true;
             uiCasts = Plugin.FilterHits(uiCasts);
+            // Dropping anywhere in the terminal resolves to a real native container button.
+            if (Plugin.IsTerminalPoint(Input.mousePosition))
+            {
+                var destination = Plugin.ResolveTerminalDrop(__instance, uiCasts);
+                if (destination)
+                {
+                    var nativeHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponent<InvButton>() == destination);
+                    if (!nativeHit.gameObject)
+                    {
+                        var module = uiCasts.FirstOrDefault(hit => hit.module != null).module;
+                        nativeHit = new RaycastResult
+                        {
+                            gameObject = destination!.gameObject,
+                            module = module,
+                            screenPosition = Input.mousePosition,
+                            sortingLayer = destination.gameObject.layer,
+                            sortingOrder = short.MaxValue - 1,
+                            distance = 0
+                        };
+                    }
+                    uiCasts.Insert(0, nativeHit);
+                }
+            }
             // Check again at release, since the snapshot can outlive a transfer/drop.
             if (!Plugin.CanInteract(__instance) || !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem))
             { Plugin.CancelDrag(__instance); return false; }
@@ -539,14 +627,13 @@ namespace UnknownInventoryTerminal
             var result = new List<InventoryEntry>();
             try
             {
-                foreach (var item in EnumerateItems(camera.body))
+                foreach (var (item, container) in EnumerateItems(camera.body))
                 {
-                    if (!item || string.IsNullOrEmpty(item.id)) continue;
-                    item.TryGetParentContainer(out var container);
-                    var containerItem = container ? container.GetComponent<Item>() : null;
+                    if (!item || !container || string.IsNullOrEmpty(item.id)) continue;
+                    var containerItem = container.GetComponent<Item>();
+                    if (!containerItem) continue;
                     var sprite = item.GetComponent<SpriteRenderer>();
-                    result.Add(new InventoryEntry(Key(item), item.id, item.fullName,
-                        container ? Key(container) : "root", containerItem ? containerItem!.fullName : "Player inventory",
+                    result.Add(new InventoryEntry(Key(item), item.id, item.fullName, Key(container), containerItem.fullName,
                         item, sprite ? sprite.sprite : null));
                 }
             }
@@ -574,44 +661,20 @@ namespace UnknownInventoryTerminal
             catch { return false; }
             return false;
         }
-        private static IEnumerable<Item> EnumerateItems(Body body)
+        private static IEnumerable<(Item Item, Container Container)> EnumerateItems(Body body)
         {
-            // Body.GetAllItemsThorough() is the game's inventory projection: it
-            // includes each held-slot/wearable root plus the ordinary Item children
-            // directly inside those containers. GetSurfaceInventoryItems() identifies
-            // the roots, so only a container that is itself in a body slot/wearable
-            // slot is filtered out; ordinary slot items remain visible.
-            var surfaceRoots = body.GetSurfaceInventoryItems();
-            var hiddenContainerShells = new HashSet<int>();
-            foreach (var root in surfaceRoots)
-                if (root && root.container) hiddenContainerShells.Add(root.GetInstanceID());
+            // Surface items establish ownership, but only actual container contents are indexed.
+            var roots = body.GetSurfaceInventoryItems().Where(item => item && item.container).Select(item => item.container);
+            return ContainerContents.Enumerate(roots, DirectItems,
+                item => item.TryGetParentContainer(out var parent) && parent ? parent : null,
+                item => item.container ? item.container : null);
+        }
 
-            var visited = new HashSet<int>();
-            foreach (var item in body.GetAllItemsThorough())
-            {
-                if (!item || !visited.Add(item.GetInstanceID())) continue;
-                if (!hiddenContainerShells.Contains(item.GetInstanceID())) yield return item;
-            }
-
-            // The stock thorough projection is one level deep. Preserve the
-            // terminal's nested-container support by walking only real Container
-            // children, while keeping the same root-shell filtering above.
-            var pending = new Stack<Item>();
-            foreach (var root in surfaceRoots)
-                if (root && root.container) pending.Push(root);
-            while (pending.Count > 0)
-            {
-                var containerItem = pending.Pop();
-                if (!containerItem || !containerItem.container) continue;
-                foreach (Transform child in containerItem.transform)
-                {
-                    if (!child.TryGetComponent<Item>(out var contained) ||
-                        !contained.TryGetParentContainer(out var parent) || parent != containerItem.container ||
-                        !visited.Add(contained.GetInstanceID())) continue;
-                    if (!hiddenContainerShells.Contains(contained.GetInstanceID())) yield return contained;
-                    if (contained.container) pending.Push(contained);
-                }
-            }
+        private static IEnumerable<Item> DirectItems(Container container)
+        {
+            if (!container) yield break;
+            foreach (Transform child in container.transform)
+                if (child && child.TryGetComponent<Item>(out var item) && item) yield return item;
         }
         private static string Key(UnityEngine.Object value) => value.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
     }

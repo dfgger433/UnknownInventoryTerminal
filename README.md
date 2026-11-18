@@ -1,6 +1,6 @@
 # Unknown Inventory Terminal
 
-Casualties Unknown 的客户端背包物品终端。当前版本提供原生 Unity 交互层和可选的 WebUI/OreUI 风格视觉面板。
+Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生终端，不再包含 WebUI 网页前端。
 
 ## 阶段 3 已交付
 
@@ -21,7 +21,7 @@ Casualties Unknown 的客户端背包物品终端。当前版本提供原生 Uni
 .\scripts\Build.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-脚本会先构建 `web/` 前端，再构建插件并运行 13 个后端测试。需要 Node.js/npm、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。若本地存在 WebUI release，构建会使用其 `WebUI.Plugin.dll` 进行 API 兼容编译；运行时缺少 WebUI 时自动回退到原生窗口。
+脚本构建插件并运行核心测试，不需要 Node.js/npm。需要 .NET SDK、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。
 
 ## 安装
 
@@ -31,7 +31,7 @@ Casualties Unknown 的客户端背包物品终端。当前版本提供原生 Uni
 .\scripts\Install.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-安装脚本只写入 `BepInEx/plugins/UnknownInventoryTerminal/`（插件 DLL、Core DLL 和编译后的 `Web/`），不修改游戏 DLL、Together 或存档。WebUI release 本身仍需按其项目说明安装到 `BepInEx/plugins/CasualtiesWebUI/`。
+安装脚本只向 `BepInEx/plugins/UnknownInventoryTerminal/` 复制插件 DLL 和 Core DLL，不修改游戏 DLL、Together 或存档，也不会清理此前安装的 `Web/` 资源。
 
 ## 文档
 

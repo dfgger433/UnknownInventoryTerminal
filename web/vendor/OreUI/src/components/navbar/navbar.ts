@@ -1,1 +1,0 @@
-export type OreNavbarElement = HTMLElement;
