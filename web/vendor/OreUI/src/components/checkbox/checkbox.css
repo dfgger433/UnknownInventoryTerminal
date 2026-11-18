@@ -1,0 +1,212 @@
+:where(input.ore-checkbox:not([role="switch"])) {
+  --ore-checkbox-unit: var(--ore-size-unit);
+  --ore-checkbox-background: var(--ore-color-neutral-50-background);
+  --ore-checkbox-highlight: var(--ore-color-neutral-50-highlight);
+  --ore-checkbox-border: var(--ore-color-border);
+  --ore-checkbox-indicator: var(--ore-color-foreground);
+  --ore-checkbox-active-background: var(--ore-color-primary-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-primary-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-primary-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-primary-highlight);
+  --ore-checkbox-active-highlight-hover: var(
+    --ore-color-primary-highlight-hover
+  );
+  --ore-checkbox-active-highlight-pressed: var(
+    --ore-color-primary-highlight-pressed
+  );
+
+  display: inline-grid;
+  flex: none;
+  place-content: center;
+  appearance: none;
+  box-sizing: border-box;
+  width: calc(var(--ore-checkbox-unit) * 12);
+  height: calc(var(--ore-checkbox-unit) * 12);
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--ore-checkbox-background);
+  box-shadow:
+    inset 0 0 0 var(--ore-checkbox-unit) var(--ore-checkbox-border),
+    inset 0 0 0 calc(var(--ore-checkbox-unit) * 2) var(--ore-checkbox-highlight);
+  color: var(--ore-checkbox-indicator);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(input.ore-checkbox:not([role="switch"]))::before {
+  width: calc(var(--ore-checkbox-unit) * 8);
+  height: calc(var(--ore-checkbox-unit) * 8);
+  background: currentColor;
+  content: "";
+  mask: url("../../assets/icons/tick.svg") center / contain no-repeat;
+  opacity: 0;
+}
+
+:where(input.ore-checkbox:not([role="switch"]):checked) {
+  --ore-checkbox-background: var(--ore-checkbox-active-background);
+  --ore-checkbox-highlight: var(--ore-checkbox-active-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"]):checked)::before {
+  opacity: 1;
+}
+
+:where(label:has(> input.ore-checkbox:not([role="switch"]))) {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--ore-size-unit) * 4);
+  min-height: calc(var(--ore-size-unit) * 12);
+  color: var(--ore-color-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+:where(
+  input.ore-checkbox:not([role="switch"])[data-color="secondary"],
+  input.ore-checkbox:not([role="switch"])[data-color="dungeons"],
+  input.ore-checkbox:not([role="switch"])[data-color="legends"],
+  input.ore-checkbox:not([role="switch"])[data-color="gold"]
+) {
+  --ore-checkbox-indicator: var(--ore-color-gray-100);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(input.ore-checkbox:not([role="switch"]):hover:not(:disabled)) {
+    --ore-checkbox-background: var(--ore-color-neutral-50-background-hover);
+    --ore-checkbox-highlight: var(--ore-color-neutral-50-highlight-hover);
+  }
+
+  :where(input.ore-checkbox:not([role="switch"]):checked:hover:not(:disabled)) {
+    --ore-checkbox-background: var(--ore-checkbox-active-background-hover);
+    --ore-checkbox-highlight: var(--ore-checkbox-active-highlight-hover);
+  }
+}
+
+:where(input.ore-checkbox:not([role="switch"]):active:not(:disabled)) {
+  --ore-checkbox-background: var(--ore-color-neutral-50-background-pressed);
+  --ore-checkbox-highlight: var(--ore-color-neutral-50-highlight-pressed);
+}
+
+:where(input.ore-checkbox:not([role="switch"]):checked:active:not(:disabled)) {
+  --ore-checkbox-background: var(--ore-checkbox-active-background-pressed);
+  --ore-checkbox-highlight: var(--ore-checkbox-active-highlight-pressed);
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="secondary"]) {
+  --ore-checkbox-active-background: var(--ore-color-secondary-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-secondary-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-secondary-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-secondary-highlight);
+  --ore-checkbox-active-highlight-hover: var(
+    --ore-color-secondary-highlight-hover
+  );
+  --ore-checkbox-active-highlight-pressed: var(
+    --ore-color-secondary-highlight-pressed
+  );
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="destructive"]) {
+  --ore-checkbox-active-background: var(--ore-color-destructive-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-destructive-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-destructive-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-destructive-highlight);
+  --ore-checkbox-active-highlight-hover: var(
+    --ore-color-destructive-highlight-hover
+  );
+  --ore-checkbox-active-highlight-pressed: var(
+    --ore-color-destructive-highlight-pressed
+  );
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="dungeons"]) {
+  --ore-checkbox-active-background: var(--ore-color-dungeons-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-dungeons-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-dungeons-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-dungeons-highlight);
+  --ore-checkbox-active-highlight-hover: var(--ore-color-dungeons-highlight);
+  --ore-checkbox-active-highlight-pressed: var(--ore-color-dungeons-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="legends"]) {
+  --ore-checkbox-active-background: var(--ore-color-legends-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-legends-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-legends-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-legends-highlight);
+  --ore-checkbox-active-highlight-hover: var(--ore-color-legends-highlight);
+  --ore-checkbox-active-highlight-pressed: var(--ore-color-legends-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="realms"]) {
+  --ore-checkbox-active-background: var(--ore-color-realms-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-realms-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-realms-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-realms-highlight);
+  --ore-checkbox-active-highlight-hover: var(--ore-color-realms-highlight);
+  --ore-checkbox-active-highlight-pressed: var(--ore-color-realms-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"])[data-color="gold"]) {
+  --ore-checkbox-active-background: var(--ore-color-gold-background);
+  --ore-checkbox-active-background-hover: var(
+    --ore-color-gold-background-hover
+  );
+  --ore-checkbox-active-background-pressed: var(
+    --ore-color-gold-background-pressed
+  );
+  --ore-checkbox-active-highlight: var(--ore-color-gold-highlight);
+  --ore-checkbox-active-highlight-hover: var(--ore-color-gold-highlight);
+  --ore-checkbox-active-highlight-pressed: var(--ore-color-gold-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"]):focus-visible) {
+  border-radius: 0;
+  outline: var(--ore-checkbox-unit) solid var(--ore-color-focus-ring);
+  outline-offset: 0;
+  box-shadow:
+    0 0 0 var(--ore-checkbox-unit) var(--ore-color-focus-ring),
+    inset 0 0 0 var(--ore-checkbox-unit) var(--ore-checkbox-border),
+    inset 0 0 0 calc(var(--ore-checkbox-unit) * 2) var(--ore-checkbox-highlight);
+}
+
+:where(input.ore-checkbox:not([role="switch"]):focus-visible:not(:checked)) {
+  --ore-checkbox-highlight: var(--ore-color-neutral-50-highlight-focus);
+}
+
+:where(input.ore-checkbox:not([role="switch"]):disabled) {
+  --ore-checkbox-background: var(--ore-color-disabled);
+  --ore-checkbox-highlight: var(--ore-color-disabled);
+  --ore-checkbox-border: var(--ore-color-disabled-border);
+  --ore-checkbox-indicator: var(--ore-color-disabled-border);
+
+  cursor: not-allowed;
+}
+
+:where(label:has(> input.ore-checkbox:not([role="switch"]):disabled)) {
+  cursor: not-allowed;
+}

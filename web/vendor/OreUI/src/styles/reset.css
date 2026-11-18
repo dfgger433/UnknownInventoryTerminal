@@ -1,0 +1,83 @@
+:where(
+  details.ore-accordion,
+  ore-button,
+  article.ore-card,
+  .ore-container,
+  .ore-table,
+  .ore-dropdown,
+  button.ore-icon-button,
+  ore-modal,
+  nav.ore-navbar,
+  progress.ore-progress-bar,
+  .ore-progress-ring,
+  ore-radio,
+  ore-radio-group,
+  .ore-scrollbar,
+  .ore-spinner,
+  ore-switch,
+  button.ore-tab-button,
+  ore-tag,
+  .ore-toggles,
+  .ore-tooltip,
+  .ore-toast
+) {
+  box-sizing: border-box;
+  font: inherit;
+}
+
+:where(ore-icon) {
+  display: inline-block;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  color: inherit;
+  line-height: 1;
+  vertical-align: -0.125em;
+}
+
+:where(ore-icon > svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Improvements for touch devices */
+:where(
+  ore-button,
+  button.ore-icon-button,
+  ore-radio,
+  ore-switch,
+  button.ore-tab-button,
+  .ore-dropdown .ore-dropdown-item,
+  ore-modal .ore-modal-header-button,
+  nav.ore-navbar .ore-navbar-button,
+  nav.ore-navbar .ore-navbar-action
+) {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(input[type="range"]) {
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(
+  .ore-textfield,
+  .ore-textfield .ore-textfield-input,
+  .ore-textarea,
+  .ore-textarea .ore-textarea-input
+) {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(input[type="range"]:not([data-orientation="vertical"])) {
+  touch-action: pan-y;
+}
+
+:where(input[type="range"][data-orientation="vertical"]) {
+  touch-action: pan-x;
+}

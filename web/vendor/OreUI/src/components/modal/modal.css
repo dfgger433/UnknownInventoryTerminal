@@ -1,0 +1,177 @@
+:where(dialog.ore-modal) {
+  --ore-modal-unit: var(--ore-size-unit);
+  --ore-modal-border: var(--ore-color-border);
+  --ore-modal-section-background: var(--ore-color-neutral-surface);
+  --ore-modal-highlight: var(--ore-color-neutral-specular);
+  --ore-modal-shadow: var(--ore-color-neutral-bevel-shadow);
+  --ore-modal-foreground: var(--ore-color-foreground);
+}
+
+:where(dialog.ore-modal) {
+  box-sizing: border-box;
+  width: min(
+    calc(var(--ore-modal-unit) * 200),
+    calc(100vw - var(--ore-modal-unit) * 16)
+  );
+  max-width: none;
+  max-height: calc(100dvh - var(--ore-modal-unit) * 16);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: var(--ore-modal-foreground);
+  background: transparent;
+  font-family: var(--ore-font-body);
+}
+
+:where(dialog.ore-modal)::backdrop {
+  background: var(--ore-color-overlay);
+}
+
+:where(dialog.ore-modal > .ore-modal-content) {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: inherit;
+  padding: var(--ore-modal-unit);
+  overflow: hidden;
+  background: var(--ore-modal-border);
+}
+
+:where(dialog.ore-modal .modal-form-body) {
+  --ore-container-gap: calc(var(--ore-modal-unit) * 8);
+  --ore-container-padding: calc(var(--ore-modal-unit) * 8)
+    calc(var(--ore-modal-unit) * 11);
+  --ore-textfield-width: 100%;
+}
+
+:where(dialog.ore-modal .modal-confirmation) {
+  --ore-container-gap: 0;
+  --ore-container-padding: calc(var(--ore-modal-unit) * 4)
+    calc(var(--ore-modal-unit) * 11);
+
+  color: var(--ore-modal-foreground);
+}
+
+:where(dialog.ore-modal .modal-actions) {
+  --ore-container-gap: calc(var(--ore-modal-unit) * 2);
+  --ore-container-padding: calc(var(--ore-modal-unit) * 7)
+    calc(var(--ore-modal-unit) * 11);
+}
+
+:where(dialog.ore-modal .modal-actions > button) {
+  width: 100%;
+}
+
+:where(
+  dialog.ore-modal > .ore-modal-content > .ore-container[data-variant="dark"]
+) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+:where(
+  dialog.ore-modal .ore-modal-header,
+  dialog.ore-modal > .ore-modal-content > .ore-container[data-variant="light"]
+) {
+  flex: none;
+}
+
+:where(dialog.ore-modal .ore-modal-header) {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    calc(var(--ore-modal-unit) * 18) 1fr
+    calc(var(--ore-modal-unit) * 18);
+  align-items: center;
+  box-sizing: border-box;
+  min-height: calc(var(--ore-modal-unit) * 19);
+  padding: var(--ore-modal-unit);
+  background: var(--ore-modal-border);
+}
+
+:where(dialog.ore-modal .ore-modal-header)::before {
+  position: absolute;
+  inset: var(--ore-modal-unit);
+  background: var(--ore-modal-section-background);
+  box-shadow: 0 0 0 var(--ore-modal-unit) var(--ore-modal-highlight);
+  content: "";
+}
+
+:where(dialog.ore-modal .ore-modal-title) {
+  z-index: 1;
+  margin: 0;
+  font-family: var(--ore-font-body);
+  font-size: calc(var(--ore-modal-unit) * 8);
+  font-weight: 400;
+  line-height: calc(var(--ore-modal-unit) * 10);
+  text-align: center;
+}
+
+:where(dialog.ore-modal .ore-modal-header-button) {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: calc(var(--ore-modal-unit) * 16);
+  height: calc(var(--ore-modal-unit) * 16);
+  min-width: 0;
+  min-height: 0;
+  padding: calc(var(--ore-modal-unit) * 4);
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+:where(dialog.ore-modal .ore-modal-header-button)::before {
+  content: none;
+}
+
+:where(dialog.ore-modal .ore-modal-header-button:first-child) {
+  margin-inline-start: var(--ore-modal-unit);
+}
+
+:where(dialog.ore-modal .ore-modal-header-button:last-child) {
+  justify-self: end;
+  margin-inline-end: var(--ore-modal-unit);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(dialog.ore-modal .ore-modal-header-button:hover) {
+    background: var(--ore-color-neutral-background-hover);
+  }
+}
+
+:where(dialog.ore-modal .ore-modal-header-button:active) {
+  background: var(--ore-color-neutral-background-pressed);
+}
+
+:where(dialog.ore-modal .ore-modal-header-button:focus-visible) {
+  outline: var(--ore-modal-unit) solid var(--ore-color-focus-ring);
+}
+
+:where(dialog.ore-modal .ore-modal-header-button > :is(ore-icon, svg)) {
+  width: calc(var(--ore-modal-unit) * 8);
+  height: calc(var(--ore-modal-unit) * 8);
+}
+
+:where(dialog.ore-modal .ore-modal-description) {
+  margin: 0;
+  font-family: "Noto Sans SC", "Noto Sans", sans-serif;
+  font-size: calc(var(--ore-modal-unit) * 6);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(dialog.ore-modal[open]) {
+    animation: ore-modal-show var(--ore-motion-fast) steps(2, jump-none);
+  }
+}
+
+@keyframes ore-modal-show {
+  from {
+    opacity: 0;
+  }
+}

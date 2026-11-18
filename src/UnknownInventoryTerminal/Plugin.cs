@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -16,6 +18,7 @@ namespace UnknownInventoryTerminal
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     [BepInDependency("net.cucorelib", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("JustUnknownCharacters", BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency("casualtiesunknown.webui", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         /// <summary>Stable BepInEx plugin identifier.</summary>
@@ -23,7 +26,7 @@ namespace UnknownInventoryTerminal
         /// <summary>Human-readable plugin name.</summary>
         public const string PluginName = "Unknown Inventory Terminal";
         /// <summary>Plugin version.</summary>
-        public const string PluginVersion = "0.3.0";
+        public const string PluginVersion = "0.4.0";
         internal static Plugin? Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; } = null!;
         internal static bool IsVisible => Instance?._window?.Visible == true;
@@ -34,6 +37,9 @@ namespace UnknownInventoryTerminal
         private InputShield? _shield;
         private Harmony? _harmony;
         private IDisposable? _pinyin;
+        private WebUiBridge? _webUi;
+        private bool _webUiRequested;
+        private float _nextWebUiProbe;
         private bool _inputReady, _sessionActive, _configuredByContainer, _textInputFocused, _clearGuiFocus;
         private PlayerCamera? _sessionCamera;
         private Body? _sessionBody;
@@ -57,16 +63,44 @@ namespace UnknownInventoryTerminal
                 (bounds, mode) => _nativePanel.SetLayout(bounds, mode));
             _configuredByContainer = SettingsBridge.ByContainer.Value;
             _window.Mode = _configuredByContainer ? InventoryViewMode.ByContainer : InventoryViewMode.Merged;
+            _webUi = new WebUiBridge(Logger);
+            _webUi.EventReceived += HandleWebUiEvent;
+            _webUi.Closed += HandleWebUiClosed;
+            _window.StateChanged += PublishWebUiState;
             _pinyin = PinyinBridge.Register(() => SettingsBridge.Pinyin.Value, Logger);
             Logger.LogInfo(PluginName + " " + PluginVersion + " loaded; native inventory bridge " + (_inputReady ? "ready." : "disabled: required input hooks unavailable."));
         }
         private void Update()
         {
+            if (!_webUiRequested && _webUi != null && Time.unscaledTime >= _nextWebUiProbe)
+            {
+                _nextWebUiProbe = Time.unscaledTime + 2f;
+                if (_webUi.TryCreate())
+                {
+                    _webUiRequested = true;
+                    if (IsVisible)
+                    {
+                        _webUi.Visible = true;
+                        PublishWebUiState();
+                    }
+                }
+            }
+            if (_webUi?.Visible == true && !_sessionActive && _window != null && CanToggle()) Open();
+            UpdateTerminal();
+        }
+
+        private void UpdateTerminal()
+        {
             if (_window == null) return;
             if (IsVisible && (!SessionValid() || Input.GetKeyDown(KeyBinds.GetBind("pause")))) Close();
             if (SettingsBridge.IsTogglePressed() && CanToggle())
             {
-                if (IsVisible) Close(); else Open();
+                if (IsVisible)
+                {
+                    if (_webUi?.IsAvailable == true && !_webUi.Visible) _webUi.Visible = true;
+                    else Close();
+                }
+                else Open();
             }
             if (_configuredByContainer != SettingsBridge.ByContainer.Value)
             {
@@ -89,6 +123,84 @@ namespace UnknownInventoryTerminal
             _nativePanel?.SetVisible(_window.Visible);
             _shield?.SetVisible(_window.Visible);
         }
+        private void HandleWebUiClosed()
+        {
+            // The WebUI panel remains registered and may reconnect its host; do not
+            // call CreatePanel again with the same stable ID after a browser close.
+            if (IsVisible) Close();
+        }
+
+        private void HandleWebUiEvent(string name, object? payload)
+        {
+            var json = payload as JToken;
+            switch (name)
+            {
+                case "close":
+                case "uit.close":
+                    if (IsVisible) Close();
+                    break;
+                case "refresh":
+                case "uit.refresh":
+                    _window?.RefreshNow();
+                    break;
+                case "query":
+                case "uit.query":
+                    SearchApi.Query = json?.Type == JTokenType.String ? json.Value<string>() ?? "" : json?["query"]?.Value<string>() ?? "";
+                    break;
+                case "mode":
+                case "uit.mode":
+                    var mode = json?.Type == JTokenType.String ? json.Value<string>() : json?["mode"]?.Value<string>();
+                    if (string.Equals(mode, "container", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "byContainer", StringComparison.OrdinalIgnoreCase))
+                        SettingsBridge.ByContainer.Value = true;
+                    else if (string.Equals(mode, "merged", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase))
+                        SettingsBridge.ByContainer.Value = false;
+                    break;
+                case "interaction":
+                case "uit.interaction":
+                    var instanceKey = json?["instanceKey"]?.Value<string>();
+                    if (string.Equals(json?["action"]?.Value<string>(), "select", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _nativePanel?.FocusInstance(instanceKey ?? "");
+                        // The external WebView cannot receive Unity's native InvButton raycasts.
+                        // Hide it after a selection so the real picker becomes the active surface.
+                        if (_webUi != null) _webUi.Visible = false;
+                    }
+                    Logger.LogDebug("WebUI interaction: " + (json?.ToString(Newtonsoft.Json.Formatting.None) ?? "null"));
+                    break;
+                case "uit.native":
+                    if (_webUi != null) _webUi.Visible = false;
+                    Logger.LogDebug("WebUI native interaction: " + (json?.ToString(Newtonsoft.Json.Formatting.None) ?? "null"));
+                    break;
+            }
+        }
+
+        private void PublishWebUiState()
+        {
+            if (_webUi == null || !_webUi.IsAvailable || _window == null) return;
+            var snapshot = _window.Rows.Select(row => new
+            {
+                instanceKey = row.First.InstanceKey,
+                typeId = row.First.TypeId,
+                displayName = row.First.DisplayName,
+                containerKey = row.First.ContainerKey,
+                containerName = row.First.ContainerName,
+                count = row.Count
+            }).ToArray();
+            var mode = _window.Mode == InventoryViewMode.ByContainer ? "container" : "merged";
+            var payload = new { items = snapshot, total = _window.Snapshot.Count, groups = _window.Rows.Count, mode, status = _window.Status };
+            _webUi.SendEvent("uit.snapshot", payload);
+            _webUi.SendEvent("inventory.snapshot", payload);
+            var statusPayload = new { text = _window.Status, count = _window.Snapshot.Count, groups = _window.Rows.Count };
+            _webUi.SendEvent("uit.status", statusPayload);
+            _webUi.SendEvent("inventory.status", statusPayload);
+            var queryPayload = new { query = SearchApi.Query };
+            _webUi.SendEvent("uit.query", queryPayload);
+            _webUi.SendEvent("inventory.query", queryPayload);
+            var modePayload = new { mode };
+            _webUi.SendEvent("uit.mode", modePayload);
+            _webUi.SendEvent("inventory.mode", modePayload);
+        }
+
         private void LateUpdate()
         {
             if (IsVisible)
@@ -144,6 +256,8 @@ namespace UnknownInventoryTerminal
             HoldInput();
             _shield?.SetVisible(true);
             _window.Open();
+            if (_webUi != null) _webUi.Visible = true;
+            PublishWebUiState();
             _nativePanel?.SetVisible(true);
         }
         private static bool NativeModalOpen(PlayerCamera camera) => PauseHandler.paused ||
@@ -168,6 +282,7 @@ namespace UnknownInventoryTerminal
         private void Close()
         {
             _window?.Close();
+            if (_webUi != null) _webUi.Visible = false;
             EndSession();
             _nativePanel?.SetVisible(false);
             _shield?.SetVisible(false);
@@ -256,6 +371,7 @@ namespace UnknownInventoryTerminal
         private void OnDestroy()
         {
             Close();
+            _webUi?.Dispose();
             _pinyin?.Dispose(); _shield?.Dispose(); _nativePanel?.Dispose(); _harmony?.UnpatchSelf();
             if (Instance == this) Instance = null;
         }

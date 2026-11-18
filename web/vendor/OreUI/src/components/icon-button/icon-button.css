@@ -1,0 +1,118 @@
+:where(button.ore-icon-button) {
+  --ore-icon-button-unit: var(--ore-size-unit);
+  --ore-icon-button-background: var(--ore-color-neutral-surface);
+  --ore-icon-button-highlight: var(--ore-color-neutral-specular);
+  --ore-icon-button-shadow-color: var(--ore-color-neutral-bevel-shadow);
+  --ore-icon-button-corner: var(--ore-color-neutral-corner);
+  --ore-icon-button-border: var(--ore-color-border);
+  --ore-icon-button-foreground: var(--ore-color-foreground);
+
+  display: inline-grid;
+  place-items: var(--ore-icon-button-place-items, center);
+  position: relative;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  min-width: 0;
+  min-height: 0;
+  width: var(--ore-icon-button-width, calc(var(--ore-icon-button-unit) * 18));
+  height: var(--ore-icon-button-height, calc(var(--ore-icon-button-unit) * 18));
+  padding: var(--ore-icon-button-padding, var(--ore-icon-button-unit));
+  color: var(--ore-icon-button-foreground);
+  background:
+    linear-gradient(
+        var(--ore-icon-button-corner),
+        var(--ore-icon-button-corner)
+      )
+      right top / var(--ore-icon-button-unit) var(--ore-icon-button-unit)
+      no-repeat,
+    linear-gradient(
+        var(--ore-icon-button-corner),
+        var(--ore-icon-button-corner)
+      )
+      left bottom / var(--ore-icon-button-unit) var(--ore-icon-button-unit)
+      no-repeat,
+    linear-gradient(
+        var(--ore-icon-button-highlight),
+        var(--ore-icon-button-highlight)
+      )
+      left top / calc(100% - var(--ore-icon-button-unit))
+      var(--ore-icon-button-unit) no-repeat,
+    linear-gradient(
+        var(--ore-icon-button-highlight),
+        var(--ore-icon-button-highlight)
+      )
+      left top / var(--ore-icon-button-unit)
+      calc(100% - var(--ore-icon-button-unit)) no-repeat,
+    linear-gradient(
+        var(--ore-icon-button-shadow-color),
+        var(--ore-icon-button-shadow-color)
+      )
+      right bottom / calc(100% - var(--ore-icon-button-unit))
+      var(--ore-icon-button-unit) no-repeat,
+    linear-gradient(
+        var(--ore-icon-button-shadow-color),
+        var(--ore-icon-button-shadow-color)
+      )
+      right bottom / var(--ore-icon-button-unit)
+      calc(100% - var(--ore-icon-button-unit)) no-repeat,
+    var(--ore-icon-button-background);
+  box-shadow: var(
+    --ore-icon-button-box-shadow,
+    0 0 0 var(--ore-icon-button-unit) var(--ore-icon-button-border)
+  );
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button.ore-icon-button)::before {
+  content: none;
+}
+
+:where(button.ore-icon-button > ore-icon) {
+  width: calc(var(--ore-icon-button-unit) * 6);
+  height: calc(var(--ore-icon-button-unit) * 6);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(
+    button.ore-icon-button:hover:not(:disabled),
+    button.ore-icon-button.preview-hover:not(:disabled)
+  ) {
+    --ore-icon-button-background: var(--ore-color-neutral-background-hover);
+    --ore-icon-button-highlight: var(--ore-color-neutral-highlight-hover);
+    --ore-icon-button-corner: var(--ore-color-neutral-highlight);
+  }
+}
+
+:where(
+  button.ore-icon-button:active:not(:disabled),
+  button.ore-icon-button.preview-pressed:not(:disabled)
+) {
+  --ore-icon-button-background: var(--ore-color-neutral-background-pressed);
+  --ore-icon-button-highlight: var(--ore-color-neutral-shadow);
+  --ore-icon-button-shadow-color: var(--ore-color-neutral-highlight-pressed);
+  --ore-icon-button-corner: var(--ore-color-neutral-background);
+
+  padding: var(--ore-icon-button-padding, var(--ore-icon-button-unit));
+}
+
+:where(
+  button.ore-icon-button:focus-visible,
+  button.ore-icon-button.preview-focus
+) {
+  outline: var(--ore-icon-button-unit) solid var(--ore-color-focus-ring);
+  outline-offset: var(--ore-icon-button-unit);
+}
+
+:where(button.ore-icon-button:disabled) {
+  --ore-icon-button-background: var(--ore-color-disabled);
+  --ore-icon-button-highlight: var(--ore-color-disabled-border);
+  --ore-icon-button-shadow-color: var(--ore-color-disabled-shadow);
+  --ore-icon-button-corner: var(--ore-color-neutral-50-highlight-focus);
+  --ore-icon-button-border: var(--ore-color-disabled-border);
+  --ore-icon-button-foreground: var(--ore-color-disabled-foreground);
+
+  cursor: not-allowed;
+}

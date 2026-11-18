@@ -25,6 +25,10 @@ namespace UnknownInventoryTerminal
         private GUIStyle? _windowStyle;
         internal bool Visible { get; private set; }
         internal InventoryViewMode Mode { get; set; }
+        internal IReadOnlyList<InventoryEntry> Snapshot => _snapshot;
+        internal IReadOnlyList<InventoryRow> Rows => _rows;
+        internal string Status => _status;
+        internal event Action? StateChanged;
 
         internal TerminalWindow(Func<IReadOnlyList<InventoryEntry>> capture,
             Action<IReadOnlyList<InventoryEntry>> publishNativeEntries,
@@ -37,13 +41,14 @@ namespace UnknownInventoryTerminal
             _configureNativePanel = configureNativePanel;
         }
 
-        internal void Open() { Visible = true; _closeRequested = false; FitToScreen(); Refresh(); }
+        internal void Open() { Visible = true; _closeRequested = false; FitToScreen(); Refresh(); StateChanged?.Invoke(); }
         internal void Close()
         {
             Visible = false;
             _snapshot = Array.Empty<InventoryEntry>();
             _rows = Array.Empty<InventoryRow>();
             _publishNativeEntries(Array.Empty<InventoryEntry>());
+            StateChanged?.Invoke();
         }
         internal void Update()
         {
@@ -52,6 +57,8 @@ namespace UnknownInventoryTerminal
             if (Time.unscaledTime >= _nextRefresh) Refresh();
             if (_lastQuery != SearchApi.Query || _lastMode != Mode) Rebuild();
         }
+        internal void RefreshNow() => Refresh();
+
         private void Refresh()
         {
             _nextRefresh = Time.unscaledTime + 0.5f;
@@ -79,6 +86,7 @@ namespace UnknownInventoryTerminal
             var matching = _rows.SelectMany(row => row.Instances).ToArray();
             _publishNativeEntries(matching);
             _status = matching.Length + " / " + _snapshot.Count + " items  |  " + _rows.Count + " matching groups";
+            StateChanged?.Invoke();
         }
         private void FitToScreen()
         {

@@ -1,0 +1,268 @@
+:where(input.ore-slider) {
+  --ore-slider-unit: var(--ore-size-unit);
+  --ore-slider-progress-end: 0;
+  --ore-slider-segment-size: 10%;
+  --ore-slider-value-end: calc(
+    var(--ore-slider-unit) * 7.25 + (100% - var(--ore-slider-unit) * 14.5) *
+      var(--ore-slider-progress-end)
+  );
+  --ore-slider-track-border: var(--ore-color-border);
+  --ore-slider-active-range-background: var(--ore-color-primary-background);
+  --ore-slider-active-range-highlight: var(--ore-color-primary-highlight);
+  --ore-slider-range-background: var(--ore-slider-active-range-background);
+  --ore-slider-range-highlight: var(--ore-slider-active-range-highlight);
+  --ore-slider-track-background: var(--ore-color-neutral-50-background);
+  --ore-slider-track-highlight: var(--ore-color-neutral-50-highlight-focus);
+  --ore-slider-thumb-background: var(--ore-color-secondary-background);
+  --ore-slider-thumb-highlight: var(--ore-color-secondary-highlight);
+  --ore-slider-thumb-shadow: var(--ore-color-secondary-shadow);
+  --ore-slider-thumb-border: var(--ore-color-border);
+  --ore-slider-thumb-focus-ring: transparent;
+  --ore-slider-segment-edge: transparent;
+  --ore-slider-thumb-image:
+    linear-gradient(
+        var(--ore-slider-thumb-background),
+        var(--ore-slider-thumb-background)
+      )
+      center calc(var(--ore-slider-unit) * 2) /
+      calc(var(--ore-slider-unit) * 10.5) calc(var(--ore-slider-unit) * 8.5)
+      no-repeat,
+    linear-gradient(
+        var(--ore-slider-thumb-shadow),
+        var(--ore-slider-thumb-shadow)
+      )
+      center calc(var(--ore-slider-unit) * 11.5) /
+      calc(var(--ore-slider-unit) * 12.5) calc(var(--ore-slider-unit) * 2)
+      no-repeat,
+    linear-gradient(
+        var(--ore-slider-thumb-highlight),
+        var(--ore-slider-thumb-highlight)
+      )
+      center var(--ore-slider-unit) / calc(var(--ore-slider-unit) * 12.5)
+      calc(var(--ore-slider-unit) * 10.5) no-repeat,
+    var(--ore-slider-thumb-border);
+  --ore-slider-segments: linear-gradient(transparent, transparent);
+
+  width: min(100%, calc(var(--ore-slider-unit) * 254.5));
+  height: calc(var(--ore-slider-unit) * 14.5);
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  background:
+    var(--ore-slider-segments) center / 100% calc(var(--ore-slider-unit) * 3.5)
+      no-repeat,
+    linear-gradient(
+        to right,
+        var(--ore-slider-range-background) 0 var(--ore-slider-value-end),
+        var(--ore-slider-track-background) var(--ore-slider-value-end) 100%
+      )
+      center / calc(100% - var(--ore-slider-unit) * 4)
+      calc(var(--ore-slider-unit) * 1.5) no-repeat,
+    linear-gradient(
+        to right,
+        var(--ore-slider-range-highlight) 0 var(--ore-slider-value-end),
+        var(--ore-slider-track-highlight) var(--ore-slider-value-end) 100%
+      )
+      center / calc(100% - var(--ore-slider-unit) * 2)
+      calc(var(--ore-slider-unit) * 3.5) no-repeat,
+    linear-gradient(
+        var(--ore-slider-track-border),
+        var(--ore-slider-track-border)
+      )
+      center / 100% calc(var(--ore-slider-unit) * 5.5) no-repeat;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(input.ore-slider[data-variant="segmented"]) {
+  --ore-slider-segment-gap: calc(
+    var(--ore-slider-segment-size) - var(--ore-slider-unit) * 0.9
+  );
+  --ore-slider-segment-period: calc(
+    var(--ore-slider-segment-size) + var(--ore-slider-unit) * 0.1
+  );
+  --ore-slider-segments: repeating-linear-gradient(
+    to right,
+    transparent 0 var(--ore-slider-segment-gap),
+    var(--ore-slider-track-border) var(--ore-slider-segment-gap)
+      calc(var(--ore-slider-segment-gap) + var(--ore-slider-unit)),
+    transparent calc(var(--ore-slider-segment-gap) + var(--ore-slider-unit))
+      var(--ore-slider-segment-period)
+  );
+}
+
+:where(input.ore-slider[data-color="secondary"]) {
+  --ore-slider-active-range-background: var(--ore-color-secondary-background);
+  --ore-slider-active-range-highlight: var(--ore-color-secondary-highlight);
+}
+
+:where(input.ore-slider[data-color="destructive"]) {
+  --ore-slider-active-range-background: var(--ore-color-destructive-background);
+  --ore-slider-active-range-highlight: var(--ore-color-destructive-highlight);
+}
+
+:where(input.ore-slider[data-color="dungeons"]) {
+  --ore-slider-active-range-background: var(--ore-color-dungeons-background);
+  --ore-slider-active-range-highlight: var(--ore-color-dungeons-highlight);
+}
+
+:where(input.ore-slider[data-color="legends"]) {
+  --ore-slider-active-range-background: var(--ore-color-legends-background);
+  --ore-slider-active-range-highlight: var(--ore-color-legends-highlight);
+}
+
+:where(input.ore-slider[data-color="realms"]) {
+  --ore-slider-active-range-background: var(--ore-color-realms-background);
+  --ore-slider-active-range-highlight: var(--ore-color-realms-highlight);
+}
+
+:where(input.ore-slider[data-color="gold"]) {
+  --ore-slider-active-range-background: var(--ore-color-gold-background);
+  --ore-slider-active-range-highlight: var(--ore-color-gold-highlight);
+}
+
+:where(input.ore-slider[data-orientation="vertical"]) {
+  width: calc(var(--ore-slider-unit) * 14.5);
+  height: calc(var(--ore-slider-unit) * 127.25);
+  background:
+    var(--ore-slider-segments) center / calc(var(--ore-slider-unit) * 3.5) 100%
+      no-repeat,
+    linear-gradient(
+        to top,
+        var(--ore-slider-range-background) 0 var(--ore-slider-value-end),
+        var(--ore-slider-track-background) var(--ore-slider-value-end) 100%
+      )
+      center / calc(var(--ore-slider-unit) * 1.5)
+      calc(100% - var(--ore-slider-unit) * 4) no-repeat,
+    linear-gradient(
+        to top,
+        var(--ore-slider-range-highlight) 0 var(--ore-slider-value-end),
+        var(--ore-slider-track-highlight) var(--ore-slider-value-end) 100%
+      )
+      center / calc(var(--ore-slider-unit) * 3.5)
+      calc(100% - var(--ore-slider-unit) * 2) no-repeat,
+    linear-gradient(
+        var(--ore-slider-track-border),
+        var(--ore-slider-track-border)
+      )
+      center / calc(var(--ore-slider-unit) * 5.5) 100% no-repeat;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+
+:where(
+  input.ore-slider[data-orientation="vertical"][data-variant="segmented"]
+) {
+  --ore-slider-segment-gap: calc(
+    var(--ore-slider-segment-size) - var(--ore-slider-unit) * 0.9
+  );
+  --ore-slider-segment-period: calc(
+    var(--ore-slider-segment-size) + var(--ore-slider-unit) * 0.1
+  );
+  --ore-slider-segments: repeating-linear-gradient(
+    to top,
+    transparent 0 var(--ore-slider-segment-gap),
+    var(--ore-slider-track-border) var(--ore-slider-segment-gap)
+      calc(var(--ore-slider-segment-gap) + var(--ore-slider-unit)),
+    transparent calc(var(--ore-slider-segment-gap) + var(--ore-slider-unit))
+      var(--ore-slider-segment-period)
+  );
+}
+
+:where(input.ore-slider)::-webkit-slider-runnable-track {
+  height: calc(var(--ore-slider-unit) * 5.5);
+  background: transparent;
+}
+
+:where(
+  input.ore-slider[data-orientation="vertical"]
+)::-webkit-slider-runnable-track {
+  width: calc(var(--ore-slider-unit) * 5.5);
+  height: 100%;
+}
+
+:where(input.ore-slider)::-moz-range-track {
+  height: calc(var(--ore-slider-unit) * 5.5);
+  background: transparent;
+}
+
+:where(input.ore-slider[data-orientation="vertical"])::-moz-range-track {
+  width: calc(var(--ore-slider-unit) * 5.5);
+  height: 100%;
+}
+
+:where(input.ore-slider)::-webkit-slider-thumb {
+  width: calc(var(--ore-slider-unit) * 14.5);
+  height: calc(var(--ore-slider-unit) * 14.5);
+  margin-top: calc(var(--ore-slider-unit) * -4.5);
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--ore-slider-thumb-image);
+  box-shadow: 0 0 0 var(--ore-slider-unit) var(--ore-slider-thumb-focus-ring);
+}
+
+:where(input.ore-slider[data-orientation="vertical"])::-webkit-slider-thumb {
+  margin-top: 0;
+  margin-left: calc(var(--ore-slider-unit) * -4.5);
+}
+
+:where(input.ore-slider)::-moz-range-thumb {
+  width: calc(var(--ore-slider-unit) * 14.5);
+  height: calc(var(--ore-slider-unit) * 14.5);
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: var(--ore-slider-thumb-image);
+  box-shadow: 0 0 0 var(--ore-slider-unit) var(--ore-slider-thumb-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(input.ore-slider:hover:not(:disabled)) {
+    --ore-slider-thumb-background: var(--ore-color-secondary-background-hover);
+    --ore-slider-thumb-highlight: var(--ore-color-secondary-highlight-hover);
+  }
+}
+
+:where(input.ore-slider:active:not(:disabled)) {
+  --ore-slider-thumb-background: var(--ore-color-secondary-background-pressed);
+  --ore-slider-thumb-highlight: var(--ore-color-secondary-highlight-pressed);
+}
+
+:where(input.ore-slider:focus-visible) {
+  --ore-slider-thumb-highlight: color-mix(
+    in srgb,
+    var(--ore-color-secondary-background),
+    var(--ore-color-white) 60%
+  );
+  --ore-slider-thumb-focus-ring: var(--ore-color-focus-ring);
+
+  outline: none;
+}
+
+:where(input.ore-slider:disabled) {
+  --ore-slider-track-border: var(--ore-color-disabled-border);
+  --ore-slider-range-background: var(--ore-color-disabled);
+  --ore-slider-range-highlight: color-mix(
+    in srgb,
+    var(--ore-color-disabled),
+    var(--ore-color-white) 10%
+  );
+  --ore-slider-track-background: var(--ore-color-disabled);
+  --ore-slider-track-highlight: color-mix(
+    in srgb,
+    var(--ore-color-disabled),
+    var(--ore-color-white) 20%
+  );
+  --ore-slider-thumb-background: var(--ore-color-disabled);
+  --ore-slider-thumb-highlight: color-mix(
+    in srgb,
+    var(--ore-color-disabled),
+    var(--ore-color-white) 60%
+  );
+  --ore-slider-thumb-shadow: var(--ore-color-disabled-shadow);
+  --ore-slider-thumb-border: var(--ore-color-disabled-border);
+
+  cursor: not-allowed;
+}

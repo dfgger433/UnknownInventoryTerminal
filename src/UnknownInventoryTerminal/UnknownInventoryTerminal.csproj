@@ -3,13 +3,14 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>0.1.0</Version>
+    <Version>0.4.0</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GameRoot Condition="'$(GameRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\..</GameRoot>
     <Managed>$(GameRoot)\CasualtiesUnknown_Data\Managed</Managed>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\dist\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <WebUiPluginAssembly>$(GameRoot)\mods\WebUI\artifacts\Release\CasualtiesWebUI\WebUI.Plugin.dll</WebUiPluginAssembly>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
@@ -19,6 +20,11 @@
     <Reference Include="$(GameRoot)\BepInEx\core\BepInEx.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameRoot)\BepInEx\core\0Harmony.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameRoot)\BepInEx\plugins\CUCoreLib.dll"><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(Managed)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="WebUI.Plugin" Condition="Exists('$(WebUiPluginAssembly)')">
+      <HintPath>$(WebUiPluginAssembly)</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(Managed)\Assembly-CSharp.dll')" Text="Game assembly missing. Set -p:GameRoot=your-game-directory." />

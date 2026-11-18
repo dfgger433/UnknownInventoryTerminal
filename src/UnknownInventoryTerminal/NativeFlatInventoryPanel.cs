@@ -66,6 +66,16 @@ namespace UnknownInventoryTerminal
             if (_visible) Synchronize();
         }
 
+        internal void FocusInstance(string instanceKey)
+        {
+            if (string.IsNullOrEmpty(instanceKey)) return;
+            var entry = _entries.FirstOrDefault(candidate => candidate.InstanceKey == instanceKey);
+            if (entry == null) return;
+            _selectionKey = (entry.TypeId, _mode == InventoryViewMode.ByContainer ? entry.ContainerKey : "");
+            _dirty = true;
+            if (_visible) Synchronize();
+        }
+
         // Bounds use IMGUI's top-left pixel coordinates; the overlay canvas uses bottom-left coordinates.
         internal void SetLayout(Rect bounds, InventoryViewMode mode)
         {

@@ -1,6 +1,6 @@
 # Unknown Inventory Terminal
 
-Casualties Unknown 的客户端背包物品终端。阶段 1 聚焦后端、兼容性边界和可验证的测试窗口。
+Casualties Unknown 的客户端背包物品终端。当前版本提供原生 Unity 交互层和可选的 WebUI/OreUI 风格视觉面板。
 
 ## 阶段 3 已交付
 
@@ -21,7 +21,7 @@ Casualties Unknown 的客户端背包物品终端。阶段 1 聚焦后端、兼�
 .\scripts\Build.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-脚本会构建插件和运行 13 个后端测试。需要本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。
+脚本会先构建 `web/` 前端，再构建插件并运行 13 个后端测试。需要 Node.js/npm、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。若本地存在 WebUI release，构建会使用其 `WebUI.Plugin.dll` 进行 API 兼容编译；运行时缺少 WebUI 时自动回退到原生窗口。
 
 ## 安装
 
@@ -31,10 +31,11 @@ Casualties Unknown 的客户端背包物品终端。阶段 1 聚焦后端、兼�
 .\scripts\Install.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-安装脚本只写入 `BepInEx/plugins/UnknownInventoryTerminal/`，不修改游戏 DLL、Together 或存档。
+安装脚本只写入 `BepInEx/plugins/UnknownInventoryTerminal/`（插件 DLL、Core DLL 和编译后的 `Web/`），不修改游戏 DLL、Together 或存档。WebUI release 本身仍需按其项目说明安装到 `BepInEx/plugins/CasualtiesWebUI/`。
 
 ## 文档
 
 - [本地计划](docs/PLAN.md)
 - [兼容性依据和未实测风险](docs/COMPATIBILITY.md)
 - [外部搜索 API](docs/SEARCH-API.md)
+- [WebUI / OreUI / AE2 风格终端设计记录](docs/webui-ae2-terminal.md)

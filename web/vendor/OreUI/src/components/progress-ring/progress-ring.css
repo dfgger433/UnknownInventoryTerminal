@@ -1,0 +1,22 @@
+:where(.ore-progress-ring) {
+  --ore-progress-ring-frame: 0;
+
+  display: inline-block;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  color: inherit;
+  line-height: 1;
+  vertical-align: -0.125em;
+}
+
+:where(.ore-progress-ring)::before {
+  content: "";
+  display: block;
+  width: 3475%;
+  height: 100%;
+  background-color: currentColor;
+  mask: url("../../assets/icons/progress-ring.svg") 0 0 / 100% 100% no-repeat;
+  transform: translateX(calc(var(--ore-progress-ring-frame) * -6.4748201439%));
+}

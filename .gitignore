@@ -1,8 +1,11 @@
 **/bin/
 **/obj/
 dist/
+web/dist/
+web/node_modules/
 research/
 TestResults/
+tests/web-terminal-smoke.png
 .vs/
 *.user
 *.suo
