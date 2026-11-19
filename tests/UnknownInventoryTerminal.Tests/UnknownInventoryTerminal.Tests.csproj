@@ -14,5 +14,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Ae2TerminalLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />
   </ItemGroup>
 </Project>

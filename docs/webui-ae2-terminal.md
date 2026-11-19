@@ -1,6 +1,6 @@
 # WebUI / OreUI / AE2 风格终端设计记录
 
-> 下文保留原生窗口设计与早期 WebUI 的历史记录。当前项目不再提供网页前端；文中的 WebUI 安装与验收内容仅供历史参考。
+> 下文是早期原生窗口和 WebUI 的历史记录，不代表当前布局或资源。当前原生终端使用 AE2 贴图，操作、构建和贴图授权见 [项目 README](../README.md)；WebUI 前端不再随本项目提供。
 
 ## 1. 目标、范围与非目标
 
@@ -135,7 +135,7 @@ dotnet test .\tests\UnknownInventoryTerminal.Tests\UnknownInventoryTerminal.Test
 - [ ] Release build 使用目标游戏目录成功完成，无缺失 Managed DLL 或 CUCoreLib 报错。
 - [ ] core tests 成功；覆盖实例 key 去重、容器分组、大小写、多词 AND、matcher 异常隔离和参数校验。
 - [ ] `dist/` 至少包含 `UnknownInventoryTerminal.dll` 与 `UnknownInventoryTerminal.Core.dll`；不要把测试 NuGet DLL 安装到插件目录。
-- [ ] BepInEx 日志显示插件版本 `0.4.0`，并明确记录必需输入 patch 是否 ready；缺失入口时不能把“窗口可见”当作完整可用。
+- [ ] BepInEx 日志显示插件版本 `0.4.2`，并明确记录必需输入 patch 是否 ready；缺失入口时不能把“窗口可见”当作完整可用。
 - [ ] 安装 WebUI release 后，F7 能打开外部终端窗口；点击网页物品会隐藏 WebUI 并把焦点交回原生 `InvButton` 选择页；没有 WebUI 时 F7 仍能打开原生窗口。
 
 ### 4.4 单机游戏内验收

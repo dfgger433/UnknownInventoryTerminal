@@ -1,0 +1,16 @@
+Applied Energistics 2 GUI textures
+
+Copyright (c) 2020 Ridanisaurus Rid
+Copyright (c) 2013-2020 AlgorithmX2 et al.
+
+Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported:
+https://creativecommons.org/licenses/by-nc-sa/3.0/
+License text: https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode
+
+Source: https://github.com/AppliedEnergistics/Applied-Energistics-2/tree/f0ee8bf4bf35431b9f43788401aa609ca2adbcef/src/main/resources/assets/ae2/textures
+Original files: guis/terminal.png, guis/states.png, guis/text_field.png,
+gui/sprites/big_scroller.png, gui/sprites/big_scroller_disabled.png.
+The bundled PNGs are unchanged. The mod slices, scales and rearranges them at
+runtime in its own UI; the texture artwork and those adaptations are subject to
+the same CC BY-NC-SA 3.0 terms. Do not use them commercially without permission.
+No Minecraft or Applied Energistics 2 runtime or source code is bundled.

@@ -67,6 +67,7 @@ namespace UnknownInventoryTerminal
                 if (optionsType == null || create == null) return false;
 
                 var root = Path.GetFullPath(Path.Combine(Paths.PluginPath, "UnknownInventoryTerminal", "Web"));
+                if (!File.Exists(Path.Combine(root, "index.html"))) return false;
                 var options = Activator.CreateInstance(optionsType)!;
                 optionsType.GetProperty("RootPath")?.SetValue(options, root);
                 optionsType.GetProperty("EntryRelativeUrl")?.SetValue(options, "index.html");
