@@ -6,9 +6,9 @@
 |---|---|
 | [terminal.json](screens/terminals/terminal.json) | `terminalStyle` 指定窗框、仓储行、滚动槽和配装背景；`images` 指定搜索、按钮状态、图标和滑块。 |
 | [terminal.png](textures/guis/terminal.png) | 终端底板、仓储网格与主槽/装备槽图集。 |
-| [states.png](textures/guis/states.png) | 按钮底图（普通/悬停）与关闭、排序、刷新等图标图集。 |
+| [states.png](textures/guis/states.png) | 按钮底图（普通/悬停）、关闭、排序、刷新等图标，以及滑块可用/禁用状态的图集。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
-| [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 滑块可用/禁用状态。 |
+| [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 独立的滑块贴图。默认屏幕描述改用 `states.png` 中的滑块；如需改回，将 `thumb` / `thumbDisabled` 指向这两个文件。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
 | [NOTICE.txt](NOTICE.txt) | AE2 原图来源和授权条件。 |
 
