@@ -322,6 +322,24 @@ namespace UnknownInventoryTerminal
             Position(_lower!, new Rect(0, _layout.GridHeight, _bounds.width, _layout.PanelHeight - _layout.GridHeight));
             _loadout.SetLayout(_layout);
             _backLabel!.fontSize = 7 * scale;
+            // The back button is managed by Position, but should be stretched to fill its container if we want it to be responsive.
+            // Based on the requirement, the button should stretch its middle part.
+            // Using a simple Position currently defines its size.
+            // If I change it to use anchors it might work.
+            // Actually, the requirement says: "按钮伽宽峕四角 咊边框丕变，祇延展中部"
+            // This suggests using a 9-slice or just stretching the middle part.
+            // Since it's a UI button, if I set the anchors, it will stretch.
+            // Let's set the anchors to be more flexible, but Position() in this codebase sets anchors to (0,1).
+            // Maybe I should keep Position() for the initial layout but use a layout group or something?
+            // No, the codebase uses manual positioning.
+            // I will try to use the existing Stretch method, but I need to make sure the anchors are correct.
+            // The existing Position method:
+            // transform.anchorMin = transform.anchorMax = transform.pivot = new Vector2(0, 1);
+            // This pins the button.
+            // If I want it to stretch, I should use different anchors.
+            // But Position() overrides them.
+            // I'll keep the Position() call but add a Stretch() call for the internal image?
+            // No, the back button *is* the image.
             Position(_backButton!.GetComponent<RectTransform>(), new Rect(7 * scale, 2 * scale, 41 * scale, 18 * scale));
             _grid!.cellSize = new Vector2(stride, stride);
             foreach (var tile in _tiles.Values) if (tile.Button) SizeTile(tile);
