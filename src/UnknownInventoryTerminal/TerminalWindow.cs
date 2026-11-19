@@ -178,7 +178,6 @@ namespace UnknownInventoryTerminal
             if (IconButton(3, 43, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
                 _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
                 _descending = !_descending;
-            if (IconButton(3, 64, Ae2Image.Refresh, TerminalText.Get("terminal.refresh"), "R")) Refresh();
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
         }
 

@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
     <!-- Increment the patch component by one for each delivered update, not for test builds. -->
-    <Version>0.4.5</Version>
+    <Version>0.4.6</Version>
   </PropertyGroup>
 </Project>

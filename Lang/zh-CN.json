@@ -18,7 +18,6 @@
   "terminal.sortQuantity": "按数量排序",
   "terminal.sortAscending": "升序排列",
   "terminal.sortDescending": "降序排列",
-  "terminal.refresh": "刷新物品栏",
   "inventory.scroll": "滚动物品",
   "inventory.scroll.description": "拖动滚动条或使用鼠标滚轮。",
   "inventory.backTooltip": "返回分组",
