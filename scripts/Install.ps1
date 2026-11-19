@@ -6,18 +6,37 @@ $destinationDir = Join-Path $GameRoot 'BepInEx\plugins\UnknownInventoryTerminal'
 if (!(Test-Path (Join-Path $GameRoot 'CasualtiesUnknown_Data\Managed\Assembly-CSharp.dll'))) { throw 'Invalid game directory.' }
 if (!(Test-Path (Join-Path $GameRoot 'BepInEx\plugins\CUCoreLib.dll'))) { throw 'CUCoreLib is required.' }
 if (Get-Process -Name CasualtiesUnknown -ErrorAction SilentlyContinue) { throw 'Close the game before installation.' }
-$files = @('UnknownInventoryTerminal.dll', 'UnknownInventoryTerminal.Core.dll')
 $assetSubdir = 'Assets\AE2'
-$assetFiles = @('terminal.png', 'states.png', 'text_field.png', 'big_scroller.png', 'big_scroller_disabled.png', 'NOTICE.txt')
-foreach ($asset in $assetFiles) { $files += Join-Path $assetSubdir $asset }
 $langSubdir = 'Lang'
-foreach ($language in @('en.json', 'zh-CN.json')) { $files += Join-Path $langSubdir $language }
+$files = @(
+    'UnknownInventoryTerminal.dll',
+    'UnknownInventoryTerminal.Core.dll',
+    (Join-Path $langSubdir 'en.json'),
+    (Join-Path $langSubdir 'zh-CN.json'),
+    (Join-Path $assetSubdir 'NOTICE.txt'),
+    (Join-Path $assetSubdir 'screens\terminals\terminal.json'),
+    (Join-Path $assetSubdir 'textures\guis\terminal.png'),
+    (Join-Path $assetSubdir 'textures\guis\states.png'),
+    (Join-Path $assetSubdir 'textures\guis\text_field.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller_disabled.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\transparent.png')
+)
 foreach ($file in $files) {
-    if (!(Test-Path (Join-Path $sourceDir $file))) { throw "Missing build artifact: $file. Run Build.ps1 first." }
+    if (!(Test-Path (Join-Path $sourceDir $file) -PathType Leaf)) { throw "Missing build artifact: $file. Run Build.ps1 first." }
 }
 # No deletions; only this plugin's dedicated subdirectory is written.
-New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $destinationDir $assetSubdir) -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $destinationDir $langSubdir) -Force | Out-Null
+$directories = @(
+    $destinationDir,
+    (Join-Path $destinationDir $langSubdir),
+    (Join-Path $destinationDir $assetSubdir),
+    (Join-Path $destinationDir "$assetSubdir\screens"),
+    (Join-Path $destinationDir "$assetSubdir\screens\terminals"),
+    (Join-Path $destinationDir "$assetSubdir\textures"),
+    (Join-Path $destinationDir "$assetSubdir\textures\guis"),
+    (Join-Path $destinationDir "$assetSubdir\textures\gui"),
+    (Join-Path $destinationDir "$assetSubdir\textures\gui\sprites")
+)
+foreach ($directory in $directories) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
 foreach ($file in $files) { Copy-Item -LiteralPath (Join-Path $sourceDir $file) -Destination (Join-Path $destinationDir $file) -Force }
 Write-Output "Installed in $destinationDir"
