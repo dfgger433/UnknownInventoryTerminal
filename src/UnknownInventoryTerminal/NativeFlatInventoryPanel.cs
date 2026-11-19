@@ -136,8 +136,21 @@ namespace UnknownInventoryTerminal
             backRect.pivot = new Vector2(0, 1);
             backRect.anchoredPosition = new Vector2(8, -8);
             backRect.sizeDelta = new Vector2(260, 30);
-            back.GetComponent<Image>().color = new Color(0.24f, 0.29f, 0.34f, 1);
-            _backButton = back.GetComponent<Button>();
+            // Use AE2 style for back button
+            back.GetComponent<Image>().color = new Color(1, 1, 1, 1);
+            _skin.Apply(back.GetComponent<Image>(), Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot);
+            backRect.sizeDelta = new Vector2(18, 20); 
+            backRect.anchoredPosition = new Vector2(8, -8);
+            
+            // Configure sprite swap for hover
+            var spriteState = new SpriteState();
+            var backImage = back.GetComponent<Image>();
+            _skin.Apply(backImage, Ae2TerminalSkin.States, 212, 128, 18, 20, Ae2TerminalSkin.Slot);
+            spriteState.highlightedSprite = backImage.sprite;
+            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot);
+            
+            _backButton.transition = Selectable.Transition.SpriteSwap;
+            _backButton.spriteState = spriteState;
             _backButton.onClick.AddListener(CloseSelection);
             _backLabel = CreateText(back.transform, "Back label", 14, TextAlignmentOptions.Center);
             _backLabel.rectTransform.anchorMin = Vector2.zero;
