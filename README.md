@@ -2,16 +2,18 @@
 
 Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生终端，不再包含 WebUI 网页前端。
 
-## 阶段 3 已交付
+## 终端 0.4.4
 
 - 只读取本地玩家的真实物品实例，按实例身份去重；不复制物品、不修改真实容器层级。
-- AE2 风格网格按精确物品 ID（或容器 + ID）聚合；主槽位普通物品与容器内物品显示，主槽位/装备槽位中的容器外壳隐藏。
-- 聚合格点击后可进入实例选择页；每个实际物品仍使用原版 `ContainerItem` / `InvButton` 交互。
-- 拖动终端物品可投放到原版背包容器；终端候选容器支持最小剩余容量、最高减重和手动选择三种规则。
-- 所有转移继续通过原版物品处理管线，交互前校验本地归属；不直接调用 `LoadItem`，Together 同步由原有补丁处理。
-- 搜索、容器分组、拼音 provider、CCL 设置和关闭/失焦状态恢复继续可用。
+- 终端窗口固定在屏幕中央，不可拖动。打开时不显示原版径向物品栏或容器面板。上部是六列可搜索仓储网格，按精确物品 ID 聚合同类；下部显示双手、主槽位和装备，不受搜索过滤。
+- 主槽位从左到右按游戏槽位索引排列：主手 `0`、副手 `1`，随后是其余槽位；数字是槽号，不是新增快捷键。装备格绑定游戏的 `wearSlotId`，空槽也显示。CUCoreLib 新注册的可穿戴物品会自动补进装备栏，先填满本行，再增加完整的六格行；屏幕放不下时可在装备栏用滚轮逐行查看。
+- 使用设置中的快捷键打开终端（默认 `F7`）。右键清空搜索框，`Enter` 退出编辑。左侧可切换名称/数量排序、升/降序和刷新，右上角关闭。用滚轮或右侧滑块逐行滚动。
+- 点击聚合格进入实例选择页；实际物品继续使用原版 `ContainerItem` / `InvButton` 交互。
+- 拖到相应的装备格可穿戴，拖到手持或穿戴的容器格可直接存入。拖到上部仓储网格时，自动模式按最小剩余容量或最高减重选取容器；手动模式请直接拖到目标容器格。
+- 物品转移仍走原版处理流程，交互前校验本地归属，不直接调用 `LoadItem`；Together 同步仍由原有补丁处理。
+- 「设置 → 游戏」保留终端语言、快捷键和容器放置规则。安装兼容的 JustUnknownCharacters（JUC）时自动接入拼音匹配，未安装时仍可普通搜索。
 
-原版 Canvas、`ContainerItem` prefab、Harmony 输入钩子以及 Together 主客机链路仍需在目标游戏版本中实机验收；自动化测试只覆盖核心投影和搜索逻辑，见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+自动化测试覆盖库存投影、搜索、六列布局与装备扩展补行；Unity 实际渲染、原版物品交互和 Together 主客机链路仍需在目标游戏版本中实机验收，见[兼容性说明](docs/COMPATIBILITY.md)。
 
 ## 构建
 
@@ -23,6 +25,8 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 
 脚本构建插件并运行核心测试，不需要 Node.js/npm。需要 .NET SDK、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。
 
+每交付一次更新，将[版本配置](src/Directory.Build.props)中的补丁位加 `1`（例如 `0.4.1` → `0.4.2`），并更新[更新记录](CHANGELOG.md)。同一版本的重复测试构建不加版；插件加载日志与两个 DLL 使用同一版本源。
+
 ## 安装
 
 关闭游戏后运行：
@@ -31,11 +35,14 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 .\scripts\Install.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-安装脚本只向 `BepInEx/plugins/UnknownInventoryTerminal/` 复制插件 DLL 和 Core DLL，不修改游戏 DLL、Together 或存档，也不会清理此前安装的 `Web/` 资源。
+安装脚本只向模组专用目录复制插件 DLL、Core DLL、AE2 贴图及授权声明和语言文件，不修改游戏 DLL、Together 或存档。终端只使用原生窗口，旧的 `UseLegacyWebUi` 配置不再生效。
+
+AE2 贴图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。原图未修改，界面在运行时裁切和重组；完整来源和使用条款见[贴图授权说明](src/UnknownInventoryTerminal/Assets/AE2/NOTICE.txt)。
 
 ## 文档
 
 - [本地计划](docs/PLAN.md)
 - [兼容性依据和未实测风险](docs/COMPATIBILITY.md)
+- [终端界面与物品 API（含接入示例）](docs/TERMINAL-API.md)
 - [外部搜索 API](docs/SEARCH-API.md)
 - [WebUI / OreUI / AE2 风格终端设计记录](docs/webui-ae2-terminal.md)

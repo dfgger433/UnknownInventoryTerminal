@@ -5,7 +5,6 @@ using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -18,7 +17,6 @@ namespace UnknownInventoryTerminal
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     [BepInDependency("net.cucorelib", BepInDependency.DependencyFlags.HardDependency)]
     [BepInDependency("JustUnknownCharacters", BepInDependency.DependencyFlags.SoftDependency)]
-    [BepInDependency("casualtiesunknown.webui", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         /// <summary>Stable BepInEx plugin identifier.</summary>
@@ -26,24 +24,19 @@ namespace UnknownInventoryTerminal
         /// <summary>Human-readable plugin name.</summary>
         public const string PluginName = "Unknown Inventory Terminal";
         /// <summary>Plugin version.</summary>
-        public const string PluginVersion = "0.4.0";
+        public const string PluginVersion = BuildVersion.Value;
         internal static Plugin? Instance { get; private set; }
         internal static ManualLogSource Log { get; private set; } = null!;
         internal static bool IsVisible => Instance?._window?.Visible == true;
         internal static bool BlocksGameplay => IsVisible || (Instance != null && Instance._closedFrame == Time.frameCount);
         private int _closedFrame = -1;
         private TerminalWindow? _window;
+        private Ae2TerminalSkin? _terminalSkin;
         private NativeFlatInventoryPanel? _nativePanel;
         private InputShield? _shield;
         private Harmony? _harmony;
         private IDisposable? _pinyin;
-        private const int MaxSnapshotIconChars = 128 * 1024;
-        private WebUiBridge? _webUi;
-        private WebUiSpriteIcons? _webUiIcons;
-        private JObject? _lastWebUiSnapshot;
-        private bool _webUiRequested, _webUiReady, _checkFocusLoss, _ackWebUiChange;
-        private float _nextWebUiProbe;
-        private bool _inputReady, _sessionActive, _configuredByContainer, _textInputFocused, _clearGuiFocus;
+        private bool _inputReady, _sessionActive, _closing, _textInputFocused, _clearGuiFocus;
         private PlayerCamera? _sessionCamera;
         private Body? _sessionBody;
         private CursorLockMode _cursorLock;
@@ -54,203 +47,49 @@ namespace UnknownInventoryTerminal
         {
             Instance = this; Log = Logger;
             _harmony = new Harmony(PluginGuid);
-            SettingsBridge.Initialize(Config, _harmony, Logger);
+            TerminalText.Initialize(Info.Location, message => Logger.LogWarning(message));
+            SettingsBridge.Initialize(Config);
             ContainerPlacement.Initialize(Config);
+            SettingsMenuLayoutPatch.Install(_harmony, Logger);
             _inputReady = GamePatches.Apply(_harmony, Logger);
             _shield = new InputShield();
-            _nativePanel = new NativeFlatInventoryPanel(Logger);
-            var adapter = new GameInventoryAdapter(Logger);
-            _window = new TerminalWindow(adapter.Capture,
+            _terminalSkin = new Ae2TerminalSkin(Logger);
+            _nativePanel = new NativeFlatInventoryPanel(Logger, _terminalSkin);
+            _window = new TerminalWindow(_terminalSkin, GameInventoryAdapter.Capture, _nativePanel.EquipmentCount,
                 entries => _nativePanel.SetEntries(entries),
                 ex => Logger.LogWarning("Terminal read failed: " + ex.Message),
-                (bounds, mode) => _nativePanel.SetLayout(bounds, mode));
-            _configuredByContainer = SettingsBridge.ByContainer.Value;
-            _window.Mode = _configuredByContainer ? InventoryViewMode.ByContainer : InventoryViewMode.Merged;
-            _webUi = new WebUiBridge(Logger);
-            _webUiIcons = new WebUiSpriteIcons(Logger);
-            _webUi.EventReceived += HandleWebUiEvent;
-            _webUi.Closed += HandleWebUiClosed;
-            _window.StateChanged += () =>
-            {
-                PublishWebUiState(force: _ackWebUiChange);
-                _ackWebUiChange = false;
-            };
-            _pinyin = PinyinBridge.Register(() => SettingsBridge.Pinyin.Value, Logger);
+                _nativePanel.SetLayout);
+            _pinyin = PinyinBridge.Register(Logger);
             Logger.LogInfo(PluginName + " " + PluginVersion + " loaded; native inventory bridge " + (_inputReady ? "ready." : "disabled: required input hooks unavailable."));
         }
         private void Update()
         {
-            if (!_webUiRequested && _webUi != null && Time.unscaledTime >= _nextWebUiProbe)
-            {
-                _nextWebUiProbe = Time.unscaledTime + 2f;
-                if (_webUi.TryCreate())
-                {
-                    _webUiRequested = true;
-                    if (IsVisible)
-                    {
-                        ShowWebUi();
-                    }
-                }
-            }
-            if (_webUi?.Visible == true && !_sessionActive && _window != null && CanToggle()) Open();
-            if (_checkFocusLoss && (!IsVisible || !WebUiBridge.IsGameForeground()))
-            {
-                _checkFocusLoss = false;
-                if (IsVisible) Close();
-            }
-            UpdateTerminal();
-            if (_webUi?.Visible == true) _webUiIcons?.Update();
-        }
-
-        private void UpdateTerminal()
-        {
             if (_window == null) return;
-            if (IsVisible && (!SessionValid() || Input.GetKeyDown(KeyBinds.GetBind("pause")))) Close();
-            if (SettingsBridge.IsTogglePressed() && CanToggle())
+            if (IsVisible)
             {
-                if (IsVisible)
+                if (!SessionValid()) Close();
+                else if (_window.CloseRequested || Input.GetKeyDown(KeyBinds.GetBind("pause"))) Close(preserveDrag: true);
+                else if (!SearchFocused && Input.GetKeyDown(KeyBinds.GetBind("woundview")) &&
+                    _sessionCamera is { } camera && HasHeldLocalDrag(camera))
                 {
-                    if (_webUi?.IsAvailable == true && !_webUi.Visible) ShowWebUi();
-                    else Close();
+                    Close(preserveDrag: true);
+                    // Native ToggleWoundView dismisses an open radial instead of opening health.
+                    camera.radialOpen = false;
+                    camera.ToggleWoundView();
                 }
-                else Open();
             }
-            if (_configuredByContainer != SettingsBridge.ByContainer.Value)
+            if (SettingsBridge.IsTogglePressed())
             {
-                _configuredByContainer = SettingsBridge.ByContainer.Value;
-                _window.Mode = _configuredByContainer ? InventoryViewMode.ByContainer : InventoryViewMode.Merged;
+                if (IsVisible) TryCloseTerminal();
+                else TryOpenTerminal();
             }
             _window.Update();
-            if (_ackWebUiChange) { PublishWebUiState(force: true); _ackWebUiChange = false; }
-            // The close button closes inside TerminalWindow.Update, bypassing Toggle.
-            if (!_window.Visible && _sessionActive) Close();
-            else if (_window.Visible)
+            if (_window.Visible)
             {
-                var byContainer = _window.Mode == InventoryViewMode.ByContainer;
-                if (byContainer != _configuredByContainer)
-                {
-                    _configuredByContainer = byContainer;
-                    SettingsBridge.ByContainer.Value = byContainer;
-                }
                 HoldInput();
+                _shield?.SetVisible(true);
+                _nativePanel?.SetVisible(true);
             }
-            _nativePanel?.SetVisible(_window.Visible);
-            _shield?.SetVisible(_window.Visible);
-        }
-        private void HandleWebUiClosed()
-        {
-            // The WebUI panel remains registered and may reconnect its host; do not
-            // call CreatePanel again with the same stable ID after a browser close.
-            if (IsVisible) Close();
-        }
-
-        private void HandleWebUiEvent(string name, object? payload)
-        {
-            var json = payload as JToken;
-            switch (name)
-            {
-                case "webui.ready":
-                    _webUiReady = true;
-                    PublishWebUiState(force: true);
-                    break;
-                case "close":
-                case "uit.close":
-                    if (IsVisible) Close();
-                    break;
-                case "refresh":
-                case "uit.refresh":
-                    if (IsVisible) { _window?.RefreshNow(); PublishWebUiState(force: true); }
-                    break;
-                case "query":
-                case "uit.query":
-                    if (_webUi?.Visible == true && IsVisible)
-                    {
-                        var query = ReadWebString(json, "query") ?? "";
-                        SearchApi.Query = query.Length > 256 ? query.Substring(0, 256) : query;
-                        _ackWebUiChange = true;
-                    }
-                    break;
-                case "mode":
-                case "uit.mode":
-                    if (_webUi?.Visible != true || !IsVisible) break;
-                    var mode = ReadWebString(json, "mode");
-                    if (string.Equals(mode, "container", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "byContainer", StringComparison.OrdinalIgnoreCase))
-                        SettingsBridge.ByContainer.Value = true;
-                    else if (string.Equals(mode, "merged", StringComparison.OrdinalIgnoreCase) || string.Equals(mode, "all", StringComparison.OrdinalIgnoreCase))
-                        SettingsBridge.ByContainer.Value = false;
-                    _ackWebUiChange = true;
-                    break;
-                case "interaction":
-                case "uit.interaction":
-                    if (json is JObject interaction && ReadWebString(interaction, "action") == "select")
-                        SelectWebItem(ReadWebString(interaction, "instanceKey"));
-                    break;
-                case "uit.native":
-                    if (_webUi?.Visible == true && SessionValid()) _webUi.Visible = false;
-                    break;
-            }
-        }
-
-        private static string? ReadWebString(JToken? payload, string field)
-        {
-            var value = payload is JObject obj ? obj[field] : payload;
-            return value?.Type == JTokenType.String ? value.Value<string>() : null;
-        }
-
-        private void SelectWebItem(string? instanceKey)
-        {
-            if (string.IsNullOrEmpty(instanceKey) || _webUi?.Visible != true || _window == null || !SessionValid()) return;
-            var entry = _window.Rows.FirstOrDefault(row => row.First.InstanceKey == instanceKey)?.First;
-            if (entry?.NativeItem is not Item item || !item || item.id != entry.TypeId ||
-                !item.TryGetParentContainer(out var parent) || !parent ||
-                parent.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture) != entry.ContainerKey ||
-                !GameInventoryAdapter.Owns(_sessionBody, item)) return;
-            // Leave the WebView visible unless there is a real native item button to hand off to.
-            if (_nativePanel?.TryFocusInstance(entry) == true) _webUi.Visible = false;
-        }
-
-        private void ShowWebUi()
-        {
-            if (_webUi?.IsAvailable != true) return;
-            _webUi.Visible = true;
-            PublishWebUiState(force: true);
-        }
-
-        private void PublishWebUiState(bool force = false)
-        {
-            if (_webUi?.Visible != true || !_webUiReady || _window?.Visible != true) return;
-            var iconBudget = MaxSnapshotIconChars;
-            var snapshot = _window.Rows.Select(row =>
-            {
-                var icon = _webUiIcons?.GetOrQueue(row.First.Icon);
-                if (icon != null && icon.Length > iconBudget) icon = null;
-                iconBudget -= icon?.Length ?? 0;
-                return new
-                {
-                    instanceKey = row.First.InstanceKey,
-                    typeId = row.First.TypeId,
-                    displayName = row.First.DisplayName,
-                    containerKey = row.First.ContainerKey,
-                    containerName = row.First.ContainerName,
-                    count = row.Count,
-                    icon
-                };
-            }).ToArray();
-            var mode = _window.Mode == InventoryViewMode.ByContainer ? "container" : "merged";
-            var payload = JObject.FromObject(new { items = snapshot, total = _window.Snapshot.Count, groups = _window.Rows.Count,
-                mode, query = _window.ProjectedQuery, status = _window.Status });
-            if (!force && JToken.DeepEquals(payload, _lastWebUiSnapshot)) return;
-            if (_webUi.SendEvent("uit.snapshot", payload)) _lastWebUiSnapshot = payload;
-            _webUi.SendEvent("inventory.snapshot", payload);
-            var statusPayload = new { text = _window.Status, count = _window.Snapshot.Count, groups = _window.Rows.Count };
-            _webUi.SendEvent("uit.status", statusPayload);
-            _webUi.SendEvent("inventory.status", statusPayload);
-            var queryPayload = new { query = SearchApi.Query };
-            _webUi.SendEvent("uit.query", queryPayload);
-            _webUi.SendEvent("inventory.query", queryPayload);
-            var modePayload = new { mode };
-            _webUi.SendEvent("uit.mode", modePayload);
-            _webUi.SendEvent("inventory.mode", modePayload);
         }
 
         private void LateUpdate()
@@ -268,12 +107,49 @@ namespace UnknownInventoryTerminal
             _textInputFocused = IsVisible && GUI.GetNameOfFocusedControl() == "UIT.Search";
         }
         internal static bool SearchFocused => Instance?._textInputFocused == true;
-        internal static bool IsInventorySurface(GameObject target) =>
-            Instance?._nativePanel?.Contains(target) == true || Instance?._shield?.IsNativeControl(target) == true;
+        internal static bool IsInventorySurface(GameObject target) => Instance?._nativePanel?.Contains(target) == true;
+        internal RectTransform? ExtensionRoot => IsVisible && !_closing && SessionValid() ? _nativePanel?.ExtensionRoot : null;
+
+        internal bool TryGetTerminalBounds(out Rect screenBounds)
+        {
+            screenBounds = default;
+            if (_closing || _window?.Visible != true || !SessionValid()) return false;
+            screenBounds = _window.ScreenBounds;
+            return true;
+        }
+
+        internal bool TryGetTerminalSnapshot(out IReadOnlyList<InventoryEntry> entries, out IReadOnlyList<InventoryRow> filteredRows)
+        {
+            entries = Array.Empty<InventoryEntry>();
+            filteredRows = Array.Empty<InventoryRow>();
+            if (_closing || _window?.Visible != true || !_window.HasSnapshot || !SessionValid()) return false;
+            entries = _window.Snapshot;
+            filteredRows = _window.Rows;
+            return true;
+        }
+
+        internal bool TryResolveTerminalItem(string instanceKey, out Item? item)
+        {
+            item = null;
+            if (string.IsNullOrEmpty(instanceKey) || !TryGetTerminalSnapshot(out var entries, out _)) return false;
+            var entry = entries.FirstOrDefault(candidate => candidate.InstanceKey == instanceKey);
+            if (entry?.NativeItem is not Item native || !native || native.id != entry.TypeId ||
+                !GameInventoryAdapter.Owns(_sessionBody, native) || !native.TryGetParentContainer(out var parent) ||
+                !parent || GameInventoryAdapter.Key(parent) != entry.ContainerKey) return false;
+            item = native;
+            return true;
+        }
+
+        internal IReadOnlyList<Item> GetTerminalLoadout() => IsVisible && !_closing && SessionValid()
+            ? Array.AsReadOnly(_sessionBody!.GetSurfaceInventoryItems().Where(item => item).Distinct().ToArray())
+            : Array.Empty<Item>();
         internal static bool IsTerminalPoint(Vector2 screenPoint) =>
-            Instance?._nativePanel?.ContainsScreenPoint(screenPoint) == true;
-        internal static InvButton? ResolveTerminalDrop(PlayerCamera camera, IReadOnlyList<RaycastResult> hits) =>
-            Instance?._nativePanel?.ResolveDrop(camera, hits);
+            Instance?._window?.ContainsScreenPoint(screenPoint) == true;
+        internal static InvButton? ResolveTerminalDrop(PlayerCamera camera)
+        {
+            var panel = Instance?._nativePanel;
+            return panel?.ContainsScreenPoint(Input.mousePosition) == true ? panel.ResolveDrop(camera) : null;
+        }
         internal static void ReleaseSearchFocus()
         {
             if (Instance == null) return;
@@ -296,24 +172,33 @@ namespace UnknownInventoryTerminal
             if (PlayerCamera.main && PlayerCamera.main.recipeFilterField && PlayerCamera.main.recipeFilterField.isFocused) return false;
             return !GameInventoryAdapter.ChatFocused;
         }
-        private void Open()
+        internal bool TryOpenTerminal()
         {
+            if (!isActiveAndEnabled || _closing || _sessionActive || !_inputReady || _window == null || !CanToggle()) return false;
             var camera = PlayerCamera.main;
-            if (!_inputReady || _window == null || !GameInventoryAdapter.IsLocalCamera(camera) ||
-                !EventSystem.current || !camera.body.alive || !camera.body.conscious || camera.dragItem || NativeModalOpen(camera)) return;
+            if (!GameInventoryAdapter.IsLocalCamera(camera) || !EventSystem.current ||
+                !camera.body.alive || !camera.body.conscious || camera.dragItem || NativeModalOpen(camera)) return false;
             _sessionCamera = camera; _sessionBody = camera.body;
             _cursorLock = Cursor.lockState; _cursorVisible = Cursor.visible;
             _forceNoMovementValue = _sessionBody.forceNoMovement;
             _radialOpen = camera.radialOpen;
             _selectedObject = EventSystem.current.currentSelectedGameObject;
-            EventSystem.current.SetSelectedGameObject(null);
             _sessionActive = true;
-            camera.radialOpen = true;
-            HoldInput();
-            _shield?.SetVisible(true);
-            _window.Open();
-            ShowWebUi();
-            _nativePanel?.SetVisible(true);
+            try
+            {
+                EventSystem.current.SetSelectedGameObject(null);
+                HoldInput();
+                _window.Open();
+                _shield?.SetVisible(true);
+                _nativePanel?.SetVisible(true);
+                return IsVisible;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError("Terminal could not open; releasing inventory input. " + ex);
+                Close();
+                return false;
+            }
         }
         private static bool NativeModalOpen(PlayerCamera camera) => PauseHandler.paused ||
             (camera.craftingPanel && camera.craftingPanel.activeSelf) ||
@@ -334,23 +219,48 @@ namespace UnknownInventoryTerminal
             _sessionCamera.radialOpen = true;
             Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
         }
-        private void Close()
+        private static bool HasHeldLocalDrag(PlayerCamera camera) =>
+            Input.GetKey(KeyBinds.GetBind("iteminteract")) && GameInventoryAdapter.Owns(camera.body, camera.dragItem);
+        internal bool TryCloseTerminal()
         {
-            _window?.Close();
-            if (_webUi != null) _webUi.Visible = false;
-            EndSession();
-            _nativePanel?.SetVisible(false);
-            _shield?.SetVisible(false);
+            if (_closing || _window?.Visible != true) return false;
+            Close(preserveDrag: true);
+            return true;
         }
-        private void EndSession()
+
+        private void Close(bool preserveDrag = false)
+        {
+            if (_closing) return;
+            _closing = true;
+            try
+            {
+                try { _nativePanel?.SetVisible(false); }
+                finally { _shield?.SetVisible(false); }
+            }
+            finally
+            {
+                try
+                {
+                    if (IsVisible) _window!.Close();
+                }
+                finally
+                {
+                    try { EndSession(preserveDrag); }
+                    finally { _closing = false; }
+                }
+            }
+        }
+        private void EndSession(bool preserveDrag)
         {
             if (!_sessionActive) return;
+            // Validate the local camera, body and item before releasing session ownership.
+            var handOff = preserveDrag && SessionValid() && HasHeldLocalDrag(_sessionCamera!);
             _sessionActive = false;
             _closedFrame = Time.frameCount;
             _textInputFocused = false; _clearGuiFocus = true;
             if (_sessionCamera)
             {
-                CancelDrag(_sessionCamera!);
+                if (!handOff) CancelDrag(_sessionCamera!);
                 _sessionCamera!.radialOpen = _radialOpen;
             }
             // Restore the exact body saved at open, even if main.body has changed.
@@ -370,7 +280,6 @@ namespace UnknownInventoryTerminal
             if (camera.dragImage) camera.dragImage.enabled = false;
         }
         internal static bool CanInteract(PlayerCamera camera) => IsVisible && Instance!.SessionValid() && camera == Instance._sessionCamera;
-        internal static void SetNativeInventoryInteraction(bool active) => Instance?._shield?.SetNativeInventoryInteraction(active);
         internal static List<RaycastResult> FilterHits(List<RaycastResult> hits)
         {
             if (!IsVisible) return hits;
@@ -378,50 +287,35 @@ namespace UnknownInventoryTerminal
             var plugin = Instance!;
             RaycastResult blocker = default;
             bool hasBlocker = false;
-            bool? inventorySurface = null;
             var terminalPoint = IsTerminalPoint(Input.mousePosition);
             foreach (var hit in hits)
             {
                 if (!hit.gameObject) continue;
-                // The full-screen shield is deliberately below native inventory canvases.
-                // Unity can still report it first when canvases have different raycasters;
-                // defer it until we know no native/terminal surface is under the pointer.
                 if (plugin._shield?.IsBlocker(hit.gameObject) == true)
                 {
                     if (!hasBlocker) { blocker = hit; hasBlocker = true; }
                     continue;
                 }
-                var native = plugin._shield?.IsNativeControl(hit.gameObject) == true;
-                var terminal = plugin._nativePanel?.Contains(hit.gameObject) == true;
-                // The terminal storage area owns the pointer while it is under the cursor;
-                // this prevents the hidden radial canvas from winning the release raycast.
-                if (terminalPoint && native && !terminal) continue;
-                if (!terminalPoint && terminal) continue;
-                // Only the foremost inventory surface receives manual raycasts. Unknown UI
-                // remains opaque so clicks cannot leak through the modal terminal.
-                if (!native && !terminal) break;
-                if (inventorySurface.HasValue && inventorySurface.Value != native) continue;
-                inventorySurface = native;
-                if (ValidHit(hit)) result.Add(hit);
+                // Extension controls receive ordinary UGUI events, not native item actions.
+                if (terminalPoint && plugin._nativePanel?.ContainsExtension(hit.gameObject) == true) return result;
+                if (terminalPoint && plugin._nativePanel?.Contains(hit.gameObject) == true && ValidHit(hit)) result.Add(hit);
             }
-            if (result.Count == 0 && !inventorySurface.HasValue && hasBlocker) result.Add(blocker);
+            if (result.Count == 0 && hasBlocker) result.Add(blocker);
             return result;
         }
         internal static bool ValidHit(RaycastResult hit)
         {
-            if (!hit.gameObject || !PlayerCamera.main) return false;
+            if (!hit.gameObject || !PlayerCamera.main || !PlayerCamera.main.body) return false;
             var camera = PlayerCamera.main;
-            var placement = hit.gameObject.GetComponent<ContainerPlacementTarget>() ??
-                hit.gameObject.GetComponentInParent<ContainerPlacementTarget>();
-            if (placement && !placement.IsValid(camera)) return false;
             if (camera.containerMenu && hit.gameObject.transform.IsChildOf(camera.containerMenu.transform) &&
                 (!camera.currentContainer || !GameInventoryAdapter.Owns(camera.body, camera.currentContainer.GetComponent<Item>()))) return false;
             var button = hit.gameObject.GetComponent<InvButton>();
             if (button)
             {
+                // Check the local body and index before InvButton dereferences its body slot.
+                if (button.isBody && (!GameInventoryAdapter.ButtonUsesLocalBody(button) ||
+                    button.slot >= camera.body.slots.Length || !camera.body.slots[button.slot])) return false;
                 var item = button.GetItem();
-                // Empty body slots remain valid drop targets, but never remote slots.
-                if (button.isBody && !GameInventoryAdapter.ButtonUsesLocalBody(button)) return false;
                 return item ? GameInventoryAdapter.Owns(PlayerCamera.main.body, item) : button.isBody;
             }
             var label = hit.gameObject.GetComponent<ItemLabel>();
@@ -429,15 +323,13 @@ namespace UnknownInventoryTerminal
         }
         private void OnApplicationFocus(bool focused)
         {
-            _checkFocusLoss = !focused && IsVisible && _webUi?.Visible == true;
-            if (!focused && !_checkFocusLoss) Close();
+            if (!focused) Close();
         }
         private void OnDisable() => Close();
         private void OnDestroy()
         {
             Close();
-            _webUi?.Dispose();
-            _pinyin?.Dispose(); _shield?.Dispose(); _nativePanel?.Dispose(); _harmony?.UnpatchSelf();
+            _pinyin?.Dispose(); _shield?.Dispose(); _nativePanel?.Dispose(); _terminalSkin?.Dispose(); _harmony?.UnpatchSelf();
             if (Instance == this) Instance = null;
         }
     }
@@ -454,7 +346,9 @@ namespace UnknownInventoryTerminal
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromWorld", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformWorldActions", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromUI", nameof(PickupPrefix), log, nameof(PickupPostfix));
-            ready &= Patch(harmony, typeof(PlayerCamera), "HandleReleaseDragging", nameof(ReleasePrefix), log, nameof(ReleasePostfix));
+            ready &= Patch(harmony, typeof(PlayerCamera), "HandleReleaseDragging", nameof(ReleasePrefix), log);
+            ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformUIActions", nameof(LoadoutActionPrefix), log);
+            ready &= Patch(harmony, typeof(PlayerCamera), nameof(PlayerCamera.OpenContainer), nameof(OpenContainerPrefix), log);
             ready &= Patch(harmony, typeof(UIUtil), "GetEventSystemRaycastResults", null, log, nameof(RaycastPostfix));
             Patch(harmony, AccessTools.TypeByName("Together.Chat"), "Update", nameof(ChatPrefix), log);
             return ready;
@@ -498,6 +392,8 @@ namespace UnknownInventoryTerminal
         private static bool DraggingPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
             if (!Plugin.BlocksGameplay) return true;
+            // Keep the closing input blocked without clearing the drag handed back to the game.
+            if (!Plugin.IsVisible) return false;
             if (!Plugin.CanInteract(__instance)) { Plugin.CancelDrag(__instance); return false; }
             uiCasts = Plugin.FilterHits(uiCasts);
             if (Plugin.SearchFocused)
@@ -508,8 +404,6 @@ namespace UnknownInventoryTerminal
                 Plugin.ReleaseSearchFocus();
             }
             if (__instance.dragItem && !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem)) Plugin.CancelDrag(__instance);
-            // Once a terminal item is picked up, expose the original inventory canvas as a drop target.
-            Plugin.SetNativeInventoryInteraction(__instance.dragItem);
             // Keep Together's world-hover branch from acquiring another body.
             __instance.radialOpen = true;
             return true;
@@ -533,59 +427,96 @@ namespace UnknownInventoryTerminal
         private static bool ReleasePrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
             if (!Plugin.BlocksGameplay) return true;
+            if (!Plugin.IsVisible) return false;
             uiCasts = Plugin.FilterHits(uiCasts);
-            // Dropping anywhere in the terminal resolves to a real native container button.
-            if (Plugin.IsTerminalPoint(Input.mousePosition))
-            {
-                var destination = Plugin.ResolveTerminalDrop(__instance, uiCasts);
-                if (destination)
-                {
-                    var nativeHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponent<InvButton>() == destination);
-                    if (!nativeHit.gameObject)
-                    {
-                        var module = uiCasts.FirstOrDefault(hit => hit.module != null).module;
-                        nativeHit = new RaycastResult
-                        {
-                            gameObject = destination!.gameObject,
-                            module = module,
-                            screenPosition = Input.mousePosition,
-                            sortingLayer = destination.gameObject.layer,
-                            sortingOrder = short.MaxValue - 1,
-                            distance = 0
-                        };
-                    }
-                    uiCasts.Insert(0, nativeHit);
-                }
-            }
-            // Check again at release, since the snapshot can outlive a transfer/drop.
+            // Revalidate before taking either the equipment or original inventory path.
             if (!Plugin.CanInteract(__instance) || !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem))
             { Plugin.CancelDrag(__instance); return false; }
-            var action = false;
-            foreach (var hit in uiCasts)
+            if (Plugin.IsTerminalPoint(Input.mousePosition))
             {
-                if (!Plugin.ValidHit(hit)) continue;
-                if (hit.gameObject.GetComponent<InvButton>() || hit.gameObject.CompareTag("RadialCenter") ||
-                    (hit.gameObject.CompareTag("ContainerBack") && __instance.currentContainer &&
-                     GameInventoryAdapter.Owns(__instance.body, __instance.currentContainer.GetComponent<Item>())))
-                { action = true; break; }
+                var slotHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponentInParent<LoadoutCell>());
+                if (slotHit.gameObject)
+                {
+                    var slot = slotHit.gameObject.GetComponentInParent<LoadoutCell>();
+                    var target = slot.Button;
+                    var source = __instance.dragItem;
+                    var moved = Vector2.Distance(Input.mousePosition, __instance.clickPos) >= 10f;
+                    var equip = moved && slot.CanEquip(__instance, source);
+                    if (slot.IsCurrent(__instance) && (equip ||
+                        (target && target!.gameObject.activeInHierarchy && Plugin.ValidHit(ButtonHit(slotHit, target)) &&
+                            (moved ? CanDropOnLoadout(__instance, slot, target, source) : target.GetItem() == source))))
+                    {
+                        uiCasts = new List<RaycastResult> { equip ? slotHit : ButtonHit(slotHit, target!) };
+                        return true;
+                    }
+                    Plugin.CancelDrag(__instance);
+                    return false;
+                }
             }
-            if (action) return true;
+            // Only the searchable storage grid uses the configured automatic container destination.
+            if (Plugin.IsTerminalPoint(Input.mousePosition))
+            {
+                var destination = uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject))
+                    ? Plugin.ResolveTerminalDrop(__instance) : null;
+                if (destination)
+                {
+                    var hit = uiCasts.FirstOrDefault(result => result.module != null);
+                    hit.screenPosition = Input.mousePosition;
+                    uiCasts = new List<RaycastResult> { ButtonHit(hit, destination!) };
+                    return true;
+                }
+                // A click on its own storage tile can complete through the native release path.
+                if (Vector2.Distance(Input.mousePosition, __instance.clickPos) < 10f &&
+                    uiCasts.Exists(hit => hit.gameObject && hit.gameObject.TryGetComponent<InvButton>(out var button) &&
+                        button.GetItem() == __instance.dragItem)) return true;
+            }
             // Releasing over the shield/blank content cancels, rather than unloading
             // into the world underneath the modal window.
             Plugin.CancelDrag(__instance);
             return false;
         }
-        private static void ReleasePostfix(PlayerCamera __instance)
+        private static RaycastResult ButtonHit(RaycastResult hit, InvButton button)
         {
-            if (Plugin.IsVisible) Plugin.SetNativeInventoryInteraction(false);
+            hit.gameObject = button.gameObject;
+            return hit;
         }
+
+        private static bool CanDropOnLoadout(PlayerCamera camera, LoadoutCell cell, InvButton button, Item source)
+        {
+            var target = button.GetItem();
+            if (target == source) return true;
+            if (target && target.container)
+                return !Input.GetKey(KeyBinds.GetBind("expanddesc")) && ContainerPlacement.CanPlace(camera.body, source, target);
+            if (cell.MainIndex < 0) return false;
+            var body = camera.body;
+            var slot = body.slots[cell.MainIndex];
+            if (!slot.canPickUp || (source.Stats.onlyHoldInHands && !slot.isHand)) return false;
+            // The native swap detaches both items before placing them. Reject it if the
+            // displaced item cannot go back to the source slot.
+            return !target || !body.HoldingItem(source) || !target.Stats.onlyHoldInHands || body.slots[body.SlotOf(source)].isHand;
+        }
+
+        private static bool LoadoutActionPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts, ref bool __result)
+        {
+            if (!Plugin.CanInteract(__instance) || uiCasts.Count == 0 || !uiCasts[0].gameObject) return true;
+            var slot = uiCasts[0].gameObject.GetComponentInParent<LoadoutCell>();
+            var source = __instance.dragItem;
+            if (!slot || Vector2.Distance(Input.mousePosition, __instance.clickPos) < 10f ||
+                !slot.CanEquip(__instance, source)) return true;
+            // Call the native wear method inside HandleReleaseDragging so CCL's conflict
+            // checks and Together's native wear/release hooks still execute.
+            if (!__instance.body.HasWearable(source)) __instance.body.WearWearable(source);
+            __result = true;
+            return false;
+        }
+
+        private static bool OpenContainerPrefix() => !Plugin.IsVisible;
         private static bool WorldPrefix() => !Plugin.BlocksGameplay;
         private static bool ChatPrefix() => !Plugin.BlocksGameplay;
     }
 
-    internal sealed class GameInventoryAdapter
+    internal static class GameInventoryAdapter
     {
-        private readonly ManualLogSource _log;
         private static readonly Type? NetType = AccessTools.TypeByName("Together.Net");
         private static readonly PropertyInfo? NetworkRunning = NetType == null ? null : AccessTools.Property(NetType, "IsRunning");
         private static readonly Type? PlayerType = AccessTools.TypeByName("Together.ScavPlayer");
@@ -596,8 +527,6 @@ namespace UnknownInventoryTerminal
         private static readonly MethodInfo? ButtonBody = AccessTools.PropertyGetter(typeof(InvButton), "body");
         private static readonly Type? ButtonPatchType = AccessTools.TypeByName("Together.InvButton_get_body_MultiplayerPatch");
         private static readonly FieldInfo? FocusedBody = ButtonPatchType == null ? null : AccessTools.Field(ButtonPatchType, "focused_body");
-
-        internal GameInventoryAdapter(ManualLogSource log) { _log = log; }
         internal static bool ChatFocused => ChatFocus?.GetValue(null) is bool focused && focused;
         internal static bool IsLocalCamera(PlayerCamera? camera)
         {
@@ -620,25 +549,21 @@ namespace UnknownInventoryTerminal
             try { return ButtonBody?.Invoke(button, null) is Body body && PlayerCamera.main && body == PlayerCamera.main.body; }
             catch { return false; }
         }
-        internal IReadOnlyList<InventoryEntry> Capture()
+        internal static IReadOnlyList<InventoryEntry> Capture()
         {
             var camera = PlayerCamera.main;
             if (!IsLocalCamera(camera)) return Array.Empty<InventoryEntry>();
             var result = new List<InventoryEntry>();
-            try
+            foreach (var (item, container) in EnumerateItems(camera.body))
             {
-                foreach (var (item, container) in EnumerateItems(camera.body))
-                {
-                    if (!item || !container || string.IsNullOrEmpty(item.id)) continue;
-                    var containerItem = container.GetComponent<Item>();
-                    if (!containerItem) continue;
-                    var sprite = item.GetComponent<SpriteRenderer>();
-                    result.Add(new InventoryEntry(Key(item), item.id, item.fullName, Key(container), containerItem.fullName,
-                        item, sprite ? sprite.sprite : null));
-                }
+                if (!item || !container || string.IsNullOrEmpty(item.id)) continue;
+                var containerItem = container.GetComponent<Item>();
+                if (!containerItem) continue;
+                var sprite = item.GetComponent<SpriteRenderer>();
+                result.Add(new InventoryEntry(Key(item), item.id, item.fullName, Key(container), containerItem.fullName,
+                    item, sprite ? sprite.sprite : null));
             }
-            catch (Exception ex) { _log.LogWarning("Inventory enumeration failed: " + ex.Message); return Array.Empty<InventoryEntry>(); }
-            return result;
+            return result.AsReadOnly();
         }
         // Membership follows actual direct Container parents to a currently held or
         // worn root. Arbitrary Item components under a transform are not inventory.
@@ -676,6 +601,6 @@ namespace UnknownInventoryTerminal
             foreach (Transform child in container.transform)
                 if (child && child.TryGetComponent<Item>(out var item) && item) yield return item;
         }
-        private static string Key(UnityEngine.Object value) => value.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        internal static string Key(UnityEngine.Object value) => value.GetInstanceID().ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }

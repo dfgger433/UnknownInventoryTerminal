@@ -5,3 +5,5 @@ $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ($LASTEXITCODE -ne 0) { throw 'Plugin build failed.' }
 & dotnet test (Join-Path $projectRoot 'tests\UnknownInventoryTerminal.Tests\UnknownInventoryTerminal.Tests.csproj') -c Release --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Backend tests failed.' }
+& dotnet run --project (Join-Path $projectRoot 'tests\InputShieldHarness\InputShieldHarness.csproj') -c Release
+if ($LASTEXITCODE -ne 0) { throw 'Input shield lifecycle tests failed.' }

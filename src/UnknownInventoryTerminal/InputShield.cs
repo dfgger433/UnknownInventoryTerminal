@@ -1,171 +1,261 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Object = UnityEngine.Object;
 
 namespace UnknownInventoryTerminal
 {
-    // IMGUI has no EventSystem surface. Keep a real UI-layer blocker below the
-    // terminal tiles and temporarily lift the original inventory controls above it.
+    // The blocker sits below the terminal. Only the drag cursor and tooltip are lifted above it.
     internal sealed class InputShield
     {
-        private GameObject? _root;
-        private readonly List<CanvasLease> _nativeCanvases = new List<CanvasLease>();
-        private CanvasGroup? _radialGroup;
-        private float _radialAlpha = 1f;
-        private bool _radialBlocksRaycasts = true, _radialInteractable = true;
-        private bool _inventoryInteraction;
-
-        internal void SetNativeInventoryInteraction(bool active)
-        {
-            _inventoryInteraction = active;
-            if (_root && _root!.activeSelf) SetVisible(true);
-        }
+        internal const int BackOrder = short.MaxValue - 3;
+        private GameObject? _root, _blocker;
+        private LeaseCleanup? _cleanup;
+        private readonly List<Lease> _leases = new List<Lease>();
 
         internal void SetVisible(bool visible)
         {
-            if (visible && !_root)
+            if (visible)
             {
-                var uiLayer = LayerMask.NameToLayer("UI");
-                _root = new GameObject("UIT.InputShield", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
-                if (uiLayer >= 0) _root.layer = uiLayer;
-                Object.DontDestroyOnLoad(_root);
-                var canvas = _root.GetComponent<Canvas>();
-                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                canvas.sortingOrder = short.MaxValue - 2;
-                var blocker = new GameObject("Block clicks", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                if (uiLayer >= 0) blocker.layer = uiLayer;
-                blocker.transform.SetParent(_root.transform, false);
-                var rect = blocker.GetComponent<RectTransform>();
-                rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-                rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
-                var image = blocker.GetComponent<Image>();
-                image.color = Color.clear;
-                image.raycastTarget = true;
+                EnsureRoot();
+                if (!_blocker!.activeSelf) _blocker.SetActive(true);
             }
-            if (_root) _root!.SetActive(visible);
-            if (!visible && _radialGroup)
+            else if (_blocker && _blocker!.activeSelf) _blocker.SetActive(false);
+
+            foreach (var lease in _leases) lease.Wanted = false;
+            if (visible)
             {
-                var radialGroup = _radialGroup!;
-                radialGroup.alpha = _radialAlpha;
-                radialGroup.blocksRaycasts = _radialBlocksRaycasts;
-                radialGroup.interactable = _radialInteractable;
-            }
-            var camera = PlayerCamera.main;
-            foreach (var lease in _nativeCanvases) lease.Wanted = false;
-            if (visible && camera)
-            {
-                var radialRoot = camera.radialMenu ? camera.radialMenu.gameObject : null;
-                Lift(radialRoot, true);
-                if (radialRoot)
+                var camera = PlayerCamera.main;
+                if (camera)
                 {
-                    if (_radialGroup && _radialGroup!.gameObject != radialRoot) _radialGroup = null;
-                    var root = radialRoot!;
-                    var radialGroup = _radialGroup ?? (_radialGroup = root.GetComponent<CanvasGroup>() ?? root.AddComponent<CanvasGroup>());
-                    var inTerminal = Plugin.IsTerminalPoint(Input.mousePosition);
-                    var dragging = camera.dragItem;
-                    var showRadial = !Plugin.IsVisible || (!inTerminal && dragging);
-                    radialGroup.alpha = showRadial ? _radialAlpha : 0f;
-                    radialGroup.blocksRaycasts = showRadial && _radialBlocksRaycasts;
-                    radialGroup.interactable = showRadial && _radialInteractable;
+                    Want<MenuLease>(camera.radialMenu ? camera.radialMenu.gameObject : null, root => new MenuLease(root));
+                    Want<MenuLease>(camera.containerMenu, root => new MenuLease(root));
+                    Want<VisualLease>(camera.dragImage ? camera.dragImage.gameObject : null, root => new VisualLease(root));
                 }
-                if (_inventoryInteraction) Lift(camera.mainCanvas ? camera.mainCanvas.gameObject : null, true);
-                // A container opened before the terminal may belong to another body.
-                var container = camera.currentContainer;
-                if (container && GameInventoryAdapter.Owns(camera.body, container.GetComponent<Item>()))
-                    Lift(camera.containerMenu, true);
-                Lift(camera.dragImage ? camera.dragImage.gameObject : null, false);
+                var hoverBox = GlobalDark.main ? GlobalDark.main.tooltipRect : null;
+                Want<VisualLease>(hoverBox ? hoverBox!.gameObject : null, root => new VisualLease(root));
             }
-            foreach (var lease in _nativeCanvases) lease.SetActive(lease.Wanted);
+
+            bool unused = false;
+            for (int i = _leases.Count - 1; i >= 0; --i)
+            {
+                var lease = _leases[i];
+                if (!lease.Root) _leases.RemoveAt(i);
+                else
+                {
+                    lease.SetActive(lease.Wanted);
+                    unused |= !lease.Wanted;
+                }
+            }
+
+            // Destroy is deferred in Unity. Wait until after Update/LateUpdate so a
+            // close and reopen in those callbacks can reuse our Canvas/CanvasGroup.
+            if (unused)
+            {
+                if (_cleanup) _cleanup!.Queue(DiscardUnusedLeases);
+                else DiscardUnusedLeases();
+            }
         }
 
-        private void Lift(GameObject? root, bool acceptsInput)
+        private void EnsureRoot()
+        {
+            if (_root && _blocker && _cleanup) return;
+            if (_root)
+            {
+                _root!.SetActive(false);
+                Object.Destroy(_root);
+            }
+            var uiLayer = LayerMask.NameToLayer("UI");
+            _root = new GameObject("UIT.InputShield", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
+            if (uiLayer >= 0) _root.layer = uiLayer;
+            Object.DontDestroyOnLoad(_root);
+            var canvas = _root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = BackOrder;
+            _cleanup = _root.AddComponent<LeaseCleanup>();
+            _blocker = new GameObject("Block clicks", typeof(RectTransform), typeof(Image));
+            _blocker.layer = _root.layer;
+            _blocker.transform.SetParent(_root.transform, false);
+            var rect = _blocker.GetComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+            _blocker.GetComponent<Image>().color = Color.clear;
+        }
+
+        private void Want<T>(GameObject? root, Func<GameObject, T> create) where T : Lease
         {
             if (!root) return;
-            var lease = _nativeCanvases.Find(candidate => candidate.Root == root);
-            if (lease == null)
-            {
-                lease = new CanvasLease(root!, acceptsInput);
-                _nativeCanvases.Add(lease);
-            }
+            var lease = _leases.Find(candidate => candidate is T && candidate.Root == root);
+            if (lease == null) _leases.Add(lease = create(root!));
             lease.Wanted = true;
         }
 
-        internal bool IsBlocker(GameObject target) => Contains(_root, target);
-        internal bool IsNativeControl(GameObject target)
+        internal bool IsBlocker(GameObject target) => _blocker && _blocker!.activeSelf && _root && target &&
+            (target.transform == _root!.transform || target.transform.IsChildOf(_root.transform));
+
+        private void DiscardUnusedLeases()
         {
-            foreach (var lease in _nativeCanvases)
-                if (lease.Wanted && lease.AcceptsInput && Contains(lease.Root, target)) return true;
-            return false;
+            for (int i = _leases.Count - 1; i >= 0; --i)
+            {
+                var lease = _leases[i];
+                if (lease.Wanted && lease.Root) continue;
+                lease.Dispose();
+                _leases.RemoveAt(i);
+            }
         }
-        private static bool Contains(GameObject? root, GameObject target) => root && target &&
-            (target.transform == root!.transform || target.transform.IsChildOf(root.transform));
 
         internal void Dispose()
         {
-            foreach (var lease in _nativeCanvases) lease.Dispose();
-            _nativeCanvases.Clear();
-            if (_root) { _root!.SetActive(false); Object.Destroy(_root); }
-            _root = null;
+            SetVisible(false);
+            DiscardUnusedLeases();
+            if (_root) Object.Destroy(_root);
+            _root = _blocker = null;
+            _cleanup = null;
         }
 
-        // Restore existing canvas settings; retain added canvases inheriting their
-        // original parent's sorting between openings. Disable only added raycasters,
-        // since disabling a Canvas can hide the original native menu's graphics.
-        private sealed class CanvasLease
+        private sealed class LeaseCleanup : MonoBehaviour
         {
-            internal readonly GameObject Root;
-            internal readonly bool AcceptsInput;
-            internal bool Wanted;
-            private readonly Canvas _canvas;
-            private readonly GraphicRaycaster? _raycaster;
-            private readonly bool _addedCanvas, _addedRaycaster;
-            private bool _active, _enabled, _overrideSorting, _raycasterEnabled, _imageRaycast;
-            private int _order, _layer;
-            private readonly Graphic? _visual;
+            private Action? _pending;
 
-            internal CanvasLease(GameObject root, bool acceptsInput)
+            internal void Queue(Action cleanup)
             {
-                Root = root; AcceptsInput = acceptsInput;
-                _canvas = root.GetComponent<Canvas>();
-                _addedCanvas = !_canvas;
-                if (_addedCanvas) _canvas = root.AddComponent<Canvas>();
-                if (acceptsInput)
-                {
-                    _raycaster = root.GetComponent<GraphicRaycaster>();
-                    _addedRaycaster = !_raycaster;
-                    if (_addedRaycaster) _raycaster = root.AddComponent<GraphicRaycaster>();
-                }
-                else _visual = root.GetComponent<Graphic>();
+                if (_pending != null) return;
+                _pending = cleanup;
+                StartCoroutine(EndOfFrame());
             }
-            internal void SetActive(bool active)
+
+            private IEnumerator EndOfFrame()
             {
-                if (!_canvas || _active == active) return;
+                yield return new WaitForEndOfFrame();
+                RunPending();
+            }
+
+            private void OnDestroy() => RunPending();
+
+            private void RunPending()
+            {
+                var pending = _pending;
+                _pending = null;
+                pending?.Invoke();
+            }
+        }
+
+        private abstract class Lease
+        {
+            protected Lease(GameObject root) { Root = root; }
+            internal GameObject Root { get; }
+            internal bool Wanted { get; set; }
+            internal abstract void SetActive(bool active);
+            internal abstract void Dispose();
+        }
+
+        private sealed class MenuLease : Lease
+        {
+            private CanvasGroup? _group;
+            private bool _added, _active, _enabled, _interactable, _blocksRaycasts;
+            private float _alpha;
+
+            internal MenuLease(GameObject root) : base(root) { }
+
+            internal override void SetActive(bool active)
+            {
+                if (!Root) return;
                 if (active)
                 {
-                    _enabled = _canvas.enabled; _overrideSorting = _canvas.overrideSorting;
-                    _order = _canvas.sortingOrder; _layer = _canvas.sortingLayerID;
-                    if (_raycaster) _raycasterEnabled = _raycaster!.enabled;
+                    if (!_group)
+                    {
+                        _group = Root.GetComponent<CanvasGroup>();
+                        _added = !_group;
+                        if (_added) _group = Root.AddComponent<CanvasGroup>();
+                        _active = false;
+                    }
+                    var group = _group!;
+                    if (!_active)
+                    {
+                        _enabled = group.enabled;
+                        _alpha = group.alpha;
+                        _interactable = group.interactable;
+                        _blocksRaycasts = group.blocksRaycasts;
+                        _active = true;
+                    }
+                    group.alpha = 0f;
+                    group.interactable = false;
+                    group.blocksRaycasts = false;
+                    group.enabled = true;
+                }
+                else if (_active)
+                {
+                    _active = false;
+                    if (!_group) return;
+                    _group!.enabled = _enabled;
+                    _group.alpha = _alpha;
+                    _group.interactable = _interactable;
+                    _group.blocksRaycasts = _blocksRaycasts;
+                }
+            }
+
+            internal override void Dispose()
+            {
+                SetActive(false);
+                if (_added && _group) Object.Destroy(_group);
+            }
+        }
+
+        private sealed class VisualLease : Lease
+        {
+            private Canvas? _canvas;
+            private GraphicRaycaster? _raycaster;
+            private Graphic? _visual;
+            private bool _addedCanvas, _active, _enabled, _overrideSorting, _raycasterEnabled, _imageRaycast;
+            private int _order, _layer;
+
+            internal VisualLease(GameObject root) : base(root) { }
+
+            internal override void SetActive(bool active)
+            {
+                if (!Root) return;
+                if (active && _active && !_canvas) SetActive(false);
+                if (_active == active) return;
+                if (active)
+                {
+                    if (!_canvas)
+                    {
+                        _canvas = Root.GetComponent<Canvas>();
+                        _addedCanvas = !_canvas;
+                        if (_addedCanvas) _canvas = Root.AddComponent<Canvas>();
+                    }
+                    var canvas = _canvas!;
+                    _enabled = canvas.enabled; _overrideSorting = canvas.overrideSorting;
+                    _order = canvas.sortingOrder; _layer = canvas.sortingLayerID;
+                    _active = true;
+                    _raycaster = Root.GetComponent<GraphicRaycaster>();
+                    if (_raycaster) { _raycasterEnabled = _raycaster!.enabled; _raycaster.enabled = false; }
+                    _visual = Root.GetComponent<Graphic>();
                     if (_visual) { _imageRaycast = _visual!.raycastTarget; _visual.raycastTarget = false; }
-                    _canvas.enabled = true;
-                    _canvas.overrideSorting = true;
-                    _canvas.sortingLayerID = 0;
-                    _canvas.sortingOrder = short.MaxValue;
-                    if (_raycaster) _raycaster!.enabled = true;
+                    canvas.enabled = true;
+                    canvas.overrideSorting = true;
+                    canvas.sortingLayerID = 0;
+                    canvas.sortingOrder = short.MaxValue;
                 }
                 else
                 {
-                    _canvas.overrideSorting = _overrideSorting;
-                    _canvas.sortingLayerID = _layer; _canvas.sortingOrder = _order;
-                    _canvas.enabled = _enabled;
-                    if (_raycaster) _raycaster!.enabled = !_addedRaycaster && _raycasterEnabled;
+                    _active = false;
+                    if (_canvas)
+                    {
+                        _canvas!.sortingLayerID = _layer; _canvas.sortingOrder = _order;
+                        _canvas.overrideSorting = _overrideSorting;
+                        _canvas.enabled = _enabled;
+                    }
+                    if (_raycaster) _raycaster!.enabled = _raycasterEnabled;
                     if (_visual) _visual!.raycastTarget = _imageRaycast;
                 }
-                _active = active;
             }
-            internal void Dispose()
+
+            internal override void Dispose()
             {
                 SetActive(false);
-                if (_addedRaycaster && _raycaster) Object.Destroy(_raycaster);
                 if (_addedCanvas && _canvas) Object.Destroy(_canvas);
             }
         }

@@ -3,17 +3,18 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <Version>0.4.0</Version>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GameRoot Condition="'$(GameRoot)' == ''">$(MSBuildThisFileDirectory)..\..\..\..</GameRoot>
     <Managed>$(GameRoot)\CasualtiesUnknown_Data\Managed</Managed>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <OutputPath>$(MSBuildThisFileDirectory)..\..\dist\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <WebUiPluginAssembly>$(GameRoot)\mods\WebUI\artifacts\Release\CasualtiesWebUI\WebUI.Plugin.dll</WebUiPluginAssembly>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
+    <None Update="Assets\AE2\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\..\Lang\en.json" LogicalName="UnknownInventoryTerminal.Lang.en.json" />
     <Reference Include="$(Managed)\UnityEngine*.dll"><Private>false</Private></Reference>
     <Reference Include="$(Managed)\Unity.TextMeshPro.dll"><Private>false</Private></Reference>
     <Reference Include="$(Managed)\Assembly-CSharp.dll"><Private>false</Private></Reference>
@@ -21,11 +22,19 @@
     <Reference Include="$(GameRoot)\BepInEx\core\0Harmony.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameRoot)\BepInEx\plugins\CUCoreLib.dll"><Private>false</Private></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(Managed)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
-    <Reference Include="WebUI.Plugin" Condition="Exists('$(WebUiPluginAssembly)')">
-      <HintPath>$(WebUiPluginAssembly)</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!-- Historical WebUI bridge source is kept for reference, but the terminal is native-only. -->
+    <Compile Remove="WebUiBridge.cs;WebUiSpriteIcons.cs" />
   </ItemGroup>
+  <Target Name="GeneratePluginVersion" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <PluginVersionSource>$(IntermediateOutputPath)PluginVersion.g.cs</PluginVersionSource>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(PluginVersionSource)" Lines="namespace UnknownInventoryTerminal { internal static class BuildVersion { internal const string Value = &quot;$(Version)&quot;%3B } }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(PluginVersionSource)" />
+      <FileWrites Include="$(PluginVersionSource)" />
+    </ItemGroup>
+  </Target>
   <Target Name="CheckGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(Managed)\Assembly-CSharp.dll')" Text="Game assembly missing. Set -p:GameRoot=your-game-directory." />
     <Error Condition="!Exists('$(GameRoot)\BepInEx\plugins\CUCoreLib.dll')" Text="Install CUCoreLib before building this plugin." />

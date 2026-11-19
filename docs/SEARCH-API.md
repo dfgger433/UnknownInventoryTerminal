@@ -24,5 +24,4 @@ token.Dispose();
 出错的 provider 会被禁用，其他内置搜索继续使用。返回的 `InventoryEntry.NativeItem` 仅供识别；
 不要在 matcher 内更改游戏物品或调用 Unity 异步操作。
 
-本插件还会可选探测 `JustUnknownCharacters.PinyinMatcher.Contains(string,string)`，建立委托，
-不改动拼音 mod 的源码或 DLL。没有安装、关闭拼音设置或接口缺失时普通搜索仍可使用。
+若安装了兼容版本的 JustUnknownCharacters（JUC），终端自动调用其 `PinyinMatcher.Contains(string,string)` 匹配物品名和容器名，不需要打开设置。没有安装 JUC、接口不兼容或匹配器出错时，普通搜索仍可使用。

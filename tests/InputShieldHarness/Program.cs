@@ -1,0 +1,209 @@
+using System;
+using System.Linq;
+using UnknownInventoryTerminal;
+using UnityEngine;
+using UnityEngine.UI;
+using Object = UnityEngine.Object;
+
+namespace InputShieldHarness;
+
+internal static class Program
+{
+    private static int Main()
+    {
+        var tests = new (string Name, Action Run)[]
+        {
+            ("Only the fullscreen blocker accepts shield interaction; native menus stay active but hidden", NativeMenusAreHidden),
+            ("Close restores borrowed menu state and releases added CanvasGroups", CloseRestoresMenus),
+            ("Close and reopen in one frame reuse added components safely", SameFrameReopen),
+            ("Destroyed shield and scene roots can be replaced without leaking menu leases", DestroyedRootsAndSceneChange),
+            ("Close restores tooltip and drag visuals without hiding or replacing them", ClosePreservesVisuals),
+        };
+        var failures = 0;
+        foreach (var (name, run) in tests)
+        {
+            try
+            {
+                run();
+                Console.WriteLine($"PASS {name}");
+            }
+            catch (Exception ex)
+            {
+                failures++;
+                Console.Error.WriteLine($"FAIL {name}: {ex}");
+            }
+            finally
+            {
+                PlayerCamera.main = null;
+                GlobalDark.main = null;
+                foreach (var root in GameObject.Created) Object.Destroy(root);
+                Object.EndFrame();
+                GameObject.Created.Clear();
+            }
+        }
+        Console.WriteLine($"{tests.Length - failures}/{tests.Length} InputShield lifecycle tests passed.");
+        return failures == 0 ? 0 : 1;
+    }
+
+    private static void NativeMenusAreHidden()
+    {
+        var radial = new GameObject("Native radial", typeof(Canvas), typeof(GraphicRaycaster));
+        var radialCanvas = radial.GetComponent<Canvas>();
+        radialCanvas.sortingOrder = 12;
+        var radialRaycaster = radial.GetComponent<GraphicRaycaster>();
+        var container = new GameObject("Inactive native container");
+        container.SetActive(false);
+        var radialButton = new GameObject("Radial button", typeof(Image));
+        radialButton.transform.SetParent(radial.transform, false);
+        var unrelated = new GameObject("Unrelated game UI");
+        PlayerCamera.main = new PlayerCamera { radialMenu = radial.transform, containerMenu = container };
+        var shield = new InputShield();
+
+        shield.SetVisible(true);
+        var blocker = GameObject.Created.Single(root => root.Name == "Block clicks");
+        var rect = blocker.GetComponent<RectTransform>();
+        Check(shield.IsBlocker(blocker) && rect.anchorMin == Vector2.zero && rect.anchorMax == Vector2.one &&
+              rect.offsetMin == Vector2.zero && rect.offsetMax == Vector2.zero && blocker.GetComponent<Image>().raycastTarget,
+            "the shield should cover the entire viewport");
+        Check(!shield.IsBlocker(radialButton) && !shield.IsBlocker(container) && !shield.IsBlocker(unrelated),
+            "only the shield's own hierarchy is registered as a blocker");
+        Check(radial.activeSelf && !container.activeSelf, "the shield must not change native root activeSelf");
+        Check(IsHidden(radial) && IsHidden(container), "radial and container should reject pointer interaction even without an open container");
+        Check(radialCanvas.sortingOrder == 12 && !radialCanvas.overrideSorting && radialRaycaster.enabled &&
+              !container.GetComponent<Canvas>() && !container.GetComponent<GraphicRaycaster>(),
+            "native menus must not be promoted or gain a GraphicRaycaster");
+
+        container.SetActive(true); // The game can still open or animate its menu itself.
+        shield.SetVisible(true);
+        Check(container.activeSelf && IsHidden(container), "native activation must not bypass modal isolation");
+        shield.SetVisible(false);
+        Check(!shield.IsBlocker(blocker) && !blocker.activeSelf && container.activeSelf,
+            "close must disable the blocker without closing a native menu");
+        shield.Dispose();
+    }
+
+    private static void CloseRestoresMenus()
+    {
+        var radial = new GameObject("Radial", typeof(CanvasGroup));
+        var borrowed = radial.GetComponent<CanvasGroup>();
+        borrowed.alpha = 0.375f;
+        borrowed.interactable = false;
+        borrowed.blocksRaycasts = true;
+        borrowed.enabled = false;
+        var container = new GameObject("Container");
+        PlayerCamera.main = new PlayerCamera { radialMenu = radial.transform, containerMenu = container };
+        var shield = new InputShield();
+
+        shield.SetVisible(true);
+        var added = container.GetComponent<CanvasGroup>();
+        Check(IsHidden(radial) && IsHidden(container), "both borrowed and added CanvasGroups should hide their menu");
+        shield.SetVisible(true); // A refresh must not capture the leased values as the original.
+        shield.SetVisible(false);
+        Check(!borrowed.enabled && borrowed.alpha == 0.375f && !borrowed.interactable && borrowed.blocksRaycasts,
+            "close should restore every original CanvasGroup setting immediately");
+        Check(added.alpha == 1f && added.interactable && added.blocksRaycasts,
+            "an added CanvasGroup should already be neutral before destruction");
+        Object.EndFrame();
+        Check(!added && !container.GetComponent<CanvasGroup>(), "the temporary group survived frame-end cleanup");
+        Check(ReferenceEquals(borrowed, radial.GetComponent<CanvasGroup>()), "the borrowed group must survive as the same instance");
+        shield.Dispose();
+    }
+
+    private static void SameFrameReopen()
+    {
+        var radial = new GameObject("Radial");
+        var drag = new GameObject("Drag image", typeof(Image));
+        var image = drag.GetComponent<Image>();
+        PlayerCamera.main = new PlayerCamera { radialMenu = radial.transform, dragImage = image };
+        var shield = new InputShield();
+        shield.SetVisible(true);
+        var group = radial.GetComponent<CanvasGroup>();
+        var canvas = drag.GetComponent<Canvas>();
+
+        shield.SetVisible(false);
+        shield.SetVisible(true);
+        Object.EndFrame();
+        Check(group && ReferenceEquals(group, radial.GetComponent<CanvasGroup>()) && IsHidden(radial),
+            "frame-end cleanup must not destroy a reopened menu's active lease");
+        Check(canvas && ReferenceEquals(canvas, drag.GetComponent<Canvas>()) && !image.raycastTarget,
+            "frame-end cleanup must not destroy a reopened drag visual's active lease");
+        shield.SetVisible(false);
+        Object.EndFrame();
+        Check(!group && !canvas && image.raycastTarget, "the final close should release both added components");
+        shield.Dispose();
+    }
+
+    private static void DestroyedRootsAndSceneChange()
+    {
+        var shield = new InputShield();
+        var radial = new GameObject("Radial in old scene");
+        var oldContainer = new GameObject("Surviving old container", typeof(CanvasGroup));
+        var borrowed = oldContainer.GetComponent<CanvasGroup>();
+        borrowed.alpha = 0.6f;
+        PlayerCamera.main = new PlayerCamera { radialMenu = radial.transform, containerMenu = oldContainer };
+        shield.SetVisible(true);
+        var oldBlocker = GameObject.Created.Single(root => root.Name == "Block clicks");
+        var oldShield = oldBlocker.transform.Parent!.gameObject;
+        var oldGroup = radial.GetComponent<CanvasGroup>();
+
+        Object.Destroy(radial);
+        Object.Destroy(oldShield);
+        Object.EndFrame();
+        Check(!oldGroup && !shield.IsBlocker(oldBlocker), "destroyed roots must not remain registered");
+        shield.SetVisible(true); // The old camera still holds a destroyed transform reference.
+        var newBlocker = GameObject.Created.Single(root => root && root.Name == "Block clicks");
+        Check(shield.IsBlocker(newBlocker), "refresh should recreate the blocker after its root is destroyed");
+        var nextRadial = new GameObject("Radial in next scene");
+        PlayerCamera.main = new PlayerCamera { radialMenu = nextRadial.transform };
+        shield.SetVisible(true);
+        Check(IsHidden(nextRadial) && borrowed.alpha == 0.6f && borrowed.blocksRaycasts && borrowed.interactable,
+            "refresh after a camera swap should restore the surviving old menu and isolate the new one");
+        shield.Dispose();
+        Object.EndFrame();
+        Check(!newBlocker && !nextRadial.GetComponent<CanvasGroup>(), "dispose should destroy the shield and release the scene's new lease");
+    }
+
+    private static void ClosePreservesVisuals()
+    {
+        var cursor = new GameObject("Active drag cursor", typeof(Image));
+        var image = cursor.GetComponent<Image>();
+        var tooltip = new GameObject("Tooltip", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(Image));
+        var tooltipCanvas = tooltip.GetComponent<Canvas>();
+        tooltipCanvas.enabled = false;
+        tooltipCanvas.sortingLayerID = 5;
+        tooltipCanvas.sortingOrder = 12;
+        var tooltipRaycaster = tooltip.GetComponent<GraphicRaycaster>();
+        var tooltipImage = tooltip.GetComponent<Image>();
+        PlayerCamera.main = new PlayerCamera { dragImage = image };
+        GlobalDark.main = new GlobalDark { tooltipRect = tooltip.GetComponent<RectTransform>() };
+        var shield = new InputShield();
+
+        shield.SetVisible(true);
+        Check(image.enabled && !image.raycastTarget && cursor.GetComponent<Canvas>().sortingOrder == short.MaxValue &&
+              !shield.IsBlocker(cursor), "active drag visual should render above the terminal and not accept input");
+        Check(tooltipCanvas.enabled && tooltipCanvas.overrideSorting && tooltipCanvas.sortingLayerID == 0 &&
+              tooltipCanvas.sortingOrder == short.MaxValue && !tooltipRaycaster.enabled && !tooltipImage.raycastTarget,
+            "borrowed tooltip canvas should render above the terminal without intercepting input");
+        shield.SetVisible(false);
+        Object.EndFrame();
+
+        Check(ReferenceEquals(image, PlayerCamera.main.dragImage) && image && image.enabled && image.raycastTarget &&
+              !cursor.GetComponent<Canvas>(), "close should restore the drag cursor without hiding or replacing it");
+        Check(ReferenceEquals(tooltipCanvas, tooltip.GetComponent<Canvas>()) && !tooltipCanvas.enabled &&
+              !tooltipCanvas.overrideSorting && tooltipCanvas.sortingLayerID == 5 && tooltipCanvas.sortingOrder == 12 &&
+              tooltipRaycaster.enabled && tooltipImage.raycastTarget,
+            "borrowed tooltip canvas, raycaster and graphic should recover exactly");
+        shield.Dispose();
+    }
+
+    private static bool IsHidden(GameObject menu)
+    {
+        var group = menu.GetComponent<CanvasGroup>();
+        return group && group.enabled && group.alpha == 0f && !group.interactable && !group.blocksRaycasts;
+    }
+
+    private static void Check(bool condition, string message)
+    {
+        if (!condition) throw new InvalidOperationException(message);
+    }
+}
