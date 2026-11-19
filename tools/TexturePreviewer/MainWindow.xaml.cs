@@ -121,6 +121,7 @@ public partial class MainWindow : Window
             if (!string.IsNullOrEmpty(previouslySelected) && _regions.Contains(previouslySelected)) RegionList.SelectedItem = previouslySelected;
             else RegionList.SelectedIndex = _regions.Count > 0 ? 0 : -1;
             if (RegionList.SelectedItem is string selectedName) ShowRegion(selectedName);
+            else ClearAtlasPreview();
             LiveIndicator.Text = "● 实时监视中";
             LiveIndicator.Foreground = (Brush)FindResource("AccentBrush");
         }
@@ -128,6 +129,7 @@ public partial class MainWindow : Window
         {
             _style = null;
             _regions.Clear();
+            ClearAtlasPreview();
             RegionCountLabel.Text = "资源无法载入";
             StatusBox.Text = ex.Message;
             CompositeCanvas.Children.Clear();
@@ -153,7 +155,11 @@ public partial class MainWindow : Window
 
     private BitmapSource Crop(Ae2ImageRegion region, int column = -1)
     {
-        var bitmap = LoadBitmap(TexturePath(region.Texture));
+        return Crop(LoadBitmap(TexturePath(region.Texture)), region, column);
+    }
+
+    private static BitmapSource Crop(BitmapSource bitmap, Ae2ImageRegion region, int column = -1)
+    {
         if (column >= 0 && (region.Width % Ae2TerminalLayout.Columns != 0 || region.Border != 0))
             throw new InvalidDataException("六格条必须等宽且不能设置九宫格边宽。");
         var width = column < 0 ? region.Width : region.Width / Ae2TerminalLayout.Columns;
@@ -181,27 +187,34 @@ public partial class MainWindow : Window
         DetailRect.Text = $"srcRect  [{region.X}, {region.Y}, {region.Width}, {region.Height}]" + (region.Border > 0 ? $"   ·   border {region.Border}px" : "");
         try
         {
-            CropImage.Source = Crop(region);
             var atlas = LoadBitmap(TexturePath(region.Texture));
-            AtlasImage.Width = atlas.PixelWidth;
-            AtlasImage.Height = atlas.PixelHeight;
+            var crop = Crop(atlas, region);
+            // The Viewbox scales the whole host, so the bitmap and outline share one pixel coordinate space.
+            AtlasHost.Width = atlas.PixelWidth;
+            AtlasHost.Height = atlas.PixelHeight;
             AtlasImage.Source = atlas;
+            CropImage.Source = crop;
             AtlasLabel.Text = $"{region.Texture} · {atlas.PixelWidth} × {atlas.PixelHeight}";
             DrawAtlasSelection(region);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or FileFormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or FileFormatException or InvalidDataException)
         {
-            CropImage.Source = null;
+            ClearAtlasPreview();
             StatusBox.Text = $"{name}: {ex.Message}";
         }
+    }
+
+    private void ClearAtlasPreview()
+    {
+        AtlasHost.Width = AtlasHost.Height = 0;
+        AtlasImage.Source = CropImage.Source = null;
+        AtlasOverlay.Children.Clear();
+        AtlasLabel.Text = "";
     }
 
     private void DrawAtlasSelection(Ae2ImageRegion region)
     {
         AtlasOverlay.Children.Clear();
-        var bitmap = AtlasImage.Source as BitmapSource;
-        AtlasOverlay.Width = bitmap?.PixelWidth ?? 0;
-        AtlasOverlay.Height = bitmap?.PixelHeight ?? 0;
         var outline = new Rectangle
         {
             Width = region.Width,

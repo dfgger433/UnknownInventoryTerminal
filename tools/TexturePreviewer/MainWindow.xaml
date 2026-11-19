@@ -88,12 +88,12 @@
               <TextBlock Text="贴图图集" FontSize="14" FontWeight="SemiBold" />
               <TextBlock x:Name="AtlasLabel" Text="" Foreground="{StaticResource MutedBrush}" Margin="10,2,0,0" />
             </StackPanel>
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-              <Grid x:Name="AtlasHost" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Image x:Name="AtlasImage" Stretch="None" />
+            <Viewbox x:Name="AtlasViewport" Stretch="Uniform" StretchDirection="DownOnly">
+              <Grid x:Name="AtlasHost" Background="{StaticResource CheckerBrush}" ClipToBounds="True">
+                <Image x:Name="AtlasImage" Stretch="Fill" RenderOptions.BitmapScalingMode="NearestNeighbor" />
                 <Canvas x:Name="AtlasOverlay" IsHitTestVisible="False" />
               </Grid>
-            </ScrollViewer>
+            </Viewbox>
           </DockPanel>
         </Border>
       </Grid>
