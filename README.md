@@ -2,7 +2,7 @@
 
 Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生终端，不再包含 WebUI 网页前端。
 
-## 终端 0.4.4
+## 终端 0.4.5
 
 - 只读取本地玩家的真实物品实例，按实例身份去重；不复制物品、不修改真实容器层级。
 - 终端窗口固定在屏幕中央，不可拖动。打开时不显示原版径向物品栏或容器面板。上部是六列可搜索仓储网格，按精确物品 ID 聚合同类；下部显示双手、主槽位和装备，不受搜索过滤。
@@ -13,7 +13,7 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 - 物品转移仍走原版处理流程，交互前校验本地归属，不直接调用 `LoadItem`；Together 同步仍由原有补丁处理。
 - 「设置 → 游戏」保留终端语言、快捷键和容器放置规则。安装兼容的 JustUnknownCharacters（JUC）时自动接入拼音匹配，未安装时仍可普通搜索。
 
-自动化测试覆盖库存投影、搜索、六列布局与装备扩展补行；Unity 实际渲染、原版物品交互和 Together 主客机链路仍需在目标游戏版本中实机验收，见[兼容性说明](docs/COMPATIBILITY.md)。
+自动化测试覆盖库存投影、搜索、六列布局与装备扩展补行，以及屏幕 JSON、图集裁切和资源边界；Unity 实际渲染、原版物品交互和 Together 主客机链路仍需在目标游戏版本中实机验收，见[兼容性说明](docs/COMPATIBILITY.md)。
 
 ## 构建
 
@@ -23,7 +23,7 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 .\scripts\Build.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-脚本构建插件并运行核心测试，不需要 Node.js/npm。需要 .NET SDK、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。
+脚本构建插件、复制 GUI 资源，并运行单元测试和输入门测试，不需要 Node.js/npm。需要 .NET SDK、本机游戏 Managed DLL、BepInEx 5 和 `BepInEx/plugins/CUCoreLib.dll`。
 
 每交付一次更新，将[版本配置](src/Directory.Build.props)中的补丁位加 `1`（例如 `0.4.1` → `0.4.2`），并更新[更新记录](CHANGELOG.md)。同一版本的重复测试构建不加版；插件加载日志与两个 DLL 使用同一版本源。
 
@@ -35,9 +35,13 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 .\scripts\Install.ps1 -GameRoot 'D:\stam\steamapps\common\Casualties Unknown'
 ```
 
-安装脚本只向模组专用目录复制插件 DLL、Core DLL、AE2 贴图及授权声明和语言文件，不修改游戏 DLL、Together 或存档。终端只使用原生窗口，旧的 `UseLegacyWebUi` 配置不再生效。
+安装脚本只向模组专用目录复制插件 DLL、Core DLL、GUI 屏幕描述、贴图、授权声明和语言文件，不修改游戏 DLL、Together 或存档。终端只使用原生窗口，旧的 `UseLegacyWebUi` 配置不再生效。
 
-AE2 贴图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。原图未修改，界面在运行时裁切和重组；完整来源和使用条款见[贴图授权说明](src/UnknownInventoryTerminal/Assets/AE2/NOTICE.txt)。
+## GUI 资源
+
+终端按 AE2 的结构将贴图放在 [textures 目录](Assets/AE2/textures/)，将背景裁切、按钮状态与图标映射放在[终端屏幕描述](Assets/AE2/screens/terminals/terminal.json)。旧的平铺贴图及 `AE2_New` 不再读取；定制方法见[贴图替换说明](Assets/AE2/README.md)。
+
+AE2 原图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。原图未修改，界面在运行时裁切和重组；完整来源和使用条款见[贴图授权说明](Assets/AE2/NOTICE.txt)。
 
 ## 文档
 

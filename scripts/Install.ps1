@@ -26,17 +26,9 @@ foreach ($file in $files) {
     if (!(Test-Path (Join-Path $sourceDir $file) -PathType Leaf)) { throw "Missing build artifact: $file. Run Build.ps1 first." }
 }
 # No deletions; only this plugin's dedicated subdirectory is written.
-$directories = @(
-    $destinationDir,
-    (Join-Path $destinationDir $langSubdir),
-    (Join-Path $destinationDir $assetSubdir),
-    (Join-Path $destinationDir "$assetSubdir\screens"),
-    (Join-Path $destinationDir "$assetSubdir\screens\terminals"),
-    (Join-Path $destinationDir "$assetSubdir\textures"),
-    (Join-Path $destinationDir "$assetSubdir\textures\guis"),
-    (Join-Path $destinationDir "$assetSubdir\textures\gui"),
-    (Join-Path $destinationDir "$assetSubdir\textures\gui\sprites")
-)
-foreach ($directory in $directories) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
-foreach ($file in $files) { Copy-Item -LiteralPath (Join-Path $sourceDir $file) -Destination (Join-Path $destinationDir $file) -Force }
+foreach ($file in $files) {
+    $destination = Join-Path $destinationDir $file
+    New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $sourceDir $file) -Destination $destination -Force
+}
 Write-Output "Installed in $destinationDir"

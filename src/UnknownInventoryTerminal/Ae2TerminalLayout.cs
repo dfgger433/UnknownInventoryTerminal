@@ -6,7 +6,7 @@ namespace UnknownInventoryTerminal
     {
         internal const int Columns = 6, Pitch = 18, Inset = 7, Rail = 24, Header = 22;
         internal const int GridWidth = Columns * Pitch, ScrollbarLeft = Inset + GridWidth + 5;
-        internal const int BoardWidth = GridWidth + 33, AtlasWidth = 195, AtlasRemovedWidth = 3 * Pitch;
+        internal const int BoardWidth = GridWidth + 33;
         internal const int DetailHeight = 24, EquipmentHeader = 12, Footer = 16;
         private const int FixedHeight = Header + Footer + DetailHeight + EquipmentHeader;
         internal int BoardLeft => Rail * Scale;

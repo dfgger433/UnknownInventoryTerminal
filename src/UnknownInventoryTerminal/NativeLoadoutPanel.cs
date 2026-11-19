@@ -158,7 +158,7 @@ namespace UnknownInventoryTerminal
             {
                 var index = _mainRow * columns + i;
                 var valid = index < mainCount && body.slots[index];
-                var cell = Cell(_mainCells, _main, i, 143);
+                var cell = Cell(_mainCells, _main, i, Ae2Image.MainSlot);
                 Bind(cell, body, valid ? index : -1, null, valid ? body.GetItem(index) : null,
                     valid ? index.ToString(CultureInfo.InvariantCulture) : "", valid && body.slots[index].isHand && body.handSlot == index);
             }
@@ -166,7 +166,7 @@ namespace UnknownInventoryTerminal
             {
                 var index = _equipmentRow * columns + i;
                 var id = index < _equipment.Count ? _equipment[index] : null;
-                var cell = Cell(_equipmentCells, _worn, i, 85);
+                var cell = Cell(_equipmentCells, _worn, i, Ae2Image.EquipmentSlot);
                 Item? item = null;
                 if (id != null && !exact.TryGetValue(id, out item)) multi.TryGetValue(id, out item);
                 Bind(cell, body, -1, id, item, item ? "" : id == null ? "" : SlotLabel(id), false);
@@ -175,7 +175,7 @@ namespace UnknownInventoryTerminal
             HideExtra(_equipmentCells, _layout.EquipmentRows * columns);
         }
 
-        private LoadoutCell Cell(List<LoadoutCell> cells, Transform parent, int i, int atlasY)
+        private LoadoutCell Cell(List<LoadoutCell> cells, Transform parent, int i, Ae2Image slotArt)
         {
             if (i == cells.Count)
             {
@@ -183,8 +183,7 @@ namespace UnknownInventoryTerminal
                 var cell = root.GetComponent<LoadoutCell>();
                 cell.Owner = this;
                 cell.Face = root.GetComponent<Image>();
-                _skin.Apply(cell.Face, Ae2TerminalSkin.Terminal, Ae2TerminalLayout.Inset + (i % Ae2TerminalLayout.Columns) * Ae2TerminalLayout.Pitch,
-                    atlasY, Ae2TerminalLayout.Pitch, Ae2TerminalLayout.Pitch, Ae2TerminalSkin.Slot);
+                _skin.Apply(cell.Face, slotArt, Ae2TerminalSkin.Slot, i % Ae2TerminalLayout.Columns);
                 cell.Caption = NativeFlatInventoryPanel.CreateText(root.transform, "Slot label", 5, TextAlignmentOptions.Center);
                 cells.Add(cell);
             }

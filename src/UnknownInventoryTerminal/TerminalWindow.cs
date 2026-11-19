@@ -119,7 +119,7 @@ namespace UnknownInventoryTerminal
             {
                 var tip = _tooltipBounds;
                 tip.position += _rect.position;
-                _skin.Draw(tip, Ae2TerminalSkin.Search, 0, 0, 128, 12, Ae2TerminalSkin.Ink);
+                _skin.Draw(tip, Ae2Image.Tooltip, Ae2TerminalSkin.Ink);
                 GUI.Label(tip, _tooltip, _tooltipStyle);
             }
             var current = Event.current;
@@ -132,17 +132,12 @@ namespace UnknownInventoryTerminal
             var left = Ae2TerminalLayout.Rail;
             var footerY = Ae2TerminalLayout.Header * s + _layout.PanelHeight;
             const int board = Ae2TerminalLayout.BoardWidth;
-            _skin.Draw(Units(left, 0, board - 2, Ae2TerminalLayout.Header), Ae2TerminalSkin.Terminal,
-                0, 0, board - 2, 17, Ae2TerminalSkin.Shell);
-            _skin.Draw(Units(left + board - 2, 0, 2, Ae2TerminalLayout.Header), Ae2TerminalSkin.Terminal,
-                Ae2TerminalLayout.AtlasWidth - 2, 0, 2, 17, Ae2TerminalSkin.Shell);
+            _skin.Draw(Units(left, 0, board - 2, Ae2TerminalLayout.Header), Ae2Image.Header, Ae2TerminalSkin.Shell);
+            _skin.Draw(Units(left + board - 2, 0, 2, Ae2TerminalLayout.Header), Ae2Image.HeaderEdge, Ae2TerminalSkin.Shell);
             var footerHeight = Ae2TerminalLayout.Footer * s;
-            _skin.Draw(new Rect(left * s, footerY, 2 * s, footerHeight), Ae2TerminalSkin.Terminal,
-                0, 161, 2, 9, Ae2TerminalSkin.Shell);
-            _skin.Draw(new Rect((left + 2) * s, footerY, (board - 4) * s, footerHeight), Ae2TerminalSkin.Terminal,
-                2, 161, 1, 9, Ae2TerminalSkin.Shell);
-            _skin.Draw(new Rect((left + board - 2) * s, footerY, 2 * s, footerHeight), Ae2TerminalSkin.Terminal,
-                174, 161, 2, 9, Ae2TerminalSkin.Shell);
+            _skin.Draw(new Rect(left * s, footerY, 2 * s, footerHeight), Ae2Image.FooterLeft, Ae2TerminalSkin.Shell);
+            _skin.Draw(new Rect((left + 2) * s, footerY, (board - 4) * s, footerHeight), Ae2Image.FooterCenter, Ae2TerminalSkin.Shell);
+            _skin.Draw(new Rect((left + board - 2) * s, footerY, 2 * s, footerHeight), Ae2Image.FooterRight, Ae2TerminalSkin.Shell);
             GUI.Label(Units(left + 7, 2, 48, 17), TerminalText.Get("terminal.title"), _titleStyle);
             GUI.Label(new Rect((left + 7) * s, footerY + s, (board - 14) * s, 13 * s), _status, _statusStyle);
 
@@ -160,8 +155,8 @@ namespace UnknownInventoryTerminal
                 GUI.FocusControl(null);
                 ev.Use();
             }
-            _skin.Draw(searchRect, Ae2TerminalSkin.Search, 0, GUI.GetNameOfFocusedControl() == SearchControl ? 24 : 0,
-                128, 12, new Color32(91, 95, 117, 255));
+            _skin.Draw(searchRect, GUI.GetNameOfFocusedControl() == SearchControl ? Ae2Image.SearchFocused : Ae2Image.Search,
+                new Color32(91, 95, 117, 255));
             GUI.SetNextControlName(SearchControl);
             SearchApi.Query = GUI.TextField(searchRect, SearchApi.Query, 256, _searchStyle);
             if (_focusSearch && Event.current.type == EventType.Repaint)
@@ -173,24 +168,26 @@ namespace UnknownInventoryTerminal
                 GUI.Label(searchRect, TerminalText.Get("terminal.search"), _searchStyle);
             SetTooltip(searchRect, TerminalText.Get("terminal.searchHint"), below: true);
 
-            if (IconButton(left + board - 22, 2, 96, 0, TerminalText.Get("terminal.close"), "X")) _closeRequested = true;
-            if (IconButton(3, 22, _sortByAmount ? 16 : 0, 64, _sortByAmount ? TerminalText.Get("terminal.sortName") : TerminalText.Get("terminal.sortQuantity"), "#"))
+            if (IconButton(left + board - 22, 2, Ae2Image.Close, TerminalText.Get("terminal.close"), "X")) _closeRequested = true;
+            if (IconButton(3, 22, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
+                _sortByAmount ? TerminalText.Get("terminal.sortName") : TerminalText.Get("terminal.sortQuantity"), "#"))
             {
                 _sortByAmount = !_sortByAmount;
                 _descending = _sortByAmount;
             }
-            if (IconButton(3, 43, _descending ? 16 : 0, 48, _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
+            if (IconButton(3, 43, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
+                _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
                 _descending = !_descending;
-            if (IconButton(3, 64, 232, 200, TerminalText.Get("terminal.refresh"), "R", 8)) Refresh();
+            if (IconButton(3, 64, Ae2Image.Refresh, TerminalText.Get("terminal.refresh"), "R")) Refresh();
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
         }
 
-        private bool IconButton(int px, int py, int x, int y, string tooltip, string fallback, int size = 16)
+        private bool IconButton(int px, int py, Ae2Image icon, string tooltip, string fallback)
         {
             var rect = Units(px, py, 18, 20);
             var hovered = rect.Contains(Event.current.mousePosition);
-            _skin.Draw(rect, Ae2TerminalSkin.States, hovered ? 212 : 176, 128, 18, 20, Ae2TerminalSkin.Shell);
-            if (!_skin.Draw(Units(px + 1, py + 2, 16, 16), Ae2TerminalSkin.States, x, y, size, size, Color.clear))
+            _skin.Draw(rect, hovered ? Ae2Image.ButtonHover : Ae2Image.Button, Ae2TerminalSkin.Shell);
+            if (!_skin.Draw(Units(px + 1, py + 2, 16, 16), icon, Color.clear))
                 GUI.Label(rect, fallback, _iconStyle);
             SetTooltip(rect, tooltip, below: py < 20);
             return GUI.Button(rect, GUIContent.none, GUIStyle.none);

@@ -248,29 +248,19 @@ namespace UnknownInventoryTerminal
                 if (PlayerCamera.main && PlayerCamera.main.dragItem) _slider.SetValueWithoutNotify(_scrollRow);
                 else MoveToRow((int)value);
             });
-            _skin.Apply(_thumb, Ae2TerminalSkin.DisabledThumb, 0, 0, 12, 15, Ae2TerminalSkin.Slot);
+            _skin.Apply(_thumb, Ae2Image.ThumbDisabled, Ae2TerminalSkin.Slot);
 
             _empty = CreateText(panel.transform, "Empty storage", 17, TextAlignmentOptions.Center);
             _lower = Add(panel.transform, "Container storage base", typeof(Image)).GetComponent<RectTransform>();
-            _skin.Apply(_lower.GetComponent<Image>(), Ae2TerminalSkin.Terminal, 0, 71, 195, 5, Ae2TerminalSkin.Shell);
+            _skin.Apply(_lower.GetComponent<Image>(), Ae2Image.LoadoutBackground, Ae2TerminalSkin.Shell);
             var back = Add(_lower, "Return to groups", typeof(Image), typeof(Button));
             _backTooltip = CreateTooltip(back, TerminalText.Get("inventory.backTooltip"), TerminalText.Get("inventory.backTooltip.description"));
             _backButton = back.GetComponent<Button>();
-
-            // Set up background image to use Ae2TerminalSkin.States atlas
             var backImage = back.GetComponent<Image>();
-            // Assuming 6 pixels border for the button to maintain corners while stretching middle
-            var border = new Vector4(6, 6, 6, 6);
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot, border);
-
-            // Configure sprite swap for hover
-            var spriteState = new SpriteState();
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 212, 128, 18, 20, Ae2TerminalSkin.Slot, border);
-            spriteState.highlightedSprite = backImage.sprite;
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot, border);
-
+            _skin.Apply(backImage, Ae2Image.BackButton, Ae2TerminalSkin.Slot);
+            _backButton.targetGraphic = backImage;
             _backButton.transition = Selectable.Transition.SpriteSwap;
-            _backButton.spriteState = spriteState;
+            _backButton.spriteState = new SpriteState { highlightedSprite = _skin.GetSprite(Ae2Image.BackButtonHover) };
             _backButton.onClick.AddListener(() => ChangeSelection(null));
             _backLabel = CreateText(back.transform, "Selection label", 13, TextAlignmentOptions.MidlineLeft);
             Stretch(_backLabel.rectTransform, new Vector2(6, 0), new Vector2(-6, 0));
@@ -298,12 +288,12 @@ namespace UnknownInventoryTerminal
                     _rowArt.Add((cells, rail));
                 }
                 var row = _rowArt[i];
-                var sourceY = i == 0 ? 17 : i == _layout.Rows - 1 ? 53 : 35;
+                var (cellsArt, railArt) = i == 0 ? (Ae2Image.FirstRow, Ae2Image.FirstRail)
+                    : i == _layout.Rows - 1 ? (Ae2Image.LastRow, Ae2Image.LastRail) : (Ae2Image.Row, Ae2Image.Rail);
                 const int split = Ae2TerminalLayout.Inset + Ae2TerminalLayout.GridWidth;
                 const int tail = Ae2TerminalLayout.BoardWidth - split;
-                _skin.Apply(row.Cells, Ae2TerminalSkin.Terminal, 0, sourceY, split, pitch, Ae2TerminalSkin.Slot);
-                _skin.Apply(row.Rail, Ae2TerminalSkin.Terminal, split + Ae2TerminalLayout.AtlasRemovedWidth,
-                    sourceY, tail, pitch, Ae2TerminalSkin.Shell);
+                _skin.Apply(row.Cells, cellsArt, Ae2TerminalSkin.Slot);
+                _skin.Apply(row.Rail, railArt, Ae2TerminalSkin.Shell);
                 row.Cells.gameObject.SetActive(true);
                 row.Rail.gameObject.SetActive(true);
                 Position(row.Cells.rectTransform, new Rect(0, i * stride, split * scale, stride));
@@ -324,25 +314,9 @@ namespace UnknownInventoryTerminal
             Position(_lower!, new Rect(0, _layout.GridHeight, _bounds.width, _layout.PanelHeight - _layout.GridHeight));
             _loadout.SetLayout(_layout);
             _backLabel!.fontSize = 7 * scale;
-            // The back button is managed by Position, but should be stretched to fill its container if we want it to be responsive.
-            // Based on the requirement, the button should stretch its middle part.
-            // Using a simple Position currently defines its size.
-            // If I change it to use anchors it might work.
-            // Actually, the requirement says: "按钮伽宽峕四角 咊边框丕变，祇延展中部"
-            // This suggests using a 9-slice or just stretching the middle part.
-            // Since it's a UI button, if I set the anchors, it will stretch.
-            // Let's set the anchors to be more flexible, but Position() in this codebase sets anchors to (0,1).
-            // Maybe I should keep Position() for the initial layout but use a layout group or something?
-            // No, the codebase uses manual positioning.
-            // I will try to use the existing Stretch method, but I need to make sure the anchors are correct.
-            // The existing Position method:
-            // transform.anchorMin = transform.anchorMax = transform.pivot = new Vector2(0, 1);
-            // This pins the button.
-            // If I want it to stretch, I should use different anchors.
-            // But Position() overrides them.
-            // I'll keep the Position() call but add a Stretch() call for the internal image?
-            // No, the back button *is* the image.
-            Position(_backButton!.GetComponent<RectTransform>(), new Rect(7 * scale, 2 * scale, 41 * scale, 18 * scale));
+            // Match the pixel scale of the surrounding UI while stretching only the slice centers.
+            ((Image)_backButton!.targetGraphic).pixelsPerUnitMultiplier = 1f / scale;
+            Position(_backButton.GetComponent<RectTransform>(), new Rect(7 * scale, 2 * scale, 41 * scale, 18 * scale));
             _grid!.cellSize = new Vector2(stride, stride);
             foreach (var tile in _tiles.Values) if (tile.Button) SizeTile(tile);
             UpdateScroll(_tiles.Count);
@@ -365,8 +339,7 @@ namespace UnknownInventoryTerminal
             if (_thumbEnabled != (max > 0))
             {
                 _thumbEnabled = max > 0;
-                _skin.Apply(_thumb!, _thumbEnabled ? Ae2TerminalSkin.Thumb : Ae2TerminalSkin.DisabledThumb,
-                    0, 0, 12, 15, Ae2TerminalSkin.Slot);
+                _skin.Apply(_thumb!, _thumbEnabled ? Ae2Image.Thumb : Ae2Image.ThumbDisabled, Ae2TerminalSkin.Slot);
             }
             var row = Mathf.Clamp(_scrollRow, 0, max);
             _slider.SetValueWithoutNotify(row);

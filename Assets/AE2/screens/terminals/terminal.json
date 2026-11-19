@@ -1,0 +1,36 @@
+{
+  "terminalStyle": {
+    "header": { "texture": "guis/terminal.png", "srcRect": [0, 0, 139, 17] },
+    "headerEdge": { "texture": "guis/terminal.png", "srcRect": [193, 0, 2, 17] },
+    "footerLeft": { "texture": "guis/terminal.png", "srcRect": [0, 161, 2, 9] },
+    "footerCenter": { "texture": "guis/terminal.png", "srcRect": [2, 161, 1, 9] },
+    "footerRight": { "texture": "guis/terminal.png", "srcRect": [174, 161, 2, 9] },
+    "firstRow": { "texture": "guis/terminal.png", "srcRect": [0, 17, 115, 18] },
+    "firstRail": { "texture": "guis/terminal.png", "srcRect": [169, 17, 26, 18] },
+    "row": { "texture": "guis/terminal.png", "srcRect": [0, 35, 115, 18] },
+    "rail": { "texture": "guis/terminal.png", "srcRect": [169, 35, 26, 18] },
+    "lastRow": { "texture": "guis/terminal.png", "srcRect": [0, 53, 115, 18] },
+    "lastRail": { "texture": "guis/terminal.png", "srcRect": [169, 53, 26, 18] },
+    "loadoutBackground": { "texture": "guis/terminal.png", "srcRect": [0, 71, 195, 5] },
+    "mainSlot": { "texture": "guis/terminal.png", "srcRect": [7, 143, 108, 18] },
+    "equipmentSlot": { "texture": "guis/terminal.png", "srcRect": [7, 85, 108, 18] }
+  },
+  "images": {
+    "search": { "texture": "guis/text_field.png", "srcRect": [0, 0, 128, 12] },
+    "searchFocused": { "texture": "guis/text_field.png", "srcRect": [0, 24, 128, 12] },
+    "tooltip": { "texture": "guis/text_field.png", "srcRect": [0, 0, 128, 12] },
+    "button": { "texture": "guis/states.png", "srcRect": [176, 128, 18, 20] },
+    "buttonHover": { "texture": "guis/states.png", "srcRect": [212, 128, 18, 20] },
+    "backButton": { "texture": "guis/states.png", "srcRect": [176, 128, 18, 20], "border": 6 },
+    "backButtonHover": { "texture": "guis/states.png", "srcRect": [212, 128, 18, 20], "border": 6 },
+    "close": { "texture": "guis/states.png", "srcRect": [96, 0, 16, 16] },
+    "sortName": { "texture": "guis/states.png", "srcRect": [0, 64, 16, 16] },
+    "sortAmount": { "texture": "guis/states.png", "srcRect": [16, 64, 16, 16] },
+    "sortAscending": { "texture": "guis/states.png", "srcRect": [0, 48, 16, 16] },
+    "sortDescending": { "texture": "guis/states.png", "srcRect": [16, 48, 16, 16] },
+    "refresh": { "texture": "guis/states.png", "srcRect": [232, 200, 8, 8] },
+    "thumb": { "texture": "gui/sprites/big_scroller.png", "srcRect": [0, 0, 12, 15] },
+    "thumbDisabled": { "texture": "gui/sprites/big_scroller_disabled.png", "srcRect": [0, 0, 12, 15] },
+    "nativeButtonFace": { "texture": "gui/sprites/transparent.png", "srcRect": [0, 0, 1, 1] }
+  }
+}

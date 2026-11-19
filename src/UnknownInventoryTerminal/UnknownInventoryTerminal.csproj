@@ -12,7 +12,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
-    <None Update="Assets\AE2\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Assets\AE2\NOTICE.txt" Link="Assets\AE2\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Assets\AE2\screens\**\*.json" Link="Assets\AE2\screens\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Assets\AE2\textures\**\*.png" Link="Assets\AE2\textures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="..\..\Lang\en.json" LogicalName="UnknownInventoryTerminal.Lang.en.json" />
     <Reference Include="$(Managed)\UnityEngine*.dll"><Private>false</Private></Reference>
