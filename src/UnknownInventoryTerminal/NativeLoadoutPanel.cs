@@ -215,7 +215,7 @@ namespace UnknownInventoryTerminal
                     button.slot = index;
                     button.refItem = index >= 0 ? null! : item!;
                     button.maxImageSize = pitch - 6 * scale;
-                    NativeFlatInventoryPanel.Stretch((RectTransform)button.transform, Vector2.one * scale, -Vector2.one * scale);
+                    NativeFlatInventoryPanel.Stretch((RectTransform)button.transform, Vector2.one * 2 * scale, -Vector2.one * 2 * scale);
                     button.gameObject.SetActive(true);
                 }
             }
