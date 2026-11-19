@@ -22,37 +22,45 @@ namespace UnknownInventoryTerminal
 
         internal Ae2TerminalSkin(ManualLogSource log) { _log = log; }
 
-        private Texture2D? Load(string name)
+        private Texture2D? LoadAsset(string category, string name)
         {
-            if (_textures.TryGetValue(name, out var cached)) return cached ? cached : null;
+            var key = category + "/" + name;
+            if (_textures.TryGetValue(key, out var cached)) return cached ? cached : null;
             Texture2D? texture = null;
             try
             {
                 var root = Path.GetDirectoryName(typeof(Ae2TerminalSkin).Assembly.Location)!;
-                var bytes = File.ReadAllBytes(Path.Combine(root, "Assets", "AE2", name + ".png"));
+                var path = Path.Combine(root, "Assets", "AE2_New", category, name + ".png");
+                if (!File.Exists(path))
+                {
+                    // Fallback to old path if not found in new structure
+                    path = Path.Combine(root, "Assets", "AE2", name + ".png");
+                }
+                
+                var bytes = File.ReadAllBytes(path);
                 texture = new Texture2D(2, 2, TextureFormat.RGBA32, false)
                 {
-                    name = "UIT.AE2." + name,
+                    name = "UIT.AE2." + key,
                     filterMode = FilterMode.Point,
                     wrapMode = TextureWrapMode.Clamp
                 };
                 if (!ImageConversion.LoadImage(texture, bytes, true)) throw new InvalidDataException("Invalid PNG");
-                _textures[name] = texture;
+                _textures[key] = texture;
                 return texture;
             }
             catch (Exception ex)
             {
                 if (texture) UnityEngine.Object.Destroy(texture);
-                _textures[name] = null;
-                _log.LogWarning("AE2 terminal texture unavailable (" + name + "): " + ex.Message);
+                _textures[key] = null;
+                _log.LogWarning("AE2 terminal texture unavailable (" + key + "): " + ex.Message);
                 return null;
             }
         }
 
-        internal bool Draw(Rect bounds, string atlas, int x, int y, int w, int h, Color fallback)
+        internal bool Draw(Rect bounds, string category, string name, int x, int y, int w, int h, Color fallback)
         {
             if (Event.current.type != EventType.Repaint) return true;
-            var texture = Load(atlas);
+            var texture = LoadAsset(category, name);
             if (texture)
             {
                 GUI.DrawTextureWithTexCoords(bounds, texture,
@@ -72,26 +80,25 @@ namespace UnknownInventoryTerminal
 
         internal void ApplyButtonFace(Image image)
         {
-            // Unity rejects writes to the threshold while an unreadable sprite is assigned,
-            // even if the new threshold is zero. Use rectangular hits before assigning the AE2 face.
             image.overrideSprite = null;
             image.sprite = null;
             image.alphaHitTestMinimumThreshold = 0;
-            Apply(image, Terminal, 255, 255, 1, 1, Color.clear);
+            // Updated to use the new category/name signature
+            Apply(image, Terminal, "background", 255, 255, 1, 1, Color.clear);
             if (!image.sprite) image.canvasRenderer.SetAlpha(0);
         }
 
-        internal void Apply(Image image, string atlas, int x, int y, int w, int h, Color fallback, Vector4 border = default)
+        internal void Apply(Image image, string category, string name, int x, int y, int w, int h, Color fallback, Vector4 border = default)
         {
-            var key = (atlas, new RectInt(x, y, w, h));
-            if (!_sprites.TryGetValue(key, out var sprite))
+            var key = (category, name, new RectInt(x, y, w, h));
+            if (!_sprites.TryGetValue((category + "/" + name, new RectInt(x, y, w, h)), out var sprite))
             {
-                var texture = Load(atlas);
+                var texture = LoadAsset(category, name);
                 if (texture)
                 {
                     sprite = Sprite.Create(texture, new Rect(x, texture!.height - y - h, w, h),
                         new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, border);
-                    _sprites[key] = sprite;
+                    _sprites[(category + "/" + name, new RectInt(x, y, w, h))] = sprite;
                 }
             }
             image.sprite = sprite;
