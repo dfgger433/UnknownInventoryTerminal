@@ -259,13 +259,15 @@ namespace UnknownInventoryTerminal
 
             // Set up background image to use Ae2TerminalSkin.States atlas
             var backImage = back.GetComponent<Image>();
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot);
+            // Assuming 3 pixels border for the button
+            var border = new Vector4(3, 3, 3, 3);
+            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot, border);
 
             // Configure sprite swap for hover
             var spriteState = new SpriteState();
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 212, 128, 18, 20, Ae2TerminalSkin.Slot);
+            _skin.Apply(backImage, Ae2TerminalSkin.States, 212, 128, 18, 20, Ae2TerminalSkin.Slot, border);
             spriteState.highlightedSprite = backImage.sprite;
-            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot);
+            _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot, border);
 
             _backButton.transition = Selectable.Transition.SpriteSwap;
             _backButton.spriteState = spriteState;

@@ -81,7 +81,7 @@ namespace UnknownInventoryTerminal
             if (!image.sprite) image.canvasRenderer.SetAlpha(0);
         }
 
-        internal void Apply(Image image, string atlas, int x, int y, int w, int h, Color fallback)
+        internal void Apply(Image image, string atlas, int x, int y, int w, int h, Color fallback, Vector4 border = default)
         {
             var key = (atlas, new RectInt(x, y, w, h));
             if (!_sprites.TryGetValue(key, out var sprite))
@@ -90,11 +90,12 @@ namespace UnknownInventoryTerminal
                 if (texture)
                 {
                     sprite = Sprite.Create(texture, new Rect(x, texture!.height - y - h, w, h),
-                        new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
+                        new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, border);
                     _sprites[key] = sprite;
                 }
             }
             image.sprite = sprite;
+            image.type = border != default ? Image.Type.Sliced : Image.Type.Simple;
             image.color = sprite ? Color.white : fallback;
         }
 
