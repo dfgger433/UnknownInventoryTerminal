@@ -259,8 +259,8 @@ namespace UnknownInventoryTerminal
 
             // Set up background image to use Ae2TerminalSkin.States atlas
             var backImage = back.GetComponent<Image>();
-            // Assuming 3 pixels border for the button
-            var border = new Vector4(3, 3, 3, 3);
+            // Assuming 6 pixels border for the button to maintain corners while stretching middle
+            var border = new Vector4(6, 6, 6, 6);
             _skin.Apply(backImage, Ae2TerminalSkin.States, 176, 128, 18, 20, Ae2TerminalSkin.Slot, border);
 
             // Configure sprite swap for hover
