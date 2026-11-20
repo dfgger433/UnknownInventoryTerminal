@@ -326,6 +326,9 @@ namespace UnknownInventoryTerminal
             _settingsStyle.normal.textColor = Color.white;
             _settingsStyle.hover.textColor = Color.white;
             _settingsStyle.active.textColor = Color.white;
+            _settingsStyle.focused.textColor = Color.white;
+            foreach (var state in new[] { _settingsStyle.normal, _settingsStyle.hover, _settingsStyle.active, _settingsStyle.focused })
+                state.background = null;
             _searchStyle = new GUIStyle(GUI.skin.textField) { fontSize = 8 * _styleScale, alignment = TextAnchor.MiddleLeft,
                 padding = new RectOffset(3 * _styleScale, 3 * _styleScale, 0, 0) };
             foreach (var state in new[] { _searchStyle.normal, _searchStyle.hover, _searchStyle.focused, _searchStyle.active,
