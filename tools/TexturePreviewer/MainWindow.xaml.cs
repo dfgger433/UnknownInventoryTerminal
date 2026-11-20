@@ -366,7 +366,7 @@ public partial class MainWindow : Window
             if (!MatchesDebugComponent(tag)) continue;
             element.RenderTransform = new TranslateTransform(offset.X, -offset.Y);
         }
-        if (SimulateHover.IsChecked == true || SimulateFocus.IsChecked == true)
+        if (SimulateHover.IsChecked == true || SimulateFocus.IsChecked == true || SimulateClick.IsChecked == true)
         {
             var face = CompositeCanvas.Children.OfType<Image>().FirstOrDefault(image =>
                 image.Source is CroppedBitmap crop && crop.SourceRect == RegionRect(Ae2Image.Button));
