@@ -345,7 +345,7 @@ namespace UnknownInventoryTerminal
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleInput", nameof(PlayerCameraPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleDragging", nameof(DraggingPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleWhileDragging", nameof(WhileDraggingPrefix), log);
-            ready &= Patch(harmony, typeof(PlayerCamera), "HandleMouseOver", nameof(MouseOverPrefix), log);
+            ready &= Patch(harmony, typeof(PlayerCamera), "HandleMouseOver", nameof(MouseOverPrefix), log, nameof(MouseOverPostfix));
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromWorld", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformWorldActions", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromUI", nameof(PickupPrefix), log, nameof(PickupPostfix));
@@ -385,12 +385,26 @@ namespace UnknownInventoryTerminal
         {
             if (Plugin.IsVisible) __result = Plugin.FilterHits(__result);
         }
-        private static bool MouseOverPrefix(PlayerCamera __instance, ref UsableObject usableObject)
+        private static bool MouseOverPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts,
+            ref UsableObject usableObject, out bool __state)
         {
+            __state = false;
             if (!Plugin.BlocksGameplay) return true;
             usableObject = null!;
             if (__instance.hoverSquare) __instance.hoverSquare.enabled = false;
-            return false;
+            // Keep the game's UI-hover/UITooltip path alive while suppressing its world-hover
+            // branch. This matters after Together has focused a local body: returning false
+            // skips the native tooltip update and leaves the last tooltip hidden or stale.
+            __state = __instance.radialOpen;
+            // A shield hit keeps the native UI path alive. If no terminal hit survived,
+            // retain the radial guard so world hover cannot leak through the modal.
+            __instance.radialOpen = uiCasts.Count == 0;
+            return true;
+        }
+
+        private static void MouseOverPostfix(PlayerCamera __instance, bool __state)
+        {
+            if (Plugin.BlocksGameplay) __instance.radialOpen = __state;
         }
         private static bool DraggingPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {

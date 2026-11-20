@@ -105,6 +105,30 @@
             <TextBlock x:Name="DetailName" Text="选择一个屏幕区域" Foreground="{StaticResource AccentBrush}" FontSize="16" FontWeight="SemiBold" Margin="0,12,0,4" TextWrapping="Wrap" />
             <TextBlock x:Name="DetailTexture" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
             <TextBlock x:Name="DetailRect" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,12" />
+            <TextBlock Text="调试预览" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <Grid Margin="0,0,0,8">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <TextBlock Text="组件" VerticalAlignment="Center" Margin="0,0,8,0" />
+              <ComboBox x:Name="DebugComponent" Grid.Column="1" SelectionChanged="DebugComponent_SelectionChanged" />
+            </Grid>
+            <Grid Margin="0,0,0,4">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/></Grid.ColumnDefinitions>
+              <TextBlock Text="X" VerticalAlignment="Center" />
+              <Slider x:Name="DebugOffsetX" Grid.Column="1" Minimum="-32" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="DebugOffset_ValueChanged" />
+              <TextBlock x:Name="DebugOffsetXText" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <Grid Margin="0,0,0,4">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="32"/><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Y" VerticalAlignment="Center" />
+              <Slider x:Name="DebugOffsetY" Grid.Column="1" Minimum="-32" Maximum="32" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="DebugOffset_ValueChanged" />
+              <TextBlock x:Name="DebugOffsetYText" Grid.Column="2" Text="0" HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+              <CheckBox x:Name="SimulateHover" Content="模拟悬停" Margin="0,0,12,0" Checked="SimulationChanged" Unchecked="SimulationChanged" />
+              <CheckBox x:Name="SimulateFocus" Content="模拟聚焦" Margin="0,0,12,0" Checked="SimulationChanged" Unchecked="SimulationChanged" />
+              <CheckBox x:Name="SimulateClick" Content="模拟点击" Checked="SimulationChanged" Unchecked="SimulationChanged" />
+              <Button Content="重置" Click="ResetDebug_Click" Margin="10,0,0,0" Padding="8,2" />
+            </StackPanel>
           </StackPanel>
           <Border Background="{StaticResource CheckerBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="3" Padding="12" Height="200" VerticalAlignment="Top">
             <Viewbox Stretch="Uniform">

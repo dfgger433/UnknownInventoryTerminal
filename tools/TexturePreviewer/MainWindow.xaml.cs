@@ -21,11 +21,15 @@ public partial class MainWindow : Window
     private string? _root;
     private string? _selected;
     private bool _loading;
+    private string _debugComponent = "Terminal";
+    private double _debugOffsetX, _debugOffsetY;
 
     public MainWindow()
     {
         InitializeComponent();
         RegionList.ItemsSource = _regions;
+        DebugComponent.ItemsSource = new[] { "Terminal", "Toolbar", "Search", "Tooltip", "Storage", "Equipment" };
+        DebugComponent.SelectedIndex = 0;
         _reloadTimer.Tick += (_, _) => { _reloadTimer.Stop(); LoadAssets(); };
         Loaded += (_, _) =>
         {
@@ -181,6 +185,40 @@ public partial class MainWindow : Window
         if (RegionList.SelectedItem is string name) ShowRegion(name);
     }
 
+    private void DebugComponent_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DebugComponent.SelectedItem is string name) _debugComponent = name;
+        ApplyDebugPreview();
+    }
+
+    private void DebugOffset_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        _debugOffsetX = DebugOffsetX.Value;
+        _debugOffsetY = DebugOffsetY.Value;
+        DebugOffsetXText.Text = _debugOffsetX.ToString("0");
+        DebugOffsetYText.Text = _debugOffsetY.ToString("0");
+        ApplyDebugPreview();
+    }
+
+    private void SimulationChanged(object sender, RoutedEventArgs e) => ApplyDebugPreview();
+
+    private void ResetDebug_Click(object sender, RoutedEventArgs e)
+    {
+        DebugOffsetX.Value = 0;
+        DebugOffsetY.Value = 0;
+        SimulateHover.IsChecked = false;
+        SimulateFocus.IsChecked = false;
+        SimulateClick.IsChecked = false;
+        ApplyDebugPreview();
+    }
+
+    private void ApplyDebugPreview()
+    {
+        if (!IsLoaded) return;
+        RenderComposite();
+        if (RegionList.SelectedItem is string name) ShowRegion(name);
+    }
+
     private void ShowRegion(string name)
     {
         if (_style is null) return;
@@ -316,7 +354,43 @@ public partial class MainWindow : Window
         var styles = new[] { Ae2Image.TerminalStyleSmall, Ae2Image.TerminalStyleMedium, Ae2Image.TerminalStyleTall, Ae2Image.TerminalStyleFull };
         for (var i = 0; i < styles.Length; i++) AddImage(styles[i], stateX + i * 20, y, scale);
         AddLabel("终端风格 短/中/长/最长", stateX, y + 17, 110, 10, scale, 6, false, caption);
+        ApplyDebugOffsets(scale);
     }
+
+    private void ApplyDebugOffsets(int scale)
+    {
+        var offset = new Vector(_debugOffsetX * scale, _debugOffsetY * scale);
+        foreach (UIElement element in CompositeCanvas.Children)
+        {
+            var tag = element is FrameworkElement framework ? framework.Tag?.ToString() : null;
+            if (!MatchesDebugComponent(tag)) continue;
+            element.RenderTransform = new TranslateTransform(offset.X, -offset.Y);
+        }
+        if (SimulateHover.IsChecked == true || SimulateFocus.IsChecked == true)
+        {
+            var face = CompositeCanvas.Children.OfType<Image>().FirstOrDefault(image =>
+                image.Source is CroppedBitmap crop && crop.SourceRect == RegionRect(Ae2Image.Button));
+            if (face is not null)
+            {
+                face.Opacity = SimulateClick.IsChecked == true ? 0.68 : 0.82;
+                face.ToolTip = SimulateClick.IsChecked == true ? "点击状态 / pressed" :
+                    SimulateHover.IsChecked == true ? "悬停状态 / hover" : "聚焦状态 / focused";
+            }
+        }
+    }
+
+    private bool MatchesDebugComponent(string? tag) => _debugComponent switch
+    {
+        "Toolbar" => tag == "ButtonBar" || tag == Ae2Image.Button.ToString() || tag == Ae2Image.ButtonHover.ToString() || tag == Ae2Image.ButtonFocus.ToString(),
+        "Search" => tag == Ae2Image.Search.ToString() || tag == Ae2Image.SearchFocused.ToString(),
+        "Tooltip" => tag == Ae2Image.Tooltip.ToString(),
+        "Storage" => tag == Ae2Image.Header.ToString() || tag == Ae2Image.FirstRow.ToString() || tag == Ae2Image.Row.ToString() || tag == Ae2Image.LastRow.ToString() || tag == Ae2Image.Bottom.ToString(),
+        "Equipment" => tag == "SlotHover",
+        _ => true
+    };
+
+    private Int32Rect RegionRect(Ae2Image id) => _style is not null && _style.TryGet(id, out var region)
+        ? new Int32Rect(region.X, region.Y, region.Width, region.Height) : new Int32Rect();
 
     internal static IReadOnlyList<Ae2Image> BoardParts(int rows)
     {
@@ -369,7 +443,7 @@ public partial class MainWindow : Window
         if (_style is null || !_style.TryGet(id, out var region)) return;
         try
         {
-            var image = new Image { Source = Crop(region), Width = width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            var image = new Image { Source = Crop(region), Width = width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true, Tag = id.ToString() };
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
             Canvas.SetLeft(image, x * scale);
             Canvas.SetTop(image, y * scale);

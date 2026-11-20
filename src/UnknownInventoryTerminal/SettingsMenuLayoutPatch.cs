@@ -25,7 +25,7 @@ namespace UnknownInventoryTerminal
             private static void Postfix(SettingsMenu __instance, Setting.SettingCategory category, List<GameObject> ___spawnedSettings)
             {
                 ConfigureScrollbars(__instance);
-                if (category != SettingsBridge.MenuCategory || !__instance.content) return;
+                if ((category != SettingsBridge.MenuCategory && category != SettingsBridge.KeybindCategory) || !__instance.content) return;
 
                 // Native rows come first; CCL defers string settings and appends them afterward.
                 var terminalRows = new List<RectTransform>(5);

@@ -472,16 +472,10 @@ namespace UnknownInventoryTerminal
                 // singletons are mapped back to their native InvButton by the raycast filter.
                 tile.Count.text = count > 1 ? count.ToString(CultureInfo.InvariantCulture) : "";
                 // A group must stay a selection control, not become a native item action target.
-                // Copy the representative item's tooltip onto the object the game raycasts.
-                if (group.HasValue)
-                {
-                    var tooltip = tile.Button.GetComponent<UITooltip>();
-                    if (tooltip)
-                    {
-                        tile.GroupTooltip.tipName = tooltip.tipName;
-                        tile.GroupTooltip.tipDesc = tooltip.tipDesc;
-                    }
-                }
+                // Copy the representative item's tooltip onto the fixed hit surface after every
+                // graphic refresh. InvButton.UpdateGraphic is the authoritative source and can
+                // change when condition, language, or multiplayer state changes.
+                RefreshTileTooltip(tile);
                 tile.Root.transform.SetSiblingIndex(index++);
                 liveKeys.Add(key);
             }
@@ -556,6 +550,17 @@ namespace UnknownInventoryTerminal
             var row = Mathf.Clamp(Mathf.FloorToInt(-local.y / pitch), 0, _layout.Rows - 1);
             Position(highlight.rectTransform, new Rect(column * pitch, row * pitch, pitch, pitch));
             highlight.gameObject.SetActive(true);
+        }
+
+        private static void RefreshTileTooltip(Tile tile)
+        {
+            var source = tile.Button.GetComponent<UITooltip>();
+            if (!source) return;
+            // Group cells own the raycast. Single-item cells still keep the same copy so
+            // tooltip lookup remains valid when the native child is visually moved.
+            tile.GroupTooltip.skipLocale = true;
+            tile.GroupTooltip.tipName = source.tipName;
+            tile.GroupTooltip.tipDesc = source.tipDesc;
         }
 
         private static UITooltip CreateTooltip(GameObject target, string name, string description)

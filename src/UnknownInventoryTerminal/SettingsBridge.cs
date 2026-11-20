@@ -9,8 +9,10 @@ namespace UnknownInventoryTerminal
     {
         internal const string ConfigSection = "UnknownInventoryTerminal";
         internal const string LanguageSetting = "Language";
-        // CCL's string overload adds a separate rail tab; the enum overload uses the stock menu.
+        // Keep general terminal options in the stock Game tab. Keybinds use the stock
+        // Controls/Input tab so all actions can be rebound in one place.
         internal const Setting.SettingCategory MenuCategory = Setting.SettingCategory.Game;
+        internal const Setting.SettingCategory KeybindCategory = Setting.SettingCategory.Input;
 
         internal static ConfigEntry<KeyCode> ToggleKey { get; private set; } = null!;
         // Changed by the terminal-style toolbar button, like AE2's client-side TERMINAL_STYLE setting.
@@ -43,7 +45,7 @@ namespace UnknownInventoryTerminal
                 "Key used to open or close the inventory terminal.");
 
             ModOptionsRegistry.Register(ModOptionDefinition.Keybind(
-                ConfigSection + ".ToggleKey", Label("ToggleKey"), Description("ToggleKey"), MenuCategory, ToggleKey.Value,
+                ConfigSection + ".ToggleKey", Label("ToggleKey"), Description("ToggleKey"), KeybindCategory, ToggleKey.Value,
                 value => ToggleKey.Value = value));
 
             _terminalHeight = config.Bind(ConfigSection, "TerminalStyle", TerminalHeight.Small,
@@ -53,7 +55,13 @@ namespace UnknownInventoryTerminal
 
         internal static bool IsTogglePressed()
         {
-            return ToggleKey.Value != KeyCode.None && Input.GetKeyDown(ToggleKey.Value);
+            // The stock rebinder accepts mouse buttons, but using them here would toggle
+            // the terminal on every inventory click. Keep the setting visible/rebindable
+            // while ignoring pointer buttons in the modal's global toggle poll.
+            var key = ToggleKey.Value;
+            return key != KeyCode.None && key != KeyCode.Mouse0 && key != KeyCode.Mouse1 &&
+                key != KeyCode.Mouse2 && key != KeyCode.Mouse3 && key != KeyCode.Mouse4 &&
+                key != KeyCode.Mouse5 && key != KeyCode.Mouse6 && Input.GetKeyDown(key);
         }
     }
 }

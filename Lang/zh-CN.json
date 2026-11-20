@@ -4,7 +4,7 @@
   "settings.Language.en": "English",
   "settings.Language.zh-CN": "简体中文",
   "settings.ToggleKey": "打开物品终端",
-  "settings.ToggleKey.description": "打开或关闭物品终端（默认 F7）。",
+  "settings.ToggleKey.description": "打开或关闭物品终端（默认 F7）。该按键位于游戏的输入/控制设置中。",
   "settings.ContainerPlacement": "终端容器放置规则",
   "settings.ContainerPlacement.description": "选择将物品拖到终端仓储区时的默认存放位置。",
   "settings.ContainerPlacement.BestFit": "优先剩余容量最小的容器",
