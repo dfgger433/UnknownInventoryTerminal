@@ -98,9 +98,9 @@ namespace UnknownInventoryTerminal
 
         private void FitToScreen()
         {
-            var camera = PlayerCamera.main;
-            var mainSlots = camera && camera.body ? camera.body.slots.Length : Ae2TerminalLayout.Columns;
-            _layout = new Ae2TerminalLayout(Screen.width, Screen.height, mainSlots, _equipmentCount());
+            // The board is fixed by terminal.png; polling the count still discovers CCL equipment slots.
+            _equipmentCount();
+            _layout = new Ae2TerminalLayout(Screen.width, Screen.height);
             _rect = new Rect(_layout.Left, _layout.Top, _layout.Width, _layout.Height);
         }
 
@@ -128,20 +128,15 @@ namespace UnknownInventoryTerminal
 
         private void DrawContents(int id)
         {
-            var s = _layout.Scale;
-            var left = Ae2TerminalLayout.Rail;
-            var footerY = Ae2TerminalLayout.Header * s + _layout.PanelHeight;
-            const int board = Ae2TerminalLayout.BoardWidth;
-            _skin.Draw(Units(left, 0, board - 2, Ae2TerminalLayout.Header), Ae2Image.Header, Ae2TerminalSkin.Shell);
-            _skin.Draw(Units(left + board - 2, 0, 2, Ae2TerminalLayout.Header), Ae2Image.HeaderEdge, Ae2TerminalSkin.Shell);
-            var footerHeight = Ae2TerminalLayout.Footer * s;
-            _skin.Draw(new Rect(left * s, footerY, 2 * s, footerHeight), Ae2Image.FooterLeft, Ae2TerminalSkin.Shell);
-            _skin.Draw(new Rect((left + 2) * s, footerY, (board - 4) * s, footerHeight), Ae2Image.FooterCenter, Ae2TerminalSkin.Shell);
-            _skin.Draw(new Rect((left + board - 2) * s, footerY, 2 * s, footerHeight), Ae2Image.FooterRight, Ae2TerminalSkin.Shell);
-            GUI.Label(Units(left + 7, 2, 48, 17), TerminalText.Get("terminal.title"), _titleStyle);
-            GUI.Label(new Rect((left + 7) * s, footerY + s, (board - 14) * s, 13 * s), _status, _statusStyle);
+            // The board image itself is drawn by the native canvas below this window, as one unscaled terminal.png region.
+            const int left = Ae2TerminalLayout.Rail;
+            GUI.Label(Units(left + 7, 2, 46, 15), TerminalText.Get("terminal.title"), _titleStyle);
+            GUI.Label(Units(left + Ae2TerminalLayout.Inset, Ae2TerminalLayout.StatusTop, 62, Ae2TerminalLayout.StatusHeight),
+                _status, _statusStyle);
 
-            var searchRect = Units(left + 55, 4, board - 79, 13);
+            // A field drawn up to 79x13 pixels is shown at its own size; a wider PNG is narrowed to fit the header.
+            var searchSize = _skin.SourceSize(Ae2Image.Search) ?? new Vector2Int(79, 12);
+            var searchRect = Units(left + 55, 3, Mathf.Min(searchSize.x, 79), Mathf.Min(searchSize.y, 13));
             var ev = Event.current;
             if (ev.type == EventType.MouseDown && ev.button == 1 && searchRect.Contains(ev.mousePosition))
             {
@@ -168,14 +163,15 @@ namespace UnknownInventoryTerminal
                 GUI.Label(searchRect, TerminalText.Get("terminal.search"), _searchStyle);
             SetTooltip(searchRect, TerminalText.Get("terminal.searchHint"), below: true);
 
-            if (IconButton(left + board - 22, 2, Ae2Image.Close, TerminalText.Get("terminal.close"), "X")) _closeRequested = true;
-            if (IconButton(3, 22, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
+            const int toolbar = Ae2TerminalLayout.ToolbarX;
+            if (IconButton(toolbar, Ae2TerminalLayout.ToolbarY(0), Ae2Image.Close, TerminalText.Get("terminal.close"), "X")) _closeRequested = true;
+            if (IconButton(toolbar, Ae2TerminalLayout.ToolbarY(1), _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
                 _sortByAmount ? TerminalText.Get("terminal.sortName") : TerminalText.Get("terminal.sortQuantity"), "#"))
             {
                 _sortByAmount = !_sortByAmount;
                 _descending = _sortByAmount;
             }
-            if (IconButton(3, 43, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
+            if (IconButton(toolbar, Ae2TerminalLayout.ToolbarY(2), _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
                 _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
                 _descending = !_descending;
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
@@ -183,7 +179,7 @@ namespace UnknownInventoryTerminal
 
         private bool IconButton(int px, int py, Ae2Image icon, string tooltip, string fallback)
         {
-            var rect = Units(px, py, 18, 20);
+            var rect = Units(px, py, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
             var hovered = rect.Contains(Event.current.mousePosition);
             _skin.Draw(rect, hovered ? Ae2Image.ButtonHover : Ae2Image.Button, Ae2TerminalSkin.Shell);
             if (!_skin.Draw(Units(px + 1, py + 2, 16, 16), icon, Color.clear))
@@ -202,7 +198,7 @@ namespace UnknownInventoryTerminal
             var y = below ? control.yMax + gap : control.y + gap;
             // Draw outside the IMGUI window so it can overlap the storage canvas.
             _tooltip = label;
-            _tooltipBounds = new Rect(x, y, width, 15 * _layout.Scale);
+            _tooltipBounds = new Rect(x, y, width, (_skin.SourceSize(Ae2Image.Tooltip)?.y ?? 15) * _layout.Scale);
         }
 
         private GUIContent? _tooltip;
@@ -218,7 +214,7 @@ namespace UnknownInventoryTerminal
             _titleStyle = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,
                 fontSize = 8 * _styleScale, padding = new RectOffset() };
             _titleStyle.normal.textColor = Ae2TerminalSkin.Ink;
-            _statusStyle = new GUIStyle(_titleStyle) { fontStyle = FontStyle.Normal, fontSize = 7 * _styleScale };
+            _statusStyle = new GUIStyle(_titleStyle) { fontStyle = FontStyle.Normal, fontSize = 6 * _styleScale };
             _iconStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter };
             _tooltipStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
             _tooltipStyle.normal.textColor = Color.white;

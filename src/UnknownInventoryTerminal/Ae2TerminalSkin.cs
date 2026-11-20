@@ -19,7 +19,7 @@ namespace UnknownInventoryTerminal
         private readonly ManualLogSource _log;
         private readonly Dictionary<string, Texture2D?> _textures = new Dictionary<string, Texture2D?>();
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
-        private readonly Dictionary<(Ae2Image, int), Sprite> _sprites = new Dictionary<(Ae2Image, int), Sprite>();
+        private readonly Dictionary<Ae2Image, Sprite> _sprites = new Dictionary<Ae2Image, Sprite>();
         private Ae2ScreenStyle? _style;
         private bool _loadedStyle;
 
@@ -74,14 +74,18 @@ namespace UnknownInventoryTerminal
             {
                 if (!region.Fits(texture.width, texture.height))
                     _log.LogWarning("AE2 terminal region outside its texture (" + id + "): " + region.Texture);
-                else if ((id is Ae2Image.MainSlot or Ae2Image.EquipmentSlot) &&
-                    (region.Width % Ae2TerminalLayout.Columns != 0 || region.Border != 0))
-                    _log.LogWarning("AE2 terminal slot strip must divide into six equal cells and have no slice border (" + id + ").");
+                else if (id == Ae2Image.Background &&
+                    (region.Width != Ae2TerminalLayout.BoardWidth || region.Height != Ae2TerminalLayout.BoardHeight || region.Border != 0))
+                    _log.LogWarning("AE2 terminal background must be one " + Ae2TerminalLayout.BoardWidth + "x" +
+                        Ae2TerminalLayout.BoardHeight + " image without a slice border; it is drawn as-is.");
                 else resolved = region;
             }
             _regions.Add(id, resolved);
             return resolved;
         }
+
+        // Source pixel size, so callers can draw an image at its own size instead of stretching it.
+        internal Vector2Int? SourceSize(Ae2Image id) => Resolve(id) is { } region ? new Vector2Int(region.Width, region.Height) : null;
 
         internal bool Draw(Rect bounds, Ae2Image id, Color fallback)
         {
@@ -104,25 +108,23 @@ namespace UnknownInventoryTerminal
             return false;
         }
 
-        internal Sprite? GetSprite(Ae2Image id, int column = -1)
+        internal Sprite? GetSprite(Ae2Image id)
         {
-            if (_sprites.TryGetValue((id, column), out var sprite)) return sprite;
+            if (_sprites.TryGetValue(id, out var sprite)) return sprite;
             if (Resolve(id) is not { } region) return null;
             var texture = _textures[region.Texture]!;
-            var width = column < 0 ? region.Width : region.Width / Ae2TerminalLayout.Columns;
-            var x = region.X + (column < 0 ? 0 : column * width);
-            var border = Vector4.one * region.Border;
-            sprite = Sprite.Create(texture, new Rect(x, texture.height - region.Y - region.Height, width, region.Height),
-                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, border);
-            _sprites.Add((id, column), sprite);
+            sprite = Sprite.Create(texture, new Rect(region.X, texture.height - region.Y - region.Height, region.Width, region.Height),
+                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
+            _sprites.Add(id, sprite);
             return sprite;
         }
 
-        internal void Apply(Image image, Ae2Image id, Color fallback, int column = -1)
+        // Images are used exactly as cut from their PNG: no slicing or tiling.
+        internal void Apply(Image image, Ae2Image id, Color fallback)
         {
-            var sprite = GetSprite(id, column);
+            var sprite = GetSprite(id);
             image.sprite = sprite;
-            image.type = sprite && sprite!.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
+            image.type = Image.Type.Simple;
             image.color = sprite ? Color.white : fallback;
         }
 

@@ -7,10 +7,9 @@ namespace UnknownInventoryTerminal
 {
     internal enum Ae2Image
     {
-        Header, HeaderEdge, FooterLeft, FooterCenter, FooterRight,
-        FirstRow, FirstRail, Row, Rail, LastRow, LastRail, LoadoutBackground, MainSlot, EquipmentSlot,
-        Search, SearchFocused, Tooltip, Button, ButtonHover, BackButton, BackButtonHover,
-        Close, SortName, SortAmount, SortAscending, SortDescending, Refresh, Thumb, ThumbDisabled, NativeButtonFace
+        Background,
+        Search, SearchFocused, Tooltip, Button, ButtonHover,
+        Close, SortName, SortAmount, SortAscending, SortDescending, Back, Refresh, Thumb, ThumbDisabled, NativeButtonFace
     }
 
     // AE2 uses top-left source coordinates: [x, y, width, height].
@@ -51,7 +50,7 @@ namespace UnknownInventoryTerminal
             var style = new Ae2ScreenStyle();
             foreach (Ae2Image image in Enum.GetValues(typeof(Ae2Image)))
             {
-                var section = image <= Ae2Image.EquipmentSlot ? "terminalStyle" : "images";
+                var section = image == Ae2Image.Background ? "terminalStyle" : "images";
                 var name = image.ToString();
                 name = char.ToLowerInvariant(name[0]) + name.Substring(1);
                 var entry = (root[section] as JObject)?[name] as JObject;
