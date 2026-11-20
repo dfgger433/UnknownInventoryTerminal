@@ -21,18 +21,25 @@ internal static class Program
             var viewport = (Viewbox)window.FindName("AtlasViewport");
             // The real window has a short atlas pane; make it even shorter on the second pass.
             // Expected crops come from the shipped screen JSON, so redrawn atlases only need their JSON kept in sync.
-            var style = UnknownInventoryTerminal.Ae2ScreenStyle.Parse(File.ReadAllText(FindScreenJson()));
+            var screen = FindScreenJson();
+            var project = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(screen)!, "..", "..", "..", ".."));
+            var findRoot = typeof(MainWindow).GetMethod("FindDefaultResourceRoot", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var fromPublish = findRoot.Invoke(null, new object[] { Path.Combine(project, "dist", "TexturePreviewer") });
+            if (!Equals(fromPublish, Path.Combine(project, "Assets", "AE2")))
+                throw new InvalidOperationException($"Published previewer must watch the project's source textures, not {fromPublish}.");
+            var style = UnknownInventoryTerminal.Ae2ScreenStyle.Parse(File.ReadAllText(screen));
             CheckSelection(window, regions, viewport, "Close", Expected(style, UnknownInventoryTerminal.Ae2Image.Close));
             CheckSelection(window, regions, viewport, "ButtonHover", Expected(style, UnknownInventoryTerminal.Ae2Image.ButtonHover));
             viewport.Height = 96;
-            CheckSelection(window, regions, viewport, "Thumb", Expected(style, UnknownInventoryTerminal.Ae2Image.Thumb));
+            CheckSelection(window, regions, viewport, "Thumb", Expected(style, UnknownInventoryTerminal.Ae2Image.Thumb), 12, 15);
+            CheckSelection(window, regions, viewport, "ThumbDisabled", Expected(style, UnknownInventoryTerminal.Ae2Image.ThumbDisabled), 12, 15);
             viewport.ClearValue(FrameworkElement.HeightProperty);
             viewport.Width = 100;
             CheckSelection(window, regions, viewport, "Bottom", Expected(style, UnknownInventoryTerminal.Ae2Image.Bottom));
             CheckComposite(window, style);
             if (Environment.GetEnvironmentVariable("UIT_PREVIEW_SNAPSHOT") is { Length: > 0 } snapshot) SaveComposite(window, snapshot);
-            Console.WriteLine("Atlas layout passed: full atlas and aligned crops at four positions, including short and narrow viewports.");
-            Console.WriteLine("Composite passed: board parts stacked at 2x with no fill behind them, button bar behind four toolbar buttons.");
+            Console.WriteLine("Asset root and atlas layout passed: source textures preferred; five crops including independent scrollers.");
+            Console.WriteLine("Composite passed: board, toolbar states and scroll thumb render at 2x with aligned layers.");
         }
         finally
         {
@@ -41,21 +48,23 @@ internal static class Program
         }
     }
 
-    private static void CheckSelection(Window window, ListBox regions, Viewbox viewport, string name, Int32Rect expected)
+    private static void CheckSelection(Window window, ListBox regions, Viewbox viewport, string name, Int32Rect expected,
+        int width = 256, int height = 256)
     {
         regions.SelectedItem = name;
         window.UpdateLayout();
         var image = (Image)window.FindName("AtlasImage");
         var overlay = (Canvas)window.FindName("AtlasOverlay");
         var crop = (Image)window.FindName("CropImage");
-        if (image.Source is not BitmapSource { PixelWidth: 256, PixelHeight: 256 } atlas ||
+        if (image.Source is not BitmapSource atlas || atlas.PixelWidth != width || atlas.PixelHeight != height ||
             crop.Source is not CroppedBitmap bitmap || bitmap.SourceRect != expected || !ReferenceEquals(bitmap.Source, atlas))
-            throw new InvalidOperationException($"{name}: atlas and crop do not use the same 256×256 source and expected region.");
+            throw new InvalidOperationException($"{name}: atlas and crop do not use the same {width}×{height} source and expected region.");
 
         var imageBounds = BoundsIn(image, viewport);
         var outlineBounds = BoundsIn((FrameworkElement)overlay.Children[0], viewport);
         var scale = imageBounds.Height / atlas.PixelHeight;
-        if (scale <= 0 || scale >= 1 || !Near(imageBounds.Width, imageBounds.Height) ||
+        var mustShrink = width > viewport.ActualWidth || height > viewport.ActualHeight;
+        if (scale <= 0 || scale > 1.01 || (mustShrink && scale >= 1) || !Near(imageBounds.Width, width * scale) ||
             imageBounds.Left < -0.01 || imageBounds.Top < -0.01 ||
             imageBounds.Right > viewport.ActualWidth + 0.01 || imageBounds.Bottom > viewport.ActualHeight + 0.01)
             throw new InvalidOperationException($"{name}: full atlas {imageBounds} does not fit viewport {viewport.RenderSize}.");
@@ -102,6 +111,31 @@ internal static class Program
         var barHeight = bar.Sum(image => image.Height);
         if (bar.Length != 3 || barHeight != (4 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
             throw new InvalidOperationException($"Button bar must be three 21 px wide slices, {4 * 22 + 6} px tall in total.");
+
+        var slot = canvas.Children.OfType<Border>().Single(border => Equals(border.Tag, "SlotHover"));
+        if (Canvas.GetLeft(slot) != 98 || Canvas.GetTop(slot) != 34 || slot.Width != 36 || slot.Height != 36 ||
+            slot.BorderThickness != new Thickness(2) || slot.IsHitTestVisible)
+            throw new InvalidOperationException("Slot hover must overlay the second grid cell at 2× and be visual only.");
+
+        var thumb = RequireImage(UnknownInventoryTerminal.Ae2Image.Thumb, 145, 18);
+        if (thumb.Width != 24 || thumb.Height != 30)
+            throw new InvalidOperationException("The native scroller must draw at 2× its 12×15 sprite size.");
+        var normal = RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 179, 74);
+        var hover = RequireImage(UnknownInventoryTerminal.Ae2Image.ButtonHover, 179, 99);
+        var focus = RequireImage(UnknownInventoryTerminal.Ae2Image.ButtonFocus, 245, 98);
+        if (Canvas.GetTop(hover) + hover.Height != Canvas.GetTop(focus) + focus.Height || normal.Height != focus.Height)
+            throw new InvalidOperationException("The lowered hover face must share the focused face's bottom edge.");
+        var icon = RequireImage(UnknownInventoryTerminal.Ae2Image.SortName, 180, 101);
+        if (canvas.Children.IndexOf(hover) >= canvas.Children.IndexOf(icon))
+            throw new InvalidOperationException("The lowered icon must draw after its hover face.");
+
+        Image RequireImage(UnknownInventoryTerminal.Ae2Image id, int x, int top)
+        {
+            var expected = Expected(style, id);
+            return images.FirstOrDefault(image => image.Source is CroppedBitmap crop && crop.SourceRect == expected &&
+                Canvas.GetLeft(image) == x * 2 && Canvas.GetTop(image) == top * 2)
+                ?? throw new InvalidOperationException($"Composite is missing {id} at ({x}, {top}).");
+        }
     }
 
     // Optional visual check: writes the composite canvas to a PNG.

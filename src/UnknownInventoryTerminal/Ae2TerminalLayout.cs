@@ -21,7 +21,8 @@ namespace UnknownInventoryTerminal
         // Offsets of the sections drawn in the bottom part, from its top edge.
         internal const int StatusHeight = 14, EquipmentOffset = StatusHeight, MainOffset = EquipmentOffset + EquipmentRowCount * Pitch + 4;
         // The scrollbar groove drawn in terminal.png; the thumb keeps its own sprite size and is centered on it.
-        internal const int GrooveLeft = 124, GrooveWidth = 6, DefaultThumbWidth = 16, DefaultThumbHeight = 16;
+        internal const int GrooveLeft = 124, GrooveWidth = 6, GrooveBorder = 1;
+        internal const int DefaultThumbWidth = 12, DefaultThumbHeight = 15;
         // AE2 VerticalButtonBar with IconButton faces: each 18x20 face ends 2 px right of the board's left edge,
         // and faces are 2 px apart. Coordinates below are relative to the window, whose board starts at x = Rail.
         internal const int ButtonWidth = 18, ButtonHeight = 20, ButtonSpacing = 2;
@@ -68,6 +69,9 @@ namespace UnknownInventoryTerminal
             (TerminalHeight)(((int)style - 1 + (backwards ? 3 : 1)) % 4 + 1);
 
         internal static int ToolbarY(int index) => ToolbarTop + index * ToolbarPitch;
+        internal static int ThumbLeft(int thumbWidth) => GrooveLeft + (GrooveWidth - thumbWidth) / 2;
+        // Like AE2, the thumb travels between the two end borders of the painted groove.
+        internal int ScrollTrackHeight => Rows * Pitch - 2 * GrooveBorder;
         // Height of vertical_buttons_bg.png behind the given number of visible buttons.
         internal static int ButtonBarHeight(int buttons) => buttons * ToolbarPitch + 6;
         internal static int ContentRows(int tiles) => (Math.Max(0, tiles) + Columns - 1) / Columns;

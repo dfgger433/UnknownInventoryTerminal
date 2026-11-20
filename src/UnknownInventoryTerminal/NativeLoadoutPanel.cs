@@ -16,7 +16,7 @@ namespace UnknownInventoryTerminal
         internal Body? Body;
         internal int MainIndex = -1;
         internal string? EquipmentId;
-        internal Image Face = null!;
+        internal Image Face = null!, Highlight = null!;
         internal TextMeshProUGUI Caption = null!;
         internal InvButton? Button;
         internal NativeLoadoutPanel Owner = null!;
@@ -79,7 +79,7 @@ namespace UnknownInventoryTerminal
         internal void Attach(Transform parent)
         {
             _main = AddSection(parent, "Main inventory", false);
-            _heading = NativeFlatInventoryPanel.CreateText(parent, "Equipment heading", 12, TextAlignmentOptions.MidlineLeft);
+            _heading = NativeFlatInventoryPanel.CreateText(parent, "Equipment heading", 12, TextAlignmentOptions.MidlineRight);
             _worn = AddSection(parent, "Equipment slots", true);
         }
 
@@ -95,24 +95,31 @@ namespace UnknownInventoryTerminal
 
         internal void SetLayout(Ae2TerminalLayout layout)
         {
+            if (_layout.Scale != layout.Scale)
+            {
+                foreach (var cell in _mainCells) Ae2TerminalSkin.SizeSlotHighlight(cell.Highlight, layout.Scale);
+                foreach (var cell in _equipmentCells) Ae2TerminalSkin.SizeSlotHighlight(cell.Highlight, layout.Scale);
+            }
             _layout = layout;
             var scale = layout.Scale;
             var pitch = Ae2TerminalLayout.Pitch * scale;
             var left = Ae2TerminalLayout.Inset * scale;
             var width = Ae2TerminalLayout.GridWidth * scale;
-            var top = Ae2TerminalLayout.DetailHeight * scale;
-            NativeFlatInventoryPanel.Position(_main, new Rect(left, top, width, layout.MainRows * pitch));
-            top += layout.MainRows * pitch;
-            _heading.fontSize = 7 * scale;
-            NativeFlatInventoryPanel.Position(_heading.rectTransform, new Rect(left, top, width, Ae2TerminalLayout.EquipmentHeader * scale));
-            top += Ae2TerminalLayout.EquipmentHeader * scale;
-            NativeFlatInventoryPanel.Position(_worn, new Rect(left, top, width, layout.EquipmentRows * pitch));
+            // The parent starts at the top of the board's bottom part; sections sit on the grids drawn there.
+            _heading.fontSize = 6 * scale;
+            // The status line uses the left part of the same gap.
+            NativeFlatInventoryPanel.Position(_heading.rectTransform, new Rect(left + 64 * scale, 0, width - 64 * scale,
+                Ae2TerminalLayout.StatusHeight * scale));
+            NativeFlatInventoryPanel.Position(_worn, new Rect(left, Ae2TerminalLayout.EquipmentOffset * scale,
+                width, layout.EquipmentRows * pitch));
+            NativeFlatInventoryPanel.Position(_main, new Rect(left, Ae2TerminalLayout.MainOffset * scale,
+                width, layout.MainRows * pitch));
         }
 
         internal void Reset()
         {
             _body = null;
-            _hover = null;
+            if (_hover) Leave(_hover!);
             _mainRow = _equipmentRow = 0;
         }
 
@@ -128,8 +135,19 @@ namespace UnknownInventoryTerminal
             return true;
         }
 
-        internal void Hover(LoadoutCell cell) => _hover = cell;
-        internal void Leave(LoadoutCell cell) { if (_hover == cell) _hover = null; }
+        internal void Hover(LoadoutCell cell)
+        {
+            if (_hover && _hover != cell) Leave(_hover!);
+            _hover = cell;
+            cell.Highlight.gameObject.SetActive(cell.MainIndex >= 0 || cell.EquipmentId != null);
+        }
+
+        internal void Leave(LoadoutCell cell)
+        {
+            if (_hover != cell) return;
+            cell.Highlight.gameObject.SetActive(false);
+            _hover = null;
+        }
 
         internal void Refresh(Body body)
         {
@@ -158,7 +176,7 @@ namespace UnknownInventoryTerminal
             {
                 var index = _mainRow * columns + i;
                 var valid = index < mainCount && body.slots[index];
-                var cell = Cell(_mainCells, _main, i, Ae2Image.MainSlot);
+                var cell = Cell(_mainCells, _main, i);
                 Bind(cell, body, valid ? index : -1, null, valid ? body.GetItem(index) : null,
                     valid ? index.ToString(CultureInfo.InvariantCulture) : "", valid && body.slots[index].isHand && body.handSlot == index);
             }
@@ -166,7 +184,7 @@ namespace UnknownInventoryTerminal
             {
                 var index = _equipmentRow * columns + i;
                 var id = index < _equipment.Count ? _equipment[index] : null;
-                var cell = Cell(_equipmentCells, _worn, i, Ae2Image.EquipmentSlot);
+                var cell = Cell(_equipmentCells, _worn, i);
                 Item? item = null;
                 if (id != null && !exact.TryGetValue(id, out item)) multi.TryGetValue(id, out item);
                 Bind(cell, body, -1, id, item, item ? "" : id == null ? "" : SlotLabel(id), false);
@@ -175,15 +193,18 @@ namespace UnknownInventoryTerminal
             HideExtra(_equipmentCells, _layout.EquipmentRows * columns);
         }
 
-        private LoadoutCell Cell(List<LoadoutCell> cells, Transform parent, int i, Ae2Image slotArt)
+        private LoadoutCell Cell(List<LoadoutCell> cells, Transform parent, int i)
         {
             if (i == cells.Count)
             {
                 var root = NativeFlatInventoryPanel.Add(parent, "AE2 loadout cell", typeof(Image), typeof(LoadoutCell));
                 var cell = root.GetComponent<LoadoutCell>();
                 cell.Owner = this;
+                // The slot art is part of terminal.png; this face is only a hit area and the active-hand tint.
                 cell.Face = root.GetComponent<Image>();
-                _skin.Apply(cell.Face, slotArt, Ae2TerminalSkin.Slot, i % Ae2TerminalLayout.Columns);
+                cell.Face.color = Color.clear;
+                cell.Highlight = Ae2TerminalSkin.CreateSlotHighlight(root.transform);
+                Ae2TerminalSkin.SizeSlotHighlight(cell.Highlight, _layout.Scale);
                 cell.Caption = NativeFlatInventoryPanel.CreateText(root.transform, "Slot label", 5, TextAlignmentOptions.Center);
                 cells.Add(cell);
             }
@@ -200,9 +221,11 @@ namespace UnknownInventoryTerminal
             cell.Body = body;
             cell.MainIndex = index;
             cell.EquipmentId = id;
-            cell.Face.color = activeHand ? Ae2TerminalSkin.Focus : index < 0 && id == null
-                ? new Color32(164, 167, 180, 255) : cell.Face.sprite ? Color.white : Ae2TerminalSkin.Slot;
+            if (_hover == cell) cell.Highlight.gameObject.SetActive(index >= 0 || id != null);
             var scale = _layout.Scale;
+            // The slot art underneath comes from terminal.png; only the active hand gets a translucent highlight.
+            var focus = Ae2TerminalSkin.Focus;
+            cell.Face.color = activeHand ? new Color(focus.r, focus.g, focus.b, .55f) : Color.clear;
             var pitch = Ae2TerminalLayout.Pitch * scale;
             // A refItem button would destroy itself on update when empty. Keep an empty equipment cell as an Image only.
             if (index >= 0 || item)

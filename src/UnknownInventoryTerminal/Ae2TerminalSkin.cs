@@ -14,6 +14,8 @@ namespace UnknownInventoryTerminal
         internal static readonly Color Shell = new Color32(199, 201, 210, 255);
         internal static readonly Color Slot = new Color32(163, 167, 184, 255);
         internal static readonly Color Focus = new Color32(170, 216, 255, 255);
+        private static readonly Color SlotHoverFill = Argb(Ae2SlotAppearance.HoverFill);
+        private static readonly Color SlotHoverBorder = Argb(Ae2SlotAppearance.HoverBorder);
         private static readonly string Root = Path.Combine(
             Path.GetDirectoryName(typeof(Ae2TerminalSkin).Assembly.Location)!, "Assets", "AE2");
         private readonly ManualLogSource _log;
@@ -144,6 +146,49 @@ namespace UnknownInventoryTerminal
             image.sprite = sprite;
             image.type = Image.Type.Simple;
             image.color = sprite ? Color.white : fallback;
+        }
+
+        private static Color32 Argb(uint value) => new Color32((byte)(value >> 16), (byte)(value >> 8), (byte)value, (byte)(value >> 24));
+
+        // AE2 slot highlight: a one-pixel cyan outline and a translucent blue interior.
+        internal static Image CreateSlotHighlight(Transform parent)
+        {
+            var root = NativeFlatInventoryPanel.Add(parent, "AE2 slot highlight", typeof(Image));
+            var fill = root.GetComponent<Image>();
+            fill.raycastTarget = false;
+            fill.color = SlotHoverFill;
+            NativeFlatInventoryPanel.Stretch(fill.rectTransform, Vector2.zero, Vector2.zero);
+            for (var side = 0; side < 4; ++side)
+            {
+                var edge = NativeFlatInventoryPanel.Add(root.transform, "Edge " + side, typeof(Image)).GetComponent<Image>();
+                edge.raycastTarget = false;
+                edge.color = SlotHoverBorder;
+            }
+            root.SetActive(false);
+            return fill;
+        }
+
+        internal static void SizeSlotHighlight(Image fill, int scale)
+        {
+            var root = fill.rectTransform;
+            for (var side = 0; side < 4; ++side)
+            {
+                var edge = (RectTransform)root.GetChild(side);
+                // Horizontal edges stretch across the entire width; vertical edges connect them.
+                var anchor = side % 2;
+                edge.anchorMin = side < 2 ? new Vector2(0, anchor) : new Vector2(anchor, 0);
+                edge.anchorMax = side < 2 ? new Vector2(1, anchor) : new Vector2(anchor, 1);
+                edge.offsetMin = side switch
+                {
+                    0 => Vector2.zero, 1 => new Vector2(0, -scale),
+                    2 => new Vector2(0, scale), _ => new Vector2(-scale, scale)
+                };
+                edge.offsetMax = side switch
+                {
+                    0 => new Vector2(0, scale), 1 => Vector2.zero,
+                    2 => new Vector2(scale, -scale), _ => new Vector2(0, -scale)
+                };
+            }
         }
 
         internal void ApplyButtonFace(Image image)

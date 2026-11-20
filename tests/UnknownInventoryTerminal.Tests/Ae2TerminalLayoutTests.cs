@@ -8,34 +8,116 @@ namespace UnknownInventoryTerminal.Tests;
 public sealed class Ae2TerminalLayoutTests
 {
     [TestMethod]
-    [DataRow(320, 240, 1, 3, 4)]
-    [DataRow(640, 480, 2, 3, 4)]
-    [DataRow(1280, 720, 3, 3, 4)]
-    [DataRow(1920, 1080, 4, 5, 4)]
-    [DataRow(3840, 2160, 4, 12, 4)]
-    public void SixColumnBoardFitsUsingWholePixelTilesAndRows(int width, int height, int scale, int rows, int equipmentRows)
+    [DataRow(320, 240, 1, 3)]
+    [DataRow(640, 480, 2, 3)]
+    [DataRow(1280, 720, 4, 3)]
+    [DataRow(1920, 1080, 4, 3)]
+    // 2160 / 4 = 540 UI px leaves room for 23 rows; Small takes a quarter of them, as in AE2.
+    [DataRow(3840, 2160, 4, 5)]
+    public void SmallBoardIsTheDrawnPngAtAWholePixelScale(int width, int height, int scale, int rows)
     {
         var layout = new Ae2TerminalLayout(width, height);
 
         Ae2TerminalLayout.Columns.Should().Be(6);
         layout.Scale.Should().Be(scale);
         layout.Rows.Should().Be(rows);
-        layout.MainRows.Should().Be(1);
-        layout.EquipmentRows.Should().Be(equipmentRows);
+        layout.EquipmentRows.Should().Be(3, "terminal.png draws three equipment rows");
+        layout.MainRows.Should().Be(1, "terminal.png draws one main-inventory row");
         layout.Width.Should().BeLessThanOrEqualTo(width);
         layout.Height.Should().BeLessThanOrEqualTo(height);
         layout.GridHeight.Should().Be(rows * 18 * scale);
         (layout.Width - layout.BoardLeft).Should().Be(141 * scale);
-        Ae2TerminalLayout.ScrollbarLeft.Should().BeGreaterThanOrEqualTo(Ae2TerminalLayout.Inset + 6 * 18);
+        layout.Height.Should().Be((170 + (rows - 3) * 18) * scale, "three rows are the 170 px board drawn in terminal.png");
+        (layout.Height - layout.PanelHeight).Should().Be(Ae2TerminalLayout.Header * scale);
     }
 
     [TestMethod]
-    [DataRow(320, 240, 19)]
-    [DataRow(1921, 1081, 25)]
-    [DataRow(2560, 1440, 120)]
-    public void TerminalIsCenteredToTheNearestPixel(int width, int height, int equipmentSlots)
+    public void SectionsFollowTheGridsDrawnInTerminalPng()
     {
-        var layout = new Ae2TerminalLayout(width, height, 6, equipmentSlots);
+        var layout = new Ae2TerminalLayout(1280, 720);
+        Ae2TerminalLayout.Header.Should().Be(17);
+        layout.StatusTop.Should().Be(71);
+        layout.EquipmentTop.Should().Be(85);
+        layout.MainTop.Should().Be(143);
+        (layout.MainTop + 18).Should().BeLessThan(layout.BoardHeight);
+        Ae2TerminalLayout.GrooveLeft.Should().BeGreaterThan(Ae2TerminalLayout.Inset + Ae2TerminalLayout.GridWidth);
+    }
+
+    [TestMethod]
+    [DataRow(1, 3)]
+    [DataRow(2, 4)]
+    [DataRow(3, 6)]
+    [DataRow(4, 8)]
+    public void TerminalStyleUsesAe2ShareOfTheRowsThatFit(int styleValue, int rows)
+    {
+        var style = (TerminalHeight)styleValue;
+        // 1080 / 4 = 270 UI px: (270 - 2 * 4 margin - 17 header - 99 bottom) / 18 = 8 possible rows.
+        var layout = new Ae2TerminalLayout(1920, 1080, style);
+
+        layout.Scale.Should().Be(4, "the height style never changes the pixel scale");
+        layout.Rows.Should().Be(rows);
+        layout.Height.Should().Be((17 + rows * 18 + 99) * 4);
+        layout.Height.Should().BeLessThanOrEqualTo(1080 - 2 * Ae2TerminalLayout.Margin * 4);
+        layout.StatusTop.Should().Be(17 + rows * 18, "equipment and main inventory move down with the storage");
+        layout.MainTop.Should().Be(layout.StatusTop + 72);
+    }
+
+    [TestMethod]
+    [DataRow(1280, 720)]
+    [DataRow(1366, 768)]
+    public void ShortScreensKeepTheThreeRowBoardForEveryStyle(int width, int height)
+    {
+        foreach (TerminalHeight style in System.Enum.GetValues(typeof(TerminalHeight)))
+            new Ae2TerminalLayout(width, height, style).Rows.Should().Be(Ae2TerminalLayout.MinRows);
+    }
+
+    [TestMethod]
+    [DataRow(1, false, 2)]
+    [DataRow(4, false, 1)]
+    [DataRow(1, true, 4)]
+    [DataRow(3, true, 2)]
+    public void TerminalStyleButtonCyclesLikeAe2(int current, bool backwards, int next)
+    {
+        Ae2TerminalLayout.Next((TerminalHeight)current, backwards).Should().Be((TerminalHeight)next);
+    }
+
+    [TestMethod]
+    [DataRow((int)TerminalHeight.Small, 52)]
+    [DataRow((int)TerminalHeight.Full, 142)]
+    public void SliderIsCenteredAndTravelsInsideThePaintedEndBorders(int styleValue, int trackHeight)
+    {
+        var layout = new Ae2TerminalLayout(1920, 1080, (TerminalHeight)styleValue);
+        var left = Ae2TerminalLayout.ThumbLeft(Ae2TerminalLayout.DefaultThumbWidth);
+
+        left.Should().Be(121);
+        (left * 2 + Ae2TerminalLayout.DefaultThumbWidth).Should().Be(2 * Ae2TerminalLayout.GrooveLeft + Ae2TerminalLayout.GrooveWidth);
+        (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder).Should().Be(18);
+        layout.ScrollTrackHeight.Should().Be(trackHeight);
+        (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder + trackHeight).Should().Be(layout.StatusTop - 1);
+    }
+
+    [TestMethod]
+    public void ToolbarSitsOnTheVerticalButtonBarLikeAe2()
+    {
+        // AE2: the bar is 21 px wide and its right edge covers the board's 2 px left border.
+        (Ae2TerminalLayout.ButtonBarX + Ae2TerminalLayout.ButtonBarWidth).Should().Be(Ae2TerminalLayout.Rail + 2);
+        (Ae2TerminalLayout.ToolbarX + Ae2TerminalLayout.ButtonWidth).Should().Be(Ae2TerminalLayout.Rail + 2);
+        Ae2TerminalLayout.ButtonBarX.Should().BeGreaterThanOrEqualTo(0, "the bar stays inside the window");
+        Ae2TerminalLayout.ButtonBarY.Should().Be(0);
+        Ae2TerminalLayout.ToolbarY(1).Should().Be(25, "AE2 places 16 px buttons 6 px apart, starting at y = 3");
+        // Close, sort, direction, terminal style and the optional return button fit on the smallest board.
+        (Ae2TerminalLayout.ButtonBarY + Ae2TerminalLayout.ButtonBarHeight(5)).Should().BeLessThanOrEqualTo(Ae2TerminalLayout.BaseBoardHeight);
+        (Ae2TerminalLayout.ToolbarY(4) + Ae2TerminalLayout.ButtonHeight).Should().BeLessThanOrEqualTo(
+            Ae2TerminalLayout.ButtonBarY + Ae2TerminalLayout.ButtonBarHeight(5) - Ae2TerminalLayout.ButtonBarBottomBorder);
+    }
+
+    [TestMethod]
+    [DataRow(320, 240)]
+    [DataRow(1921, 1081)]
+    [DataRow(2560, 1440)]
+    public void TerminalIsCenteredToTheNearestPixel(int width, int height)
+    {
+        var layout = new Ae2TerminalLayout(width, height);
 
         (width - 2 * layout.Left - layout.Width).Should().BeInRange(0, 1);
         (height - 2 * layout.Top - layout.Height).Should().BeInRange(0, 1);
@@ -52,28 +134,6 @@ public sealed class Ae2TerminalLayoutTests
     {
         Ae2TerminalLayout.ContentRows(slots).Should().Be(rows);
         Ae2TerminalLayout.PaddedCells(slots).Should().Be(rows * 6);
-    }
-
-    [TestMethod]
-    public void EquipmentGrowsByOneFullRowWhenThePreviousRowFills()
-    {
-        var current = new Ae2TerminalLayout(1920, 1080, 6, 24);
-        var expanded = new Ae2TerminalLayout(1920, 1080, 6, 25);
-
-        expanded.EquipmentRows.Should().Be(current.EquipmentRows + 1);
-        expanded.Width.Should().Be(current.Width);
-        expanded.Height.Should().BeLessThanOrEqualTo(1080);
-    }
-
-    [TestMethod]
-    public void ManyEquipmentSlotsPreserveMainAndStorageOnASmallScreen()
-    {
-        var layout = new Ae2TerminalLayout(320, 240, 6, 240);
-
-        layout.Height.Should().BeLessThanOrEqualTo(240);
-        layout.MainRows.Should().Be(1);
-        layout.Rows.Should().BeGreaterThan(0);
-        layout.EquipmentRows.Should().BeLessThan(Ae2TerminalLayout.ContentRows(240));
     }
 
     [TestMethod]

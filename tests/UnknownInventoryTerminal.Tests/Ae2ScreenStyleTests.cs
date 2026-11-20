@@ -39,6 +39,38 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    [DataRow((int)Ae2Image.Thumb, "gui/sprites/big_scroller.png")]
+    [DataRow((int)Ae2Image.ThumbDisabled, "gui/sprites/big_scroller_disabled.png")]
+    public void ScrollThumbUsesTheWholeNativeAe2Sprite(int image, string texture)
+    {
+        var style = ReadBundledStyle();
+
+        style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
+        region.Texture.Should().Be(texture);
+        (region.X, region.Y, region.Width, region.Height).Should().Be((0, 0, 12, 15));
+        ReadPngDimensions(TextureFilePath(region.Texture)).Should().Be((region.Width, region.Height));
+    }
+
+    [TestMethod]
+    [DataRow(false, false, (int)Ae2Image.Button, 145, 20, 0)]
+    [DataRow(false, true, (int)Ae2Image.ButtonFocus, 163, 20, 0)]
+    [DataRow(true, false, (int)Ae2Image.ButtonHover, 181, 19, 1)]
+    [DataRow(true, true, (int)Ae2Image.ButtonHover, 181, 19, 1)]
+    public void ToolbarFaceFollowsAe2StateOrderAtOneToOnePixels(bool hovered, bool focused, int image, int x, int height, int offset)
+    {
+        var style = ReadBundledStyle();
+        var face = Ae2ToolbarAppearance.Face(hovered, focused);
+
+        face.Should().Be((Ae2Image)image);
+        Ae2ToolbarAppearance.OffsetY(face).Should().Be(offset);
+        style.TryGet(face, out var region).Should().BeTrue();
+        region.Texture.Should().Be("guis/states.png");
+        (region.X, region.Y, region.Width, region.Height).Should().Be((x, 65, 18, height));
+        (region.Height + offset).Should().Be(Ae2TerminalLayout.ButtonHeight,
+            "the shorter inset face still fills the button down to the same bottom edge");
+    }
+
+    [TestMethod]
     public void BoardSectionsMatchTheGridsDrawnInTerminalPng()
     {
         var path = TextureFilePath("guis/terminal.png");
@@ -185,6 +217,9 @@ public sealed class Ae2ScreenStyleTests
 
         act.Should().Throw<JsonReaderException>();
     }
+
+    private static Ae2ScreenStyle ReadBundledStyle() => Ae2ScreenStyle.Parse(File.ReadAllText(
+        Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
 
     private static string TextureFilePath(string logicalTexture)
     {

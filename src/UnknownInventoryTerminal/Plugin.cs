@@ -58,7 +58,7 @@ namespace UnknownInventoryTerminal
             _window = new TerminalWindow(_terminalSkin, GameInventoryAdapter.Capture, _nativePanel.EquipmentCount,
                 entries => _nativePanel.SetEntries(entries),
                 ex => Logger.LogWarning("Terminal read failed: " + ex.Message),
-                _nativePanel.SetLayout);
+                _nativePanel.SetLayout, () => _nativePanel.CanReturnToGroups, _nativePanel.ReturnToGroups);
             _pinyin = PinyinBridge.Register(Logger);
             Logger.LogInfo(PluginName + " " + PluginVersion + " loaded; native inventory bridge " + (_inputReady ? "ready." : "disabled: required input hooks unavailable."));
         }

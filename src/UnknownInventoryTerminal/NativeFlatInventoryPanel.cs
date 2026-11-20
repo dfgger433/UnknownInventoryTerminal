@@ -23,18 +23,14 @@ namespace UnknownInventoryTerminal
             internal UITooltip GroupTooltip = null!;
         }
 
-        private sealed class TilePointer : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
+        private sealed class TilePointer : MonoBehaviour, IPointerClickHandler
         {
             internal NativeFlatInventoryPanel Owner = null!;
             internal (string Type, string Parent)? Group;
-            internal Image Highlight = null!;
             public void OnPointerClick(PointerEventData e)
             {
                 if (Group.HasValue && e.button == PointerEventData.InputButton.Left) Owner.ChangeSelection(Group);
             }
-            public void OnPointerEnter(PointerEventData e) => Owner.Highlight(this);
-            public void OnPointerExit(PointerEventData e) => OnDisable();
-            private void OnDisable() { if (Owner?._hovered == this) Owner.Highlight(null); }
         }
 
         private sealed class GridWheel : MonoBehaviour, IScrollHandler
@@ -62,11 +58,11 @@ namespace UnknownInventoryTerminal
         private Slider? _slider;
         private Image? _thumb;
         private InvButton? _automaticTarget;
-        private TextMeshProUGUI? _empty, _backFallback;
-        private Image? _backIcon;
-        private UITooltip? _scrollTooltip, _backTooltip;
-        private Button? _backButton;
-        private TilePointer? _hovered;
+        private TextMeshProUGUI? _empty;
+        private UITooltip? _scrollTooltip;
+        internal bool CanReturnToGroups => _visible && _selectionKey.HasValue;
+        internal void ReturnToGroups() => ChangeSelection(null);
+        private Image? _storageHighlight;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
         private Rect _bounds, _windowBounds;
@@ -77,7 +73,7 @@ namespace UnknownInventoryTerminal
         private Image? _barTop, _barMiddle, _barBottom;
         private RectTransform? _buttonBar;
         private bool _visible, _dirty = true, _prefabWarning, _byAmount, _descending, _thumbEnabled;
-        private int _scrollRow;
+        private int _scrollRow, _buttonBarButtonCount, _buttonBarScale;
         private string _query = "";
 
         internal NativeFlatInventoryPanel(ManualLogSource log, Ae2TerminalSkin skin)
@@ -127,11 +123,6 @@ namespace UnknownInventoryTerminal
                 _scrollTooltip!.tipName = TerminalText.Get("inventory.scroll");
                 _scrollTooltip.tipDesc = TerminalText.Get("inventory.scroll.description");
             }
-            if (_backTooltip)
-            {
-                _backTooltip!.tipName = TerminalText.Get("inventory.backTooltip");
-                _backTooltip.tipDesc = TerminalText.Get("inventory.backTooltip.description");
-            }
         }
 
         internal void SetEntries(IEnumerable<InventoryEntry> entries)
@@ -141,7 +132,6 @@ namespace UnknownInventoryTerminal
                 _query = SearchApi.Query;
                 _scrollRow = 0;
                 _selectionKey = null;
-                Highlight(null);
             }
             _entries = entries.Where(e => e.NativeItem is Item item && item).ToArray();
             _dirty = true;
@@ -191,6 +181,7 @@ namespace UnknownInventoryTerminal
                 RefreshTooltips();
                 Synchronize();
                 _loadout.Refresh(PlayerCamera.main.body);
+                UpdateStorageHighlight();
             }
             else if (_root) _root!.SetActive(false);
         }
@@ -240,6 +231,7 @@ namespace UnknownInventoryTerminal
 
             var viewport = Add(panel.transform, "Storage slot viewport", typeof(RectMask2D));
             _viewport = viewport.GetComponent<RectTransform>();
+            _storageHighlight = Ae2TerminalSkin.CreateSlotHighlight(_viewport);
             var content = Add(viewport.transform, "Storage slots", typeof(GridLayoutGroup));
             _content = content.GetComponent<RectTransform>();
             _grid = content.GetComponent<GridLayoutGroup>();
@@ -256,9 +248,10 @@ namespace UnknownInventoryTerminal
             _slider.navigation = new Navigation { mode = Navigation.Mode.None };
             _slider.transition = Selectable.Transition.None;
             var handleLane = Add(scroll.transform, "Thumb travel").GetComponent<RectTransform>();
-            handleLane.anchorMin = Vector2.zero;
-            handleLane.anchorMax = Vector2.one;
+            Stretch(handleLane, Vector2.zero, Vector2.zero);
             _thumb = Add(handleLane, "AE2 thumb", typeof(Image)).GetComponent<Image>();
+            _thumb.rectTransform.anchorMin = new Vector2(0, 1);
+            _thumb.rectTransform.anchorMax = Vector2.one;
             _slider.handleRect = _thumb.rectTransform;
             _slider.targetGraphic = _thumb;
             _slider.onValueChanged.AddListener(value =>
@@ -271,22 +264,6 @@ namespace UnknownInventoryTerminal
 
             _empty = CreateText(panel.transform, "Empty storage", 17, TextAlignmentOptions.Center);
             _lower = Add(panel.transform, "Container storage base").GetComponent<RectTransform>();
-            // The board has no room for a text button, so returning is a toolbar icon in the left rail.
-            var back = Add(panel.transform, "Return to groups", typeof(Image), typeof(Button));
-            _backTooltip = CreateTooltip(back, TerminalText.Get("inventory.backTooltip"), TerminalText.Get("inventory.backTooltip.description"));
-            _backButton = back.GetComponent<Button>();
-            var backImage = back.GetComponent<Image>();
-            _skin.Apply(backImage, Ae2Image.Button, Ae2TerminalSkin.Shell);
-            _backButton.targetGraphic = backImage;
-            _backButton.transition = Selectable.Transition.SpriteSwap;
-            _backButton.spriteState = new SpriteState { highlightedSprite = _skin.GetSprite(Ae2Image.ButtonHover) };
-            _backButton.onClick.AddListener(() => ChangeSelection(null));
-            _backIcon = Add(back.transform, "Return icon", typeof(Image)).GetComponent<Image>();
-            _backIcon.raycastTarget = false;
-            _skin.Apply(_backIcon, Ae2Image.Back, Color.clear);
-            _backFallback = CreateText(back.transform, "Return fallback", 13, TextAlignmentOptions.Center);
-            _backFallback.text = _backIcon.sprite ? "" : "<";
-            Stretch(_backFallback.rectTransform, Vector2.zero, Vector2.zero);
             _loadout.Attach(_lower);
             Position(_panel, _bounds);
             ApplyLayout();
@@ -301,28 +278,23 @@ namespace UnknownInventoryTerminal
             var gridWidth = stride * Ae2TerminalLayout.Columns;
             const int inset = Ae2TerminalLayout.Inset;
             Position(_viewport!, new Rect(inset * scale, 0, gridWidth, _layout.GridHeight));
+            Ae2TerminalSkin.SizeSlotHighlight(_storageHighlight!, scale);
             // The thumb keeps its sprite's pixel size and is centered on the groove drawn in terminal.png.
             var thumbSize = _skin.SourceSize(Ae2Image.Thumb) ??
                 new Vector2Int(Ae2TerminalLayout.DefaultThumbWidth, Ae2TerminalLayout.DefaultThumbHeight);
-            var thumbLeft = Ae2TerminalLayout.GrooveLeft + (Ae2TerminalLayout.GrooveWidth - thumbSize.x) / 2;
-            Position(_slider!.GetComponent<RectTransform>(), new Rect(thumbLeft * scale, 0, thumbSize.x * scale, _layout.GridHeight));
-            _thumb!.rectTransform.sizeDelta = new Vector2(0, thumbSize.y * scale);
-            var travel = (RectTransform)_thumb.transform.parent;
-            travel.offsetMin = new Vector2(0, thumbSize.y / 2 * scale);
-            travel.offsetMax = new Vector2(0, -(thumbSize.y - thumbSize.y / 2) * scale);
+            Position(_slider!.GetComponent<RectTransform>(), new Rect(Ae2TerminalLayout.ThumbLeft(thumbSize.x) * scale,
+                Ae2TerminalLayout.GrooveBorder * scale, thumbSize.x * scale, _layout.ScrollTrackHeight * scale));
+            var handle = _thumb!.rectTransform;
+            handle.sizeDelta = new Vector2(0, thumbSize.y * scale);
+            handle.anchoredPosition = Vector2.zero;
+            var halfThumb = thumbSize.y * scale / 2f;
+            // Slider drives the handle's center. Equal insets land the edges on both ends even for a 15px thumb.
+            Stretch((RectTransform)handle.parent, new Vector2(0, halfThumb), new Vector2(0, -halfThumb));
             Position(_empty!.rectTransform, new Rect(inset * scale, 0, gridWidth, _layout.GridHeight));
             Position(_lower!, new Rect(0, _layout.GridHeight, _bounds.width, _layout.PanelHeight - _layout.GridHeight));
             _loadout.SetLayout(_layout);
             LayoutBoard();
-            // Toolbar coordinates are window-relative; the panel starts at the board's header edge.
-            // The return button follows the four IMGUI buttons (close, sort, direction, terminal style).
-            Position(_backButton!.GetComponent<RectTransform>(), new Rect(
-                (Ae2TerminalLayout.ToolbarX - Ae2TerminalLayout.Rail) * scale,
-                (Ae2TerminalLayout.ToolbarY(4) - Ae2TerminalLayout.Header) * scale,
-                Ae2TerminalLayout.ButtonWidth * scale, Ae2TerminalLayout.ButtonHeight * scale));
             LayoutButtonBar();
-            Position(_backIcon!.rectTransform, new Rect(scale, 2 * scale, 16 * scale, 16 * scale));
-            _backFallback!.fontSize = 8 * scale;
             _grid!.cellSize = new Vector2(stride, stride);
             foreach (var tile in _tiles.Values) if (tile.Button) SizeTile(tile);
             UpdateScroll(_tiles.Count);
@@ -361,7 +333,10 @@ namespace UnknownInventoryTerminal
         private void LayoutButtonBar()
         {
             var scale = _layout.Scale;
-            var buttons = _backButton && _backButton!.gameObject.activeSelf ? 5 : 4;
+            var buttons = CanReturnToGroups ? 5 : 4;
+            if (_buttonBarButtonCount == buttons && _buttonBarScale == scale) return;
+            _buttonBarButtonCount = buttons;
+            _buttonBarScale = scale;
             var height = Ae2TerminalLayout.ButtonBarHeight(buttons);
             const int top = Ae2TerminalLayout.ButtonBarTopBorder, bottom = Ae2TerminalLayout.ButtonBarBottomBorder;
             void Place(Image image, int y, int h) => Position(image.rectTransform, new Rect(Ae2TerminalLayout.ButtonBarX * scale,
@@ -384,7 +359,6 @@ namespace UnknownInventoryTerminal
 
         private void MoveToRow(int row)
         {
-            if (row != _scrollRow) Highlight(null);
             _scrollRow = row;
             Position(_content!, new Rect(0, -row * Ae2TerminalLayout.Pitch * _layout.Scale,
                 Ae2TerminalLayout.Columns * Ae2TerminalLayout.Pitch * _layout.Scale,
@@ -414,7 +388,6 @@ namespace UnknownInventoryTerminal
             _selectionKey = key;
             _scrollRow = 0;
             _dirty = true;
-            Highlight(null);
             Synchronize();
         }
 
@@ -458,11 +431,7 @@ namespace UnknownInventoryTerminal
                 DestroyTile(_tiles[key]);
                 _tiles.Remove(key);
             }
-            if (_backButton!.gameObject.activeSelf != (selection != null))
-            {
-                _backButton.gameObject.SetActive(selection != null);
-                LayoutButtonBar();
-            }
+            LayoutButtonBar();
             _empty!.text = TerminalText.Get(!prefab ? "inventory.unavailable" : rows.Count == 0 ? "inventory.empty" : "inventory.buttonError");
             _empty.gameObject.SetActive(_tiles.Count == 0);
             UpdateScroll(_tiles.Count);
@@ -528,12 +497,6 @@ namespace UnknownInventoryTerminal
                 _skin.ApplyButtonFace(image);
                 foreach (var child in native.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = root.layer;
                 foreach (var graphic in native.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
-                var highlight = Add(root.transform, "Slot hover", typeof(Image)).GetComponent<Image>();
-                highlight.raycastTarget = false;
-                highlight.color = new Color(1, 1, 1, 0.23f);
-                highlight.enabled = false;
-                Stretch(highlight.rectTransform, new Vector2(1, 1), new Vector2(-1, -1));
-                pointer.Highlight = highlight;
                 var count = CreateText(root.transform, "Item count", 16, TextAlignmentOptions.BottomRight);
                 count.color = Color.white;
                 count.fontStyle = FontStyles.Bold;
@@ -560,11 +523,23 @@ namespace UnknownInventoryTerminal
             tile.Count.fontSize = 5 * scale;
         }
 
-        private void Highlight(TilePointer? next)
+        // Use board coordinates rather than tile raycasts so empty cells highlight too, without gaining an item action.
+        private void UpdateStorageHighlight()
         {
-            if (_hovered && _hovered!.Highlight) _hovered.Highlight.enabled = false;
-            _hovered = next;
-            if (next && next!.Highlight) next.Highlight.enabled = true;
+            var viewport = _viewport!;
+            var highlight = _storageHighlight!;
+            var pointer = Input.mousePosition;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(viewport, pointer, null, out var local) ||
+                !viewport.rect.Contains(local))
+            {
+                highlight.gameObject.SetActive(false);
+                return;
+            }
+            var pitch = Ae2TerminalLayout.Pitch * _layout.Scale;
+            var column = Mathf.Clamp(Mathf.FloorToInt(local.x / pitch), 0, Ae2TerminalLayout.Columns - 1);
+            var row = Mathf.Clamp(Mathf.FloorToInt(-local.y / pitch), 0, _layout.Rows - 1);
+            Position(highlight.rectTransform, new Rect(column * pitch, row * pitch, pitch, pitch));
+            highlight.gameObject.SetActive(true);
         }
 
         private static UITooltip CreateTooltip(GameObject target, string name, string description)

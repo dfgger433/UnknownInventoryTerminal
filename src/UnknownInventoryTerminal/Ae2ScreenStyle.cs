@@ -9,9 +9,24 @@ namespace UnknownInventoryTerminal
     {
         // terminalStyle parts, as in AE2's base_terminal.json.
         Header, FirstRow, Row, LastRow, Bottom,
-        Search, SearchFocused, Tooltip, Button, ButtonHover,
+        Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
         Close, SortName, SortAmount, SortAscending, SortDescending, Back, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
         TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
+    }
+
+    internal static class Ae2ToolbarAppearance
+    {
+        // AE2 IconButton: hover takes precedence over focus and moves the face and icon together.
+        internal static Ae2Image Face(bool hovered, bool focused) => hovered ? Ae2Image.ButtonHover :
+            focused ? Ae2Image.ButtonFocus : Ae2Image.Button;
+
+        internal static int OffsetY(Ae2Image face) => face == Ae2Image.ButtonHover ? 1 : 0;
+    }
+
+    internal static class Ae2SlotAppearance
+    {
+        internal const uint HoverFill = 0x669CD3FF;
+        internal const uint HoverBorder = 0xFFDAFFFF;
     }
 
     // AE2 uses top-left source coordinates: [x, y, width, height].

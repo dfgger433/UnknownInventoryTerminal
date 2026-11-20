@@ -29,15 +29,25 @@ public partial class MainWindow : Window
         _reloadTimer.Tick += (_, _) => { _reloadTimer.Stop(); LoadAssets(); };
         Loaded += (_, _) =>
         {
-            for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            {
-                var candidate = Path.Combine(directory.FullName, "Assets", "AE2");
-                if (!File.Exists(Path.Combine(candidate, "screens", "terminals", "terminal.json"))) continue;
-                SetRoot(candidate);
-                return;
-            }
+            var root = FindDefaultResourceRoot(AppContext.BaseDirectory);
+            if (root is not null) SetRoot(root);
         };
         Closed += (_, _) => _watcher?.Dispose();
+    }
+
+    // A published EXE lives under dist/, whose built copy would hide live edits in the project assets.
+    internal static string? FindDefaultResourceRoot(string start)
+    {
+        string? nearest = null;
+        for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "Assets", "AE2");
+            if (!File.Exists(Path.Combine(candidate, "screens", "terminals", "terminal.json"))) continue;
+            if (File.Exists(Path.Combine(directory.FullName, "src", "UnknownInventoryTerminal", "UnknownInventoryTerminal.csproj")))
+                return candidate;
+            nearest ??= candidate;
+        }
+        return nearest;
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
@@ -108,8 +118,10 @@ public partial class MainWindow : Window
                 {
                     var bitmap = LoadBitmap(TexturePath(region.Texture));
                     if (!region.Fits(bitmap.PixelWidth, bitmap.PixelHeight)) warnings.Add($"{name}: 裁切 [{region.X}, {region.Y}, {region.Width}, {region.Height}] 超出 {bitmap.PixelWidth}×{bitmap.PixelHeight}");
-                    if ((id is Ae2Image.MainSlot or Ae2Image.EquipmentSlot) && region.Width % Ae2TerminalLayout.Columns != 0)
-                        warnings.Add($"{name}: 六格贴图宽度 {region.Width} 不能被 6 整除");
+                    if (Ae2ScreenStyle.IsBoardPart(id) && (region.Width != Ae2TerminalLayout.BoardWidth || region.Height != Ae2ScreenStyle.BoardPartHeight(id)))
+                        warnings.Add($"{name}: 底板分段须为 {Ae2TerminalLayout.BoardWidth}×{Ae2ScreenStyle.BoardPartHeight(id)}，游戏内不会拉伸它");
+                    if (id == Ae2Image.VerticalButtonsBg && region.Width != Ae2TerminalLayout.ButtonBarWidth)
+                        warnings.Add($"{name}: 按钮栏背景须为 {Ae2TerminalLayout.ButtonBarWidth} 像素宽");
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
                 {
@@ -153,20 +165,13 @@ public partial class MainWindow : Window
         return bitmap;
     }
 
-    private BitmapSource Crop(Ae2ImageRegion region, int column = -1)
-    {
-        return Crop(LoadBitmap(TexturePath(region.Texture)), region, column);
-    }
+    private BitmapSource Crop(Ae2ImageRegion region) => Crop(LoadBitmap(TexturePath(region.Texture)), region);
 
-    private static BitmapSource Crop(BitmapSource bitmap, Ae2ImageRegion region, int column = -1)
+    private static BitmapSource Crop(BitmapSource bitmap, Ae2ImageRegion region)
     {
-        if (column >= 0 && (region.Width % Ae2TerminalLayout.Columns != 0 || region.Border != 0))
-            throw new InvalidDataException("六格条必须等宽且不能设置九宫格边宽。");
-        var width = column < 0 ? region.Width : region.Width / Ae2TerminalLayout.Columns;
-        var x = region.X + (column < 0 ? 0 : column * width);
-        if (column >= Ae2TerminalLayout.Columns || !region.Fits(bitmap.PixelWidth, bitmap.PixelHeight))
+        if (!region.Fits(bitmap.PixelWidth, bitmap.PixelHeight))
             throw new InvalidDataException("裁切区域超出图集边界。");
-        var crop = new CroppedBitmap(bitmap, new Int32Rect(x, region.Y, width, region.Height));
+        var crop = new CroppedBitmap(bitmap, new Int32Rect(region.X, region.Y, region.Width, region.Height));
         crop.Freeze();
         return crop;
     }
@@ -184,7 +189,7 @@ public partial class MainWindow : Window
         if (!_style.TryGet(id, out var region)) return;
         DetailName.Text = name;
         DetailTexture.Text = region.Texture;
-        DetailRect.Text = $"srcRect  [{region.X}, {region.Y}, {region.Width}, {region.Height}]" + (region.Border > 0 ? $"   ·   border {region.Border}px" : "");
+        DetailRect.Text = $"srcRect  [{region.X}, {region.Y}, {region.Width}, {region.Height}]";
         try
         {
             var atlas = LoadBitmap(TexturePath(region.Texture));
@@ -228,6 +233,7 @@ public partial class MainWindow : Window
         AtlasOverlay.Children.Add(outline);
     }
 
+    // Mirrors the game: stack the board regions at an integer scale, preserving their alpha.
     private void RenderComposite()
     {
         CompositeCanvas.Children.Clear();
@@ -235,108 +241,130 @@ public partial class MainWindow : Window
         const int scale = 2;
         const int rail = Ae2TerminalLayout.Rail;
         const int board = Ae2TerminalLayout.BoardWidth;
-        const int header = Ae2TerminalLayout.Header;
-        const int footer = Ae2TerminalLayout.Footer;
-        const int rows = 3, mainRows = 1, equipmentRows = 4;
-        var panelHeight = rows * Ae2TerminalLayout.Pitch + Ae2TerminalLayout.DetailHeight + Ae2TerminalLayout.EquipmentHeader + (mainRows + equipmentRows) * Ae2TerminalLayout.Pitch;
-        const int canvasLogicalWidth = 300;
-        var width = canvasLogicalWidth * scale;
-        var height = (header + footer) * scale + panelHeight * scale;
+        var stateX = rail + board + 14;
+        var width = (stateX + 132) * scale;
+        var height = 246 * scale;
         CompositeCanvas.Width = width;
         CompositeCanvas.Height = height;
         CompositeHost.Width = width + 20;
         CompositeHost.Height = height + 20;
         CompositeCanvas.Background = new SolidColorBrush(Color.FromRgb(23, 27, 32));
-        AddSolid(rail, header, board, panelHeight, scale, Color.FromRgb(199, 201, 210));
 
-        // Header and footer frame.
-        AddRegion(Ae2Image.Header, rail, 0, board - 2, header, scale);
-        AddRegion(Ae2Image.HeaderEdge, rail + board - 2, 0, 2, header, scale);
-        AddLabel("UNKNOWN INVENTORY TERMINAL", rail + 7, 2, 48, 17, scale, 8, true);
-        AddRegion(Ae2Image.Search, rail + 55, 4, board - 79, 13, scale);
-        AddLabel("Search items...", rail + 56, 5, board - 80, 11, scale, 6, false, Color.FromRgb(110, 114, 128));
-        AddRegion(Ae2Image.Button, rail + board - 22, 2, 18, 20, scale);
-        AddRegion(Ae2Image.Close, rail + board - 21, 4, 16, 16, scale);
-
-        // Inventory rows and rails.
-        for (var i = 0; i < rows; i++)
+        // Small terminal style: three storage rows, stacked from the board parts as in AE2's MEStorageScreen.drawBG.
+        var layout = new Ae2TerminalLayout(width, Ae2TerminalLayout.BaseBoardHeight + 2 * Ae2TerminalLayout.Margin);
+        var boardY = 0;
+        foreach (var part in BoardParts(layout.Rows))
         {
-            var y = header + i * Ae2TerminalLayout.Pitch;
-            var left = i == 0 ? Ae2Image.FirstRow : i == rows - 1 ? Ae2Image.LastRow : Ae2Image.Row;
-            var right = i == 0 ? Ae2Image.FirstRail : i == rows - 1 ? Ae2Image.LastRail : Ae2Image.Rail;
-            AddRegion(left, rail, y, Ae2TerminalLayout.Inset + Ae2TerminalLayout.GridWidth, Ae2TerminalLayout.Pitch, scale);
-            AddRegion(right, rail + Ae2TerminalLayout.Inset + Ae2TerminalLayout.GridWidth, y, board - Ae2TerminalLayout.Inset - Ae2TerminalLayout.GridWidth, Ae2TerminalLayout.Pitch, scale);
+            AddImage(part, rail, boardY, scale);
+            boardY += Ae2ScreenStyle.BoardPartHeight(part);
         }
-        AddRegion(Ae2Image.Thumb, rail + Ae2TerminalLayout.ScrollbarLeft, header + 7, 12, 15, scale);
+        AddButtonBar(4, scale);
+        AddSlotHighlight(rail + Ae2TerminalLayout.Inset + Ae2TerminalLayout.Pitch, Ae2TerminalLayout.Header, scale);
+        var muted = Color.FromRgb(82, 85, 100);
+        AddLabel("Terminal", rail + 7, 2, 46, 15, scale, 8, true);
+        var search = SourceSize(Ae2Image.Search, 79, 12);
+        AddRegion(Ae2Image.Search, rail + 55, 3, Math.Min(search.Width, 79), Math.Min(search.Height, 13), scale);
+        AddLabel("Search items...", rail + 58, 3, 74, 12, scale, 6, false, Colors.White);
 
-        // Lower loadout panel uses mock item glyphs to reveal the six slot strips.
-        var lower = header + rows * Ae2TerminalLayout.Pitch;
-        AddRegion(Ae2Image.LoadoutBackground, rail, lower, board, Ae2TerminalLayout.DetailHeight + Ae2TerminalLayout.EquipmentHeader + (mainRows + equipmentRows) * Ae2TerminalLayout.Pitch, scale);
-        AddLabel("Container storage", rail + 54, lower + 6, 80, 12, scale, 6, false, Color.FromRgb(82, 85, 100));
-        AddNineSlice(Ae2Image.BackButton, "‹  Back", rail + 7, lower + 2, 41, 18, scale);
-        var slotsY = lower + Ae2TerminalLayout.DetailHeight;
-        for (var i = 0; i < mainRows; i++)
-            for (var c = 0; c < Ae2TerminalLayout.Columns; c++)
-            {
-                var x = rail + Ae2TerminalLayout.Inset + c * Ae2TerminalLayout.Pitch;
-                var y = slotsY + i * Ae2TerminalLayout.Pitch;
-                AddRegion(Ae2Image.MainSlot, x, y, Ae2TerminalLayout.Pitch, Ae2TerminalLayout.Pitch, scale, c);
-                AddLabel(c.ToString(), x + 10, y + 10, 7, 7, scale, 5, false, Color.FromRgb(78, 80, 93));
-            }
-        var equipmentY = slotsY + mainRows * Ae2TerminalLayout.Pitch + Ae2TerminalLayout.EquipmentHeader;
-        AddLabel("Equipment", rail + Ae2TerminalLayout.Inset, equipmentY - 13, 60, 10, scale, 6, true);
-        for (var i = 0; i < equipmentRows; i++)
-            for (var c = 0; c < Ae2TerminalLayout.Columns; c++)
-            {
-                var x = rail + Ae2TerminalLayout.Inset + c * Ae2TerminalLayout.Pitch;
-                var y = equipmentY + i * Ae2TerminalLayout.Pitch;
-                AddRegion(Ae2Image.EquipmentSlot, x, y, Ae2TerminalLayout.Pitch, Ae2TerminalLayout.Pitch, scale, c);
-            }
+        var thumb = SourceSize(Ae2Image.Thumb, Ae2TerminalLayout.DefaultThumbWidth, Ae2TerminalLayout.DefaultThumbHeight);
+        AddImage(Ae2Image.Thumb, rail + Ae2TerminalLayout.ThumbLeft(thumb.Width), Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder, scale);
+        AddLabel("12 / 30 items  |  5 groups", rail + Ae2TerminalLayout.Inset, layout.StatusTop, 62, Ae2TerminalLayout.StatusHeight, scale, 6, false, muted);
+        AddLabel("Equipment 1–3/4 ↕", rail + Ae2TerminalLayout.Inset + 64, layout.StatusTop, Ae2TerminalLayout.GridWidth - 64,
+            Ae2TerminalLayout.StatusHeight, scale, 6, false, muted, TextAlignment.Right);
 
-        var footerY = header + panelHeight;
-        AddRegion(Ae2Image.FooterLeft, rail, footerY, 2, footer, scale);
-        AddRegion(Ae2Image.FooterCenter, rail + 2, footerY, board - 4, footer, scale);
-        AddRegion(Ae2Image.FooterRight, rail + board - 2, footerY, 2, footer, scale);
-        AddLabel("静态示例  ·  贴图预览", rail + 7, footerY + 1, 127, 13, scale, 6, false, Color.FromRgb(82, 85, 100));
+        // Toolbar buttons sit on vertical_buttons_bg.png left of the board, in game order.
+        AddToolbarButton(Ae2Image.Close, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(0), scale);
+        AddToolbarButton(Ae2Image.SortName, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(1), scale);
+        AddToolbarButton(Ae2Image.SortAscending, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2), scale);
+        AddToolbarButton(Ae2Image.TerminalStyleSmall, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(3), scale);
 
-        // Toolbar buttons are drawn in the separate 24px rail, then their icon crops are layered above.
-        AddToolbarButton(Ae2Image.SortName, 3, 22, scale);
-        AddToolbarButton(Ae2Image.SortAscending, 3, 43, scale);
-        AddToolbarButton(Ae2Image.Refresh, 3, 64, scale);
-
-        // State samples are placed in a labeled strip outside the assembled terminal.
-        var stateX = rail + board + 14;
+        // State samples are shown at their own pixel size beside the terminal.
         var stateCaption = new TextBlock { Text = "交互状态", Foreground = (Brush)FindResource("AccentBrush"), FontSize = 11, FontWeight = FontWeights.SemiBold };
         Canvas.SetLeft(stateCaption, stateX * scale);
         Canvas.SetTop(stateCaption, 2 * scale);
         CompositeCanvas.Children.Add(stateCaption);
-        AddRegion(Ae2Image.Search, stateX, 20, 112, 13, scale);
-        AddLabel("搜索 Search", stateX, 34, 80, 10, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddRegion(Ae2Image.SearchFocused, stateX, 44, 112, 13, scale);
-        AddLabel("聚焦 Focused", stateX, 58, 80, 10, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddButton(Ae2Image.Button, "", stateX, 72, scale);
-        AddRegion(Ae2Image.SortName, stateX + 1, 74, 16, 16, scale);
-        AddLabel("普通按钮", stateX + 22, 74, 60, 14, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddButton(Ae2Image.ButtonHover, "", stateX, 96, scale);
-        AddRegion(Ae2Image.SortAmount, stateX + 1, 98, 16, 16, scale);
-        AddLabel("悬停按钮", stateX + 22, 98, 60, 14, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddNineSlice(Ae2Image.BackButton, "‹  返回", stateX, 122, 41, 18, scale);
-        AddLabel("返回按钮", stateX + 45, 124, 54, 14, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddNineSlice(Ae2Image.BackButtonHover, "‹  悬停", stateX, 146, 41, 18, scale);
-        AddRegion(Ae2Image.Thumb, stateX, 174, 12, 15, scale);
-        AddLabel("可滚动", stateX + 18, 174, 50, 14, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddRegion(Ae2Image.ThumbDisabled, stateX + 64, 174, 12, 15, scale);
-        AddLabel("禁用", stateX + 82, 174, 35, 14, scale, 6, false, Color.FromRgb(150, 160, 168));
-        AddRegion(Ae2Image.Tooltip, stateX, 202, 112, 15, scale);
-        AddLabel("Tooltip sample", stateX + 2, 203, 108, 13, scale, 6, false);
+        var caption = Color.FromRgb(150, 160, 168);
+        var y = 20;
+        AddImage(Ae2Image.Search, stateX, y, scale);
+        AddLabel("搜索 Search", stateX, y + SourceSize(Ae2Image.Search, 0, 12).Height + 1, 80, 10, scale, 6, false, caption);
+        y += 26;
+        AddImage(Ae2Image.SearchFocused, stateX, y, scale);
+        AddLabel("聚焦 Focused", stateX, y + SourceSize(Ae2Image.SearchFocused, 0, 12).Height + 1, 80, 10, scale, 6, false, caption);
+        y += 28;
+        AddToolbarButton(Ae2Image.SortName, stateX, y, scale);
+        AddLabel("普通按钮", stateX + 22, y + 3, 60, 14, scale, 6, false, caption);
+        y += 24;
+        AddToolbarButton(Ae2Image.SortName, stateX, y, scale, Ae2ToolbarAppearance.Face(hovered: true, focused: false));
+        AddLabel("悬停 / 下沉", stateX + 22, y + 3, 44, 14, scale, 6, false, caption);
+        AddToolbarButton(Ae2Image.SortName, stateX + 66, y, scale, Ae2ToolbarAppearance.Face(hovered: false, focused: true));
+        AddLabel("聚焦按钮", stateX + 88, y + 3, 40, 14, scale, 6, false, caption);
+        y += 26;
+        AddImage(Ae2Image.Thumb, stateX, y, scale);
+        AddLabel("可滚动", stateX + 20, y, 40, 14, scale, 6, false, caption);
+        AddImage(Ae2Image.ThumbDisabled, stateX + 60, y, scale);
+        AddLabel("禁用", stateX + 80, y, 35, 14, scale, 6, false, caption);
+        y += 24;
+        AddImage(Ae2Image.Tooltip, stateX, y, scale);
+        AddLabel("Tooltip sample", stateX + 2, y, 108, SourceSize(Ae2Image.Tooltip, 0, 12).Height, scale, 6, false, Colors.White);
+        y += 20;
+        // Terminal style icons, in the order the button cycles through them.
+        var styles = new[] { Ae2Image.TerminalStyleSmall, Ae2Image.TerminalStyleMedium, Ae2Image.TerminalStyleTall, Ae2Image.TerminalStyleFull };
+        for (var i = 0; i < styles.Length; i++) AddImage(styles[i], stateX + i * 20, y, scale);
+        AddLabel("终端风格 短/中/长/最长", stateX, y + 17, 110, 10, scale, 6, false, caption);
     }
 
-    private void AddRegion(Ae2Image id, int x, int y, int width, int height, int scale, int column = -1)
+    internal static IReadOnlyList<Ae2Image> BoardParts(int rows)
+    {
+        var parts = new List<Ae2Image> { Ae2Image.Header, Ae2Image.FirstRow };
+        for (var i = 2; i < rows; i++) parts.Add(Ae2Image.Row);
+        parts.Add(Ae2Image.LastRow);
+        parts.Add(Ae2Image.Bottom);
+        return parts;
+    }
+
+    // Mirrors AE2 VerticalButtonBar: fixed 2-row top and 4-row bottom, stretched middle.
+    private void AddButtonBar(int buttons, int scale)
+    {
+        if (_style is null || !_style.TryGet(Ae2Image.VerticalButtonsBg, out var region)) return;
+        const int top = Ae2TerminalLayout.ButtonBarTopBorder, bottom = Ae2TerminalLayout.ButtonBarBottomBorder;
+        if (region.Height <= top + bottom) return;
+        var height = Ae2TerminalLayout.ButtonBarHeight(buttons);
+        AddRows(region, 0, top, Ae2TerminalLayout.ButtonBarY, top, scale);
+        AddRows(region, top, region.Height - top - bottom, Ae2TerminalLayout.ButtonBarY + top, height - top - bottom, scale);
+        AddRows(region, region.Height - bottom, bottom, Ae2TerminalLayout.ButtonBarY + height - bottom, bottom, scale);
+    }
+
+    private void AddRows(Ae2ImageRegion region, int sourceTop, int sourceHeight, int y, int height, int scale)
+    {
+        try
+        {
+            var rows = new Ae2ImageRegion(region.Texture, region.X, region.Y + sourceTop, region.Width, sourceHeight, 0);
+            var image = new Image { Source = Crop(rows), Width = region.Width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true, Tag = "ButtonBar" };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+            Canvas.SetLeft(image, Ae2TerminalLayout.ButtonBarX * scale);
+            Canvas.SetTop(image, y * scale);
+            CompositeCanvas.Children.Add(image);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or NotSupportedException or FileFormatException or InvalidDataException)
+        {
+            StatusBox.Text = $"{Ae2Image.VerticalButtonsBg}: {ex.Message}";
+        }
+    }
+
+    private (int Width, int Height) SourceSize(Ae2Image id, int width, int height) =>
+        _style is not null && _style.TryGet(id, out var region) ? (region.Width, region.Height) : (width, height);
+
+    private void AddImage(Ae2Image id, int x, int y, int scale)
+    {
+        if (_style is not null && _style.TryGet(id, out var region)) AddRegion(id, x, y, region.Width, region.Height, scale);
+    }
+
+    private void AddRegion(Ae2Image id, int x, int y, int width, int height, int scale)
     {
         if (_style is null || !_style.TryGet(id, out var region)) return;
         try
         {
-            var image = new Image { Source = Crop(region, column), Width = width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            var image = new Image { Source = Crop(region), Width = width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true };
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
             Canvas.SetLeft(image, x * scale);
             Canvas.SetTop(image, y * scale);
@@ -348,53 +376,30 @@ public partial class MainWindow : Window
         }
     }
 
-    private void AddToolbarButton(Ae2Image icon, int x, int y, int scale)
+    private void AddSlotHighlight(int x, int y, int scale)
     {
-        AddRegion(Ae2Image.Button, x, y, 18, 20, scale);
-        AddRegion(icon, x + 1, y + 2, 16, 16, scale);
+        static SolidColorBrush Brush(uint argb) => new(Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        var size = Ae2TerminalLayout.Pitch * scale;
+        var highlight = new Border { Width = size, Height = size, BorderThickness = new Thickness(scale),
+            BorderBrush = Brush(Ae2SlotAppearance.HoverBorder), Background = Brush(Ae2SlotAppearance.HoverFill),
+            SnapsToDevicePixels = true, IsHitTestVisible = false, Tag = "SlotHover" };
+        Canvas.SetLeft(highlight, x * scale);
+        Canvas.SetTop(highlight, y * scale);
+        CompositeCanvas.Children.Add(highlight);
     }
 
-    private void AddButton(Ae2Image face, string fallback, int x, int y, int scale, bool wide = false)
+    private void AddToolbarButton(Ae2Image icon, int x, int y, int scale, Ae2Image face = Ae2Image.Button)
     {
-        AddRegion(face, x, y, wide ? 41 : 18, wide ? 18 : 20, scale);
-        if (!string.IsNullOrEmpty(fallback)) AddLabel(fallback, x + 1, y + 1, wide ? 39 : 16, wide ? 16 : 18, scale, wide ? 6 : 7, false);
+        y += Ae2ToolbarAppearance.OffsetY(face);
+        AddImage(face, x, y, scale);
+        AddImage(icon, x + 1, y + 2, scale);
     }
 
-    private void AddNineSlice(Ae2Image id, string label, int x, int y, int width, int height, int scale)
-    {
-        if (_style is null || !_style.TryGet(id, out var region) || region.Border <= 0) return;
-        var source = Crop(region);
-        var b = region.Border;
-        var xs = new[] { 0, b, region.Width - b, region.Width };
-        var ys = new[] { 0, b, region.Height - b, region.Height };
-        var dx = new[] { 0, b, width - b, width };
-        var dy = new[] { 0, b, height - b, height };
-        for (var row = 0; row < 3; row++)
-            for (var col = 0; col < 3; col++)
-            {
-                var piece = new CroppedBitmap(source, new Int32Rect(xs[col], ys[row], xs[col + 1] - xs[col], ys[row + 1] - ys[row]));
-                piece.Freeze();
-                var image = new Image { Source = piece, Width = (dx[col + 1] - dx[col]) * scale, Height = (dy[row + 1] - dy[row]) * scale,
-                    Stretch = Stretch.Fill, SnapsToDevicePixels = true };
-                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
-                Canvas.SetLeft(image, (x + dx[col]) * scale);
-                Canvas.SetTop(image, (y + dy[row]) * scale);
-                CompositeCanvas.Children.Add(image);
-            }
-        AddLabel(label, x + b, y + 1, width - 2 * b, height - 2, scale, 6, false);
-    }
 
-    private void AddSolid(int x, int y, int width, int height, int scale, Color color)
+    private void AddLabel(string text, int x, int y, int width, int height, int scale, int fontSize, bool bold, Color? color = null,
+        TextAlignment alignment = TextAlignment.Left)
     {
-        var rect = new Rectangle { Width = width * scale, Height = height * scale, Fill = new SolidColorBrush(color), IsHitTestVisible = false };
-        Canvas.SetLeft(rect, x * scale);
-        Canvas.SetTop(rect, y * scale);
-        CompositeCanvas.Children.Add(rect);
-    }
-
-    private void AddLabel(string text, int x, int y, int width, int height, int scale, int fontSize, bool bold, Color? color = null)
-    {
-        var label = new TextBlock { Text = text, Width = width * scale, Height = height * scale, FontSize = fontSize * scale,
+        var label = new TextBlock { Text = text, Width = width * scale, Height = height * scale, FontSize = fontSize * scale, TextAlignment = alignment,
             FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = color is { } c ? new SolidColorBrush(c) : new SolidColorBrush(Color.FromRgb(48, 50, 58)),
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Canvas.SetLeft(label, x * scale);
