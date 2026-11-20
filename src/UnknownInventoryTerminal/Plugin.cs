@@ -298,6 +298,9 @@ namespace UnknownInventoryTerminal
                     continue;
                 }
                 // Extension controls receive ordinary UGUI events, not native item actions.
+                // The settings popup is IMGUI, so its screen rectangle is consumed by the
+                // terminal input gate rather than leaking clicks into inventory cells.
+                if (terminalPoint && plugin._window?.SettingsOpen == true) return result;
                 if (terminalPoint && plugin._nativePanel?.ContainsExtension(hit.gameObject) == true) return result;
                 if (!terminalPoint || plugin._nativePanel?.Contains(hit.gameObject) != true) continue;
                 plugin._nativePanel.ResolveItemHit(ref hit);
@@ -396,9 +399,11 @@ namespace UnknownInventoryTerminal
             // branch. This matters after Together has focused a local body: returning false
             // skips the native tooltip update and leaves the last tooltip hidden or stale.
             __state = __instance.radialOpen;
-            // A shield hit keeps the native UI path alive. If no terminal hit survived,
-            // retain the radial guard so world hover cannot leak through the modal.
-            __instance.radialOpen = uiCasts.Count == 0;
+            // Keep HandleMouseOver on its UI-only branch. It treats an empty cast list as
+            // permission to probe the world, so add a non-hit sentinel for blank/shielded
+            // terminal areas instead of allowing world hover through the modal.
+            __instance.radialOpen = false;
+            if (uiCasts.Count == 0) uiCasts.Add(default);
             return true;
         }
 

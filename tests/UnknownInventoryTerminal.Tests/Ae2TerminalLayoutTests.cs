@@ -106,7 +106,7 @@ public sealed class Ae2TerminalLayoutTests
         Ae2TerminalLayout.ButtonBarY.Should().Be(0);
         Ae2TerminalLayout.ToolbarY(1).Should().Be(25, "AE2 places 16 px buttons 6 px apart, starting at y = 3");
         var barWithReturn = Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons + 1);
-        Ae2TerminalLayout.ToolbarButtons.Should().Be(3, "the close button is no longer in the sidebar");
+        Ae2TerminalLayout.ToolbarButtons.Should().Be(4, "the close button is separate and settings is the fourth sidebar action");
         (Ae2TerminalLayout.ButtonBarY + barWithReturn).Should().BeLessThanOrEqualTo(Ae2TerminalLayout.BaseBoardHeight);
         (Ae2TerminalLayout.ToolbarY(Ae2TerminalLayout.ToolbarButtons) + Ae2TerminalLayout.ButtonHeight).Should().BeLessThanOrEqualTo(
             Ae2TerminalLayout.ButtonBarY + barWithReturn - Ae2TerminalLayout.ButtonBarBottomBorder);

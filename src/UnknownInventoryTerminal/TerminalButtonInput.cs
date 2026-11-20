@@ -1,6 +1,6 @@
 namespace UnknownInventoryTerminal
 {
-    internal enum TerminalButton { None, Close, Sort, Direction, Style, Return }
+    internal enum TerminalButton { None, Close, Sort, Direction, Style, Settings, Return }
 
     // The same rectangles drive drawing and input, but clicks do not depend on IMGUI control IDs or repaint order.
     internal sealed class TerminalButtonInput
@@ -18,7 +18,7 @@ namespace UnknownInventoryTerminal
             var x = (screenX - layout.Left) / layout.Scale;
             var y = (screenY - layout.Top) / layout.Scale;
             if (Contains(TerminalButton.Close)) return TerminalButton.Close;
-            var last = canReturn ? TerminalButton.Return : TerminalButton.Style;
+            var last = canReturn ? TerminalButton.Return : TerminalButton.Settings;
             for (var button = TerminalButton.Sort; button <= last; button++)
                 if (Contains(button)) return button;
             return TerminalButton.None;

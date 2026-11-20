@@ -24,8 +24,9 @@ public sealed class TerminalButtonInputTests
         Expect(8, 23, TerminalButton.None);
         Expect(8, 25, TerminalButton.Direction);
         Expect(8, 47, TerminalButton.Style);
-        Expect(8, 69, TerminalButton.Return);
-        Expect(8, 69, TerminalButton.None, canReturn: false);
+        Expect(8, 69, TerminalButton.Settings);
+        Expect(8, 91, TerminalButton.Return);
+        Expect(8, 91, TerminalButton.None, canReturn: false);
 
         void Expect(int x, int y, TerminalButton button, bool canReturn = true) =>
             TerminalButtonInput.HitTest(layout, layout.Left + x * layout.Scale,
@@ -36,7 +37,7 @@ public sealed class TerminalButtonInputTests
     public void LeftPressAndReleaseTriggersEachButtonOnceIndependentlyOfFocusAndRepaint()
     {
         var input = new TerminalButtonInput();
-        foreach (var button in new[] { TerminalButton.Close, TerminalButton.Sort, TerminalButton.Direction, TerminalButton.Style, TerminalButton.Return })
+        foreach (var button in new[] { TerminalButton.Close, TerminalButton.Sort, TerminalButton.Direction, TerminalButton.Style, TerminalButton.Settings, TerminalButton.Return })
         {
             input.Press(button, 0).Should().BeTrue();
             input.Focused.Should().Be(button);

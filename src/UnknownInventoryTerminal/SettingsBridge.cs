@@ -2,6 +2,7 @@ using BepInEx.Configuration;
 using CUCoreLib.Data;
 using CUCoreLib.Registries;
 using UnityEngine;
+using System;
 
 namespace UnknownInventoryTerminal
 {
@@ -15,6 +16,16 @@ namespace UnknownInventoryTerminal
         internal const Setting.SettingCategory KeybindCategory = Setting.SettingCategory.Input;
 
         internal static ConfigEntry<KeyCode> ToggleKey { get; private set; } = null!;
+        private static ConfigEntry<string> _language = null!;
+        internal static event Action? LanguageChanged;
+
+        internal static string Language => TerminalText.Language;
+        internal static string LanguageLabel() => ChoiceLabel(LanguageSetting, Language);
+        internal static void SetLanguage(string language) => _language.Value =
+            string.Equals(language, TerminalText.Chinese, System.StringComparison.OrdinalIgnoreCase)
+                ? TerminalText.Chinese : TerminalText.English;
+        internal static void CycleLanguage() => SetLanguage(Language == TerminalText.Chinese ? TerminalText.English : TerminalText.Chinese);
+
         // Changed by the terminal-style toolbar button, like AE2's client-side TERMINAL_STYLE setting.
         private static ConfigEntry<TerminalHeight>? _terminalHeight;
         internal static TerminalHeight TerminalHeight
@@ -26,20 +37,17 @@ namespace UnknownInventoryTerminal
         internal static string Label(string name) => TerminalText.Get("settings." + name);
         internal static string Description(string name) => Label(name + ".description");
         internal static string ChoiceLabel(string name, string key) => Label(name + "." + key);
-        internal static ModDropdownChoice Choice(string name, string key) => new ModDropdownChoice(key, ChoiceLabel(name, key));
 
         internal static void Initialize(ConfigFile config)
         {
-            var language = config.Bind(ConfigSection, LanguageSetting, TerminalText.English,
+            _language = config.Bind(ConfigSection, LanguageSetting, TerminalText.English,
                 "Display language for the inventory terminal (en or zh-CN).");
-            TerminalText.Select(language.Value);
-            language.SettingChanged += (_, _) => TerminalText.Select(language.Value);
-            var languages = new[] { TerminalText.English, TerminalText.Chinese };
-            ModOptionsRegistry.Register(ModOptionDefinition.Dropdown(ConfigSection + "." + LanguageSetting,
-                Label(LanguageSetting), Description(LanguageSetting), MenuCategory,
-                TerminalText.Language == TerminalText.Chinese ? 1 : 0, new[] {
-                    Choice(LanguageSetting, languages[0]), Choice(LanguageSetting, languages[1])
-                }, index => { if (index >= 0 && index < languages.Length) language.Value = languages[index]; }));
+            TerminalText.Select(_language.Value);
+            _language.SettingChanged += (_, _) =>
+            {
+                TerminalText.Select(_language.Value);
+                LanguageChanged?.Invoke();
+            };
 
             ToggleKey = config.Bind(ConfigSection, "ToggleKey", KeyCode.F7,
                 "Key used to open or close the inventory terminal.");

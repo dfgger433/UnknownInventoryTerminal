@@ -78,7 +78,10 @@ namespace UnknownInventoryTerminal
         private string _query = "";
 
         internal NativeFlatInventoryPanel(ManualLogSource log, Ae2TerminalSkin skin)
-        { _log = log; _skin = skin; _loadout = new NativeLoadoutPanel(log, skin); }
+        {
+            _log = log; _skin = skin; _loadout = new NativeLoadoutPanel(log, skin);
+            SettingsBridge.LanguageChanged += RefreshTooltips;
+        }
 
         // The transparent chrome is a blocker, not an inventory control. In particular,
         // clicking the IMGUI search field must not release text focus to the game.
@@ -132,6 +135,12 @@ namespace UnknownInventoryTerminal
             {
                 _scrollTooltip!.tipName = TerminalText.Get("inventory.scroll");
                 _scrollTooltip.tipDesc = TerminalText.Get("inventory.scroll.description");
+            }
+            foreach (var tile in _tiles.Values)
+            {
+                if (!tile.Button) continue;
+                tile.Button.UpdateGraphic();
+                RefreshTileTooltip(tile);
             }
         }
 
@@ -618,6 +627,7 @@ namespace UnknownInventoryTerminal
 
         public void Dispose()
         {
+            SettingsBridge.LanguageChanged -= RefreshTooltips;
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
             _tiles.Clear();

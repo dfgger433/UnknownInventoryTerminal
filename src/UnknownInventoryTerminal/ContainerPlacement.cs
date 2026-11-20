@@ -19,18 +19,13 @@ namespace UnknownInventoryTerminal
             get => Enum.IsDefined(typeof(ContainerPlacementMode), _mode.Value) ? _mode.Value : ContainerPlacementMode.BestFit;
             set => _mode.Value = value;
         }
+        internal static string Label() => SettingsBridge.ChoiceLabel("ContainerPlacement", Mode.ToString());
+        internal static void Cycle() => Mode = (ContainerPlacementMode)(((int)Mode + 1) % 3);
 
         internal static void Initialize(ConfigFile config)
         {
             _mode = config.Bind(SettingsBridge.ConfigSection, "ContainerPlacement", ContainerPlacementMode.BestFit,
                 "Default destination for a drop on the storage grid. A drop on a loadout slot targets that slot.");
-            const string name = "ContainerPlacement";
-            ModOptionsRegistry.Register(ModOptionDefinition.Dropdown(SettingsBridge.ConfigSection + "." + name,
-                SettingsBridge.Label(name), SettingsBridge.Description(name), SettingsBridge.MenuCategory, (int)Mode, new[] {
-                    SettingsBridge.Choice(name, nameof(ContainerPlacementMode.BestFit)),
-                    SettingsBridge.Choice(name, nameof(ContainerPlacementMode.WeightReduction)),
-                    SettingsBridge.Choice(name, nameof(ContainerPlacementMode.Manual))
-                }, value => { if (value >= 0 && value <= 2) Mode = (ContainerPlacementMode)value; }));
         }
 
         internal sealed class Candidate

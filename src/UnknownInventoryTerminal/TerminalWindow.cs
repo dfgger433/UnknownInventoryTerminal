@@ -24,8 +24,9 @@ namespace UnknownInventoryTerminal
         private Rect _rect;
         private string _lastQuery = "", _status = "";
         private float _nextRefresh;
-        private bool _closeRequested, _focusSearch, _sortByAmount, _descending;
-        private GUIStyle? _titleStyle, _statusStyle, _searchStyle, _tooltipStyle, _iconStyle;
+        private bool _closeRequested, _focusSearch, _sortByAmount, _descending, _settingsOpen;
+        private GUIStyle? _titleStyle, _statusStyle, _searchStyle, _tooltipStyle, _iconStyle, _settingsStyle;
+        internal bool SettingsOpen => _settingsOpen;
         private int _styleScale;
         private readonly TerminalButtonInput _buttons = new TerminalButtonInput();
         internal bool Visible { get; private set; }
@@ -55,6 +56,7 @@ namespace UnknownInventoryTerminal
         {
             Visible = false;
             _focusSearch = false;
+            _settingsOpen = false;
             _buttons.Reset();
             _snapshot = Array.Empty<InventoryEntry>();
             _rows = Array.Empty<InventoryRow>();
@@ -93,6 +95,10 @@ namespace UnknownInventoryTerminal
                     case TerminalButton.Style:
                         SettingsBridge.TerminalHeight = Ae2TerminalLayout.Next(_layout.Style, backwards: button == 1);
                         FitToScreen();
+                        break;
+                    case TerminalButton.Settings:
+                        _settingsOpen = !_settingsOpen;
+                        Plugin.ReleaseSearchFocus();
                         break;
                     case TerminalButton.Return: _returnToGroups(); break;
                 }
@@ -208,7 +214,34 @@ namespace UnknownInventoryTerminal
             DrawButton(TerminalButton.Style, StyleIcon(height), TerminalText.Get("terminal.style") + ": " +
                 TerminalText.Get("terminal.style." + height), "H");
             if (_canReturn()) DrawButton(TerminalButton.Return, Ae2Image.Back, TerminalText.Get("inventory.backTooltip"), "<");
+            DrawButton(TerminalButton.Settings, Ae2Image.NativeButtonFace, TerminalText.Get("terminal.settings"), "S");
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
+            DrawSettingsPanel();
+        }
+
+        private void DrawSettingsPanel()
+        {
+            if (!_settingsOpen) return;
+            var panel = Units(Ae2TerminalLayout.Rail + 10, Ae2TerminalLayout.Header + 12, 116, 92);
+            var ev = Event.current;
+            if (ev.type == EventType.MouseDown && ev.button == 0 && !panel.Contains(ev.mousePosition))
+            {
+                _settingsOpen = false;
+                ev.Use();
+                return;
+            }
+            GUI.Box(panel, GUIContent.none, _settingsStyle);
+            var title = new Rect(panel.x + 5 * _layout.Scale, panel.y + 3 * _layout.Scale,
+                panel.width - 10 * _layout.Scale, 14 * _layout.Scale);
+            GUI.Label(title, TerminalText.Get("terminal.settings"), _titleStyle);
+            var language = new Rect(panel.x + 5 * _layout.Scale, panel.y + 23 * _layout.Scale,
+                panel.width - 10 * _layout.Scale, 20 * _layout.Scale);
+            if (GUI.Button(language, TerminalText.Format("terminal.settings.language", SettingsBridge.LanguageLabel()), _settingsStyle))
+                SettingsBridge.CycleLanguage();
+            var placement = new Rect(panel.x + 5 * _layout.Scale, panel.y + 47 * _layout.Scale,
+                panel.width - 10 * _layout.Scale, 34 * _layout.Scale);
+            if (GUI.Button(placement, TerminalText.Format("terminal.settings.placement", ContainerPlacement.Label()), _settingsStyle))
+                ContainerPlacement.Cycle();
         }
 
         private static Ae2Image StyleIcon(TerminalHeight height) => height switch
@@ -269,6 +302,11 @@ namespace UnknownInventoryTerminal
             _iconStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter };
             _tooltipStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
             _tooltipStyle.normal.textColor = Color.white;
+            _settingsStyle = new GUIStyle(GUI.skin.button) { alignment = TextAnchor.MiddleCenter,
+                fontSize = 7 * _styleScale, wordWrap = true, padding = new RectOffset(3 * _styleScale, 3 * _styleScale, 1 * _styleScale, 1 * _styleScale) };
+            _settingsStyle.normal.textColor = Color.white;
+            _settingsStyle.hover.textColor = Color.white;
+            _settingsStyle.active.textColor = Color.white;
             _searchStyle = new GUIStyle(GUI.skin.textField) { fontSize = 8 * _styleScale, alignment = TextAnchor.MiddleLeft,
                 padding = new RectOffset(3 * _styleScale, 3 * _styleScale, 0, 0) };
             foreach (var state in new[] { _searchStyle.normal, _searchStyle.hover, _searchStyle.focused, _searchStyle.active,
