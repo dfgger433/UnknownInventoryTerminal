@@ -318,7 +318,7 @@ public partial class MainWindow : Window
         AddToolbarButton(Ae2Image.SortName, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(0), scale);
         AddToolbarButton(Ae2Image.SortAscending, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(1), scale);
         AddToolbarButton(Ae2Image.TerminalStyleSmall, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2), scale);
-        AddToolbarButton(Ae2Image.Back, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(3), scale);
+        AddToolbarButton(Ae2Image.Settings, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(3), scale);
         foreach (UIElement element in CompositeCanvas.Children)
             Canvas.SetTop(element, Canvas.GetTop(element) + Ae2TerminalLayout.ChromeTopPadding * scale);
 

@@ -6,9 +6,11 @@
 |---|---|
 | [terminal.json](screens/terminals/terminal.json) | `terminalStyle` 按 AE2 `base_terminal.json` 的方式把底板分为 `header`、`firstRow`、`row`、`lastRow`、`bottom` 五段；`images` 指定搜索、按钮状态、图标、滑块和左侧按钮栏背景。 |
 | [terminal.png](textures/guis/terminal.png) | 终端底板（3 行时为 141×170）：窗框、仓储格、滚动槽、3 行装备格和 1 行主物品栏。 |
-| [states.png](textures/guis/states.png) | 手绘图集：按钮底图（普通、聚焦、悬停）及关闭、排序、返回、终端风格（短/中等/长/最长，y=112）等图标。 |
+| [states.png](textures/guis/states.png) | 手绘图集：按钮底图（普通、聚焦、悬停）及关闭、排序、设置（x=32/48，y=48）、返回、终端风格（短/中等/长/最长，y=112）等图标。 |
 | [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），垫在左侧工具栏按钮下方。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
+| [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
+| [checkbox.png](textures/guis/checkbox.png) | 设置面板的加速/使用状态贴图。 |
 | [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 原版 AE2 仓储终端的独立滑块（各 12×15），分别绑定 `thumb` 和 `thumbDisabled`。没有可滚动行时显示禁用贴图。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
 | [NOTICE.txt](NOTICE.txt) | AE2 原图来源和授权条件。 |

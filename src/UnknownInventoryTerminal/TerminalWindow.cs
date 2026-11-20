@@ -214,7 +214,7 @@ namespace UnknownInventoryTerminal
             DrawButton(TerminalButton.Style, StyleIcon(height), TerminalText.Get("terminal.style") + ": " +
                 TerminalText.Get("terminal.style." + height), "H");
             if (_canReturn()) DrawButton(TerminalButton.Return, Ae2Image.Back, TerminalText.Get("inventory.backTooltip"), "<");
-            DrawButton(TerminalButton.Settings, Ae2Image.NativeButtonFace, TerminalText.Get("terminal.settings"), "S");
+            DrawButton(TerminalButton.Settings, Ae2Image.Settings, TerminalText.Get("terminal.settings"), "S");
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
             DrawSettingsPanel();
         }
@@ -230,7 +230,10 @@ namespace UnknownInventoryTerminal
                 ev.Use();
                 return;
             }
-            GUI.Box(panel, GUIContent.none, _settingsStyle);
+            _skin.Draw(panel, Ae2Image.SettingsBackground, new Color32(196, 198, 208, 255));
+            var checkbox = new Rect(panel.x + 4 * _layout.Scale, panel.y + 24 * _layout.Scale,
+                16 * _layout.Scale, 16 * _layout.Scale);
+            _skin.Draw(checkbox, Ae2Image.SettingsCheckbox, Color.clear);
             var title = new Rect(panel.x + 5 * _layout.Scale, panel.y + 3 * _layout.Scale,
                 panel.width - 10 * _layout.Scale, 14 * _layout.Scale);
             GUI.Label(title, TerminalText.Get("terminal.settings"), _titleStyle);

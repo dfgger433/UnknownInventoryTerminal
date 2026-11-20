@@ -10,8 +10,8 @@ namespace UnknownInventoryTerminal
         // terminalStyle parts, as in AE2's base_terminal.json.
         Header, FirstRow, Row, LastRow, Bottom,
         Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
-        Close, SortName, SortAmount, SortAscending, SortDescending, Back, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
-        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
+        Close, SortName, SortAmount, SortAscending, SortDescending, Back, Settings, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
+        SettingsBackground, SettingsCheckbox, TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
     }
 
     internal static class Ae2ToolbarAppearance

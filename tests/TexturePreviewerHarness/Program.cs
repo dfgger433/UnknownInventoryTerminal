@@ -134,6 +134,8 @@ internal static class Program
         CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 3 + padding), UnknownInventoryTerminal.Ae2Image.SortName, new Int32Rect(3, 4, 10, 9));
         CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 25 + padding), UnknownInventoryTerminal.Ae2Image.SortAscending, new Int32Rect(4, 3, 8, 11));
         CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 47 + padding), UnknownInventoryTerminal.Ae2Image.TerminalStyleSmall, new Int32Rect(4, 4, 9, 9));
+        if (!images.Any(image => image.Source is CroppedBitmap crop && crop.SourceRect == Expected(style, UnknownInventoryTerminal.Ae2Image.Settings)))
+            throw new InvalidOperationException("Composite is missing the settings icon.");
         CheckCenteredIcon(hover, UnknownInventoryTerminal.Ae2Image.SortName, new Int32Rect(3, 4, 10, 9));
 
         void CheckCenteredIcon(Image face, UnknownInventoryTerminal.Ae2Image id, Int32Rect bounds)
