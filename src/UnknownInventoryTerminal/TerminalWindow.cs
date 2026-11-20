@@ -26,7 +26,8 @@ namespace UnknownInventoryTerminal
         private float _nextRefresh;
         private bool _closeRequested, _focusSearch, _sortByAmount, _descending;
         private GUIStyle? _windowStyle, _titleStyle, _statusStyle, _searchStyle, _tooltipStyle, _iconStyle;
-        private int _styleScale, _focusedToolbarButton = -1;
+        private int _styleScale;
+        private Vector2Int? _focusedButton;
         internal bool Visible { get; private set; }
         internal bool CloseRequested => _closeRequested;
         internal IReadOnlyList<InventoryEntry> Snapshot => _snapshot;
@@ -54,7 +55,7 @@ namespace UnknownInventoryTerminal
         {
             Visible = false;
             _focusSearch = false;
-            _focusedToolbarButton = -1;
+            _focusedButton = null;
             _snapshot = Array.Empty<InventoryEntry>();
             _rows = Array.Empty<InventoryRow>();
             _publishNativeEntries(Array.Empty<InventoryEntry>());
@@ -106,11 +107,12 @@ namespace UnknownInventoryTerminal
             // Storage rows follow the terminal-style setting; polling the count still discovers CCL equipment slots.
             _equipmentCount();
             _layout = new Ae2TerminalLayout(Screen.width, Screen.height, SettingsBridge.TerminalHeight);
-            _rect = new Rect(_layout.Left, _layout.Top, _layout.Width, _layout.Height);
+            var padding = Ae2TerminalLayout.ChromeTopPadding * _layout.Scale;
+            _rect = new Rect(_layout.Left, _layout.Top - padding, _layout.Width, _layout.Height + padding);
         }
 
-        private void ConfigureNativePanel() => _configureNativePanel(_rect,
-            new Rect(_rect.x + _layout.BoardLeft, _rect.y + Ae2TerminalLayout.Header * _layout.Scale,
+        private void ConfigureNativePanel() => _configureNativePanel(new Rect(_rect.x, _layout.Top, _layout.Width, _layout.Height),
+            new Rect(_rect.x + _layout.BoardLeft, _layout.Top + Ae2TerminalLayout.Header * _layout.Scale,
                 Ae2TerminalLayout.BoardWidth * _layout.Scale, _layout.PanelHeight),
             _layout, _sortByAmount, _descending);
 
@@ -139,11 +141,12 @@ namespace UnknownInventoryTerminal
             GUI.Label(Units(left + Ae2TerminalLayout.Inset, _layout.StatusTop, 62, Ae2TerminalLayout.StatusHeight),
                 _status, _statusStyle);
 
-            // A field drawn up to 79x13 pixels is shown at its own size; a wider PNG is narrowed to fit the header.
-            var searchSize = _skin.SourceSize(Ae2Image.Search) ?? new Vector2Int(79, 12);
-            var searchRect = Units(left + 55, 3, Mathf.Min(searchSize.x, 79), Mathf.Min(searchSize.y, 13));
+            // Reserve the right end of the header for the close button.
+            var searchSize = _skin.SourceSize(Ae2Image.Search) ?? new Vector2Int(Ae2TerminalLayout.SearchWidth, 12);
+            var searchRect = Units(Ae2TerminalLayout.SearchX, Ae2TerminalLayout.SearchY,
+                Mathf.Min(searchSize.x, Ae2TerminalLayout.SearchWidth), Mathf.Min(searchSize.y, Ae2TerminalLayout.SearchHeight));
             var ev = Event.current;
-            if (ev.type == EventType.MouseDown) _focusedToolbarButton = -1;
+            if (ev.type == EventType.MouseDown) _focusedButton = null;
             if (ev.type == EventType.MouseDown && ev.button == 1 && searchRect.Contains(ev.mousePosition))
             {
                 SearchApi.Query = "";
@@ -169,32 +172,36 @@ namespace UnknownInventoryTerminal
                 GUI.Label(searchRect, TerminalText.Get("terminal.search"), _searchStyle);
             SetTooltip(searchRect, TerminalText.Get("terminal.searchHint"), below: true);
 
-            if (IconButton(0, Ae2Image.Close, TerminalText.Get("terminal.close"), "X")) _closeRequested = true;
-            if (IconButton(1, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
+            if (IconButton(Ae2TerminalLayout.CloseX, Ae2TerminalLayout.CloseY, Ae2Image.Close,
+                TerminalText.Get("terminal.close"), "X", tooltipBelow: true)) _closeRequested = true;
+            if (ToolbarButton(0, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
                 _sortByAmount ? TerminalText.Get("terminal.sortName") : TerminalText.Get("terminal.sortQuantity"), "#"))
             {
                 _sortByAmount = !_sortByAmount;
                 _descending = _sortByAmount;
             }
-            if (IconButton(2, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
+            if (ToolbarButton(1, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
                 _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
                 _descending = !_descending;
             // AE2 SettingToggleButton for TERMINAL_STYLE: left click goes to the next height, right click to the previous.
             var height = _layout.Style;
-            var backwards = ev.type == EventType.MouseDown && ev.button == 1 && ToolbarBounds(3).Contains(ev.mousePosition);
+            var styleIcon = StyleIcon(height);
+            var backwards = ev.type == EventType.MouseDown && ev.button == 1 &&
+                ButtonBounds(Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2)).Contains(ev.mousePosition);
             if (backwards)
             {
-                FocusToolbarButton(3);
+                FocusButton(Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2));
                 ev.Use();
             }
-            if (IconButton(3, StyleIcon(height), TerminalText.Get("terminal.style") + ": " +
+            if (ToolbarButton(2, styleIcon, TerminalText.Get("terminal.style") + ": " +
                 TerminalText.Get("terminal.style." + height), "H") || backwards)
             {
                 SettingsBridge.TerminalHeight = Ae2TerminalLayout.Next(height, backwards);
                 FitToScreen();
                 ConfigureNativePanel();
             }
-            if (_canReturn() && IconButton(4, Ae2Image.Back, TerminalText.Get("inventory.backTooltip"), "<")) _returnToGroups();
+            if (_canReturn() && ToolbarButton(Ae2TerminalLayout.ToolbarButtons, Ae2Image.Back,
+                TerminalText.Get("inventory.backTooltip"), "<")) _returnToGroups();
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
         }
 
@@ -206,31 +213,40 @@ namespace UnknownInventoryTerminal
             _ => Ae2Image.TerminalStyleSmall
         };
 
-        private Rect ToolbarBounds(int index) => Units(Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(index),
-            Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
+        private Rect ButtonBounds(int x, int y) => Units(x, y, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
 
-        private void FocusToolbarButton(int index)
+        private void FocusButton(int x, int y)
         {
-            _focusedToolbarButton = index;
+            _focusedButton = new Vector2Int(x, y);
             GUI.FocusControl(null);
         }
 
-        private bool IconButton(int index, Ae2Image icon, string tooltip, string fallback)
+        private bool ToolbarButton(int index, Ae2Image icon, string tooltip, string fallback) =>
+            IconButton(Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(index), icon, tooltip, fallback);
+
+        private bool IconButton(int x, int y, Ae2Image icon, string tooltip, string fallback, bool tooltipBelow = false)
         {
-            var hit = ToolbarBounds(index);
+            var hit = ButtonBounds(x, y);
             var ev = Event.current;
             var hovered = hit.Contains(ev.mousePosition);
-            if (hovered && ev.type == EventType.MouseDown && ev.button == 0) FocusToolbarButton(index);
+            if (hovered && ev.type == EventType.MouseDown && ev.button == 0) FocusButton(x, y);
 
-            var face = Ae2ToolbarAppearance.Face(hovered, _focusedToolbarButton == index);
-            var offset = Ae2ToolbarAppearance.OffsetY(face);
-            var x = Ae2TerminalLayout.ToolbarX;
-            var y = Ae2TerminalLayout.ToolbarY(index) + offset;
-            var faceSize = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
-            _skin.Draw(Units(x, y, faceSize.x, faceSize.y), face, Ae2TerminalSkin.Shell);
-            var iconBounds = Units(x + 1, y + 2, 16, 16);
-            if (!_skin.Draw(iconBounds, icon, Color.clear)) GUI.Label(iconBounds, fallback, _iconStyle);
-            SetTooltip(hit, tooltip, below: index == 0);
+            if (ev.type == EventType.Repaint)
+            {
+                var face = Ae2ToolbarAppearance.Face(hovered, _focusedButton == new Vector2Int(x, y));
+                var offset = Ae2ToolbarAppearance.OffsetY(face);
+                var faceSize = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
+                _skin.Draw(Units(x, y + offset, faceSize.x, faceSize.y), face, Ae2TerminalSkin.Shell);
+                if (_skin.SourceSize(icon) is { } size && _skin.VisibleBounds(icon) is { } visible)
+                {
+                    var (dx, dy) = Ae2ToolbarAppearance.CenterIcon(visible, faceSize.x, faceSize.y, _layout.Scale);
+                    var iconRect = Units(x, y + offset, size.x, size.y);
+                    iconRect.position += new Vector2(dx, dy);
+                    _skin.Draw(iconRect, icon, Color.clear);
+                }
+                else GUI.Label(Units(x, y + offset, faceSize.x, faceSize.y), fallback, _iconStyle);
+                SetTooltip(hit, tooltip, below: tooltipBelow);
+            }
             return GUI.Button(hit, GUIContent.none, GUIStyle.none);
         }
 
@@ -249,8 +265,8 @@ namespace UnknownInventoryTerminal
 
         private GUIContent? _tooltip;
         private Rect _tooltipBounds;
-        private Rect Units(float x, float y, float w, float h) => new Rect(x * _layout.Scale, y * _layout.Scale,
-            w * _layout.Scale, h * _layout.Scale);
+        private Rect Units(float x, float y, float w, float h) => new Rect(x * _layout.Scale,
+            (y + Ae2TerminalLayout.ChromeTopPadding) * _layout.Scale, w * _layout.Scale, h * _layout.Scale);
 
         private void EnsureStyles()
         {

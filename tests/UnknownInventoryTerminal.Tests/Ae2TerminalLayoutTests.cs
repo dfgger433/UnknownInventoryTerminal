@@ -105,10 +105,22 @@ public sealed class Ae2TerminalLayoutTests
         Ae2TerminalLayout.ButtonBarX.Should().BeGreaterThanOrEqualTo(0, "the bar stays inside the window");
         Ae2TerminalLayout.ButtonBarY.Should().Be(0);
         Ae2TerminalLayout.ToolbarY(1).Should().Be(25, "AE2 places 16 px buttons 6 px apart, starting at y = 3");
-        // Close, sort, direction, terminal style and the optional return button fit on the smallest board.
-        (Ae2TerminalLayout.ButtonBarY + Ae2TerminalLayout.ButtonBarHeight(5)).Should().BeLessThanOrEqualTo(Ae2TerminalLayout.BaseBoardHeight);
-        (Ae2TerminalLayout.ToolbarY(4) + Ae2TerminalLayout.ButtonHeight).Should().BeLessThanOrEqualTo(
-            Ae2TerminalLayout.ButtonBarY + Ae2TerminalLayout.ButtonBarHeight(5) - Ae2TerminalLayout.ButtonBarBottomBorder);
+        var barWithReturn = Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons + 1);
+        Ae2TerminalLayout.ToolbarButtons.Should().Be(3, "the close button is no longer in the sidebar");
+        (Ae2TerminalLayout.ButtonBarY + barWithReturn).Should().BeLessThanOrEqualTo(Ae2TerminalLayout.BaseBoardHeight);
+        (Ae2TerminalLayout.ToolbarY(Ae2TerminalLayout.ToolbarButtons) + Ae2TerminalLayout.ButtonHeight).Should().BeLessThanOrEqualTo(
+            Ae2TerminalLayout.ButtonBarY + barWithReturn - Ae2TerminalLayout.ButtonBarBottomBorder);
+    }
+
+    [TestMethod]
+    public void CloseRestoresTheOriginalRightInsetWithoutOverlappingSearchOrScroll()
+    {
+        (Ae2TerminalLayout.Rail + Ae2TerminalLayout.BoardWidth - Ae2TerminalLayout.CloseX - Ae2TerminalLayout.ButtonWidth)
+            .Should().Be(4);
+        (Ae2TerminalLayout.CloseY + Ae2TerminalLayout.ChromeTopPadding).Should().Be(0);
+        (Ae2TerminalLayout.CloseY + Ae2TerminalLayout.ButtonHeight)
+            .Should().BeLessThanOrEqualTo(Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder);
+        (Ae2TerminalLayout.SearchX + Ae2TerminalLayout.SearchWidth).Should().BeLessThan(Ae2TerminalLayout.CloseX);
     }
 
     [TestMethod]

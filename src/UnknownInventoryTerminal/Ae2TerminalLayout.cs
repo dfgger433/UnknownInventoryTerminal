@@ -27,6 +27,14 @@ namespace UnknownInventoryTerminal
         // and faces are 2 px apart. Coordinates below are relative to the window, whose board starts at x = Rail.
         internal const int ButtonWidth = 18, ButtonHeight = 20, ButtonSpacing = 2;
         internal const int ToolbarX = Rail + 2 - ButtonWidth, ToolbarTop = 3, ToolbarPitch = ButtonHeight + ButtonSpacing;
+        internal const int CloseRightInset = 4;
+        internal const int CloseX = Rail + BoardWidth - CloseRightInset - ButtonWidth;
+        // The old right inset is preserved. With the shorter painted header, leave the thumb's top edge unobstructed.
+        internal const int CloseY = Header + GrooveBorder - ButtonHeight;
+        internal const int ChromeTopPadding = -CloseY;
+        internal const int SearchX = Rail + 55, SearchY = 3, SearchHeight = 13;
+        internal const int SearchWidth = CloseX - SearchX - 2;
+        internal const int ToolbarButtons = 3;
         // vertical_buttons_bg.png: AE2 draws it 2 px left of and 1 px above the buttons' bounds, 1 px wider and 4 px taller.
         internal const int ButtonBarX = ToolbarX - 3, ButtonBarY = ToolbarTop - 3, ButtonBarWidth = 21;
         internal const int ButtonBarTopBorder = 2, ButtonBarBottomBorder = 4;

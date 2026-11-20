@@ -96,7 +96,8 @@ internal static class Program
             throw new InvalidOperationException("Composite still paints a solid fill behind the board.");
         // Small style: header, first, middle and last row, bottom, stacked without gaps at 2x their source size.
         var images = canvas.Children.OfType<Image>().ToList();
-        var y = 0.0;
+        const int padding = UnknownInventoryTerminal.Ae2TerminalLayout.ChromeTopPadding;
+        var y = (double)(padding * 2);
         foreach (var part in new[] { UnknownInventoryTerminal.Ae2Image.Header, UnknownInventoryTerminal.Ae2Image.FirstRow,
             UnknownInventoryTerminal.Ae2Image.Row, UnknownInventoryTerminal.Ae2Image.LastRow, UnknownInventoryTerminal.Ae2Image.Bottom })
         {
@@ -109,25 +110,42 @@ internal static class Program
         }
         var bar = canvas.Children.OfType<Image>().Where(image => Equals(image.Tag, "ButtonBar")).ToArray();
         var barHeight = bar.Sum(image => image.Height);
-        if (bar.Length != 3 || barHeight != (4 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
-            throw new InvalidOperationException($"Button bar must be three 21 px wide slices, {4 * 22 + 6} px tall in total.");
+        if (bar.Length != 3 || barHeight != (3 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
+            throw new InvalidOperationException("Button bar must span three side buttons, not include the close button.");
 
         var slot = canvas.Children.OfType<Border>().Single(border => Equals(border.Tag, "SlotHover"));
-        if (Canvas.GetLeft(slot) != 98 || Canvas.GetTop(slot) != 34 || slot.Width != 36 || slot.Height != 36 ||
+        if (Canvas.GetLeft(slot) != 98 || Canvas.GetTop(slot) != (17 + padding) * 2 || slot.Width != 36 || slot.Height != 36 ||
             slot.BorderThickness != new Thickness(2) || slot.IsHitTestVisible)
             throw new InvalidOperationException("Slot hover must overlay the second grid cell at 2× and be visual only.");
 
-        var thumb = RequireImage(UnknownInventoryTerminal.Ae2Image.Thumb, 145, 18);
+        var thumb = RequireImage(UnknownInventoryTerminal.Ae2Image.Thumb, 145, 18 + padding);
         if (thumb.Width != 24 || thumb.Height != 30)
             throw new InvalidOperationException("The native scroller must draw at 2× its 12×15 sprite size.");
+        var close = RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 143, 0);
+        var search = RequireImage(UnknownInventoryTerminal.Ae2Image.Search, 79, 3 + padding);
+        if (Canvas.GetTop(close) + close.Height > Canvas.GetTop(thumb) || Canvas.GetLeft(search) + search.Width >= Canvas.GetLeft(close))
+            throw new InvalidOperationException("The top-right close button must not obscure the thumb or search field.");
         var normal = RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 179, 74);
         var hover = RequireImage(UnknownInventoryTerminal.Ae2Image.ButtonHover, 179, 99);
         var focus = RequireImage(UnknownInventoryTerminal.Ae2Image.ButtonFocus, 245, 98);
         if (Canvas.GetTop(hover) + hover.Height != Canvas.GetTop(focus) + focus.Height || normal.Height != focus.Height)
             throw new InvalidOperationException("The lowered hover face must share the focused face's bottom edge.");
-        var icon = RequireImage(UnknownInventoryTerminal.Ae2Image.SortName, 180, 101);
-        if (canvas.Children.IndexOf(hover) >= canvas.Children.IndexOf(icon))
-            throw new InvalidOperationException("The lowered icon must draw after its hover face.");
+        CheckCenteredIcon(close, UnknownInventoryTerminal.Ae2Image.Close, new Int32Rect(4, 4, 8, 9));
+        CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 3 + padding), UnknownInventoryTerminal.Ae2Image.SortName, new Int32Rect(3, 4, 10, 9));
+        CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 25 + padding), UnknownInventoryTerminal.Ae2Image.SortAscending, new Int32Rect(4, 3, 8, 11));
+        CheckCenteredIcon(RequireImage(UnknownInventoryTerminal.Ae2Image.Button, 8, 47 + padding), UnknownInventoryTerminal.Ae2Image.TerminalStyleSmall, new Int32Rect(4, 4, 9, 9));
+        CheckCenteredIcon(hover, UnknownInventoryTerminal.Ae2Image.SortName, new Int32Rect(3, 4, 10, 9));
+
+        void CheckCenteredIcon(Image face, UnknownInventoryTerminal.Ae2Image id, Int32Rect bounds)
+        {
+            var expected = Expected(style, id);
+            var x = Canvas.GetLeft(face) + face.Width / 2 - (2 * bounds.X + bounds.Width);
+            var y = Canvas.GetTop(face) + face.Height / 2 - (2 * bounds.Y + bounds.Height);
+            var icon = images.FirstOrDefault(image => image.Source is CroppedBitmap crop && crop.SourceRect == expected &&
+                Canvas.GetLeft(image) == x && Canvas.GetTop(image) == y && image.Width == expected.Width * 2 && image.Height == expected.Height * 2);
+            if (icon is null || canvas.Children.IndexOf(face) >= canvas.Children.IndexOf(icon))
+                throw new InvalidOperationException($"{id} must draw after the face with its visible pixels centered.");
+        }
 
         Image RequireImage(UnknownInventoryTerminal.Ae2Image id, int x, int top)
         {

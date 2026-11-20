@@ -333,7 +333,7 @@ namespace UnknownInventoryTerminal
         private void LayoutButtonBar()
         {
             var scale = _layout.Scale;
-            var buttons = CanReturnToGroups ? 5 : 4;
+            var buttons = Ae2TerminalLayout.ToolbarButtons + (CanReturnToGroups ? 1 : 0);
             if (_buttonBarButtonCount == buttons && _buttonBarScale == scale) return;
             _buttonBarButtonCount = buttons;
             _buttonBarScale = scale;

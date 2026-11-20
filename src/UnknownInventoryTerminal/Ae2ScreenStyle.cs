@@ -21,6 +21,30 @@ namespace UnknownInventoryTerminal
             focused ? Ae2Image.ButtonFocus : Ae2Image.Button;
 
         internal static int OffsetY(Ae2Image face) => face == Ae2Image.ButtonHover ? 1 : 0;
+
+        // Icon crops may have unequal transparent margins. Measure their visible pixels, not the crop rectangle.
+        internal static (int X, int Y, int Width, int Height)? VisibleBounds(int width, int height, Func<int, int, byte> alpha)
+        {
+            var left = width;
+            var top = height;
+            var right = -1;
+            var bottom = -1;
+            for (var y = 0; y < height; y++)
+                for (var x = 0; x < width; x++)
+                {
+                    if (alpha(x, y) == 0) continue;
+                    left = Math.Min(left, x);
+                    top = Math.Min(top, y);
+                    right = Math.Max(right, x);
+                    bottom = Math.Max(bottom, y);
+                }
+            return right < 0 ? null : (left, top, right - left + 1, bottom - top + 1);
+        }
+
+        // Return screen-pixel offsets to keep the art crisp, including at odd scales or for odd-width artwork.
+        internal static (int X, int Y) CenterIcon((int X, int Y, int Width, int Height) visible, int faceWidth, int faceHeight, int scale) =>
+            ((faceWidth - visible.Width) * scale / 2 - visible.X * scale,
+                (faceHeight - visible.Height) * scale / 2 - visible.Y * scale);
     }
 
     internal static class Ae2SlotAppearance

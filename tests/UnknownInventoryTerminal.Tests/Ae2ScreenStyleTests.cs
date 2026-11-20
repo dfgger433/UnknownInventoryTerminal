@@ -71,6 +71,18 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    public void IconCenterUsesVisiblePixelsAndKeepsIntegerScreenCoordinates()
+    {
+        var visible = Ae2ToolbarAppearance.VisibleBounds(16, 16,
+            (x, y) => x is >= 4 and <= 12 && y is >= 3 and <= 13 ? (byte)255 : (byte)0);
+
+        visible.Should().Be((4, 3, 9, 11));
+        Ae2ToolbarAppearance.CenterIcon(visible!.Value, 18, 20, 4).Should().Be((2, 6));
+        Ae2ToolbarAppearance.CenterIcon(visible.Value, 18, 19, 3).Should().Be((1, 3));
+        Ae2ToolbarAppearance.VisibleBounds(16, 16, (_, _) => 0).Should().BeNull();
+    }
+
+    [TestMethod]
     public void BoardSectionsMatchTheGridsDrawnInTerminalPng()
     {
         var path = TextureFilePath("guis/terminal.png");

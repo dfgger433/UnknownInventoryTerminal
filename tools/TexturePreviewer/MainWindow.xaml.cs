@@ -258,13 +258,16 @@ public partial class MainWindow : Window
             AddImage(part, rail, boardY, scale);
             boardY += Ae2ScreenStyle.BoardPartHeight(part);
         }
-        AddButtonBar(4, scale);
+        AddButtonBar(Ae2TerminalLayout.ToolbarButtons, scale);
         AddSlotHighlight(rail + Ae2TerminalLayout.Inset + Ae2TerminalLayout.Pitch, Ae2TerminalLayout.Header, scale);
         var muted = Color.FromRgb(82, 85, 100);
         AddLabel("Terminal", rail + 7, 2, 46, 15, scale, 8, true);
-        var search = SourceSize(Ae2Image.Search, 79, 12);
-        AddRegion(Ae2Image.Search, rail + 55, 3, Math.Min(search.Width, 79), Math.Min(search.Height, 13), scale);
-        AddLabel("Search items...", rail + 58, 3, 74, 12, scale, 6, false, Colors.White);
+        var search = SourceSize(Ae2Image.Search, Ae2TerminalLayout.SearchWidth, 12);
+        var searchWidth = Math.Min(search.Width, Ae2TerminalLayout.SearchWidth);
+        AddRegion(Ae2Image.Search, Ae2TerminalLayout.SearchX, Ae2TerminalLayout.SearchY, searchWidth,
+            Math.Min(search.Height, Ae2TerminalLayout.SearchHeight), scale);
+        AddLabel("Search items...", Ae2TerminalLayout.SearchX + 3, Ae2TerminalLayout.SearchY,
+            Math.Max(0, searchWidth - 5), 12, scale, 6, false, Colors.White);
 
         var thumb = SourceSize(Ae2Image.Thumb, Ae2TerminalLayout.DefaultThumbWidth, Ae2TerminalLayout.DefaultThumbHeight);
         AddImage(Ae2Image.Thumb, rail + Ae2TerminalLayout.ThumbLeft(thumb.Width), Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder, scale);
@@ -272,11 +275,13 @@ public partial class MainWindow : Window
         AddLabel("Equipment 1–3/4 ↕", rail + Ae2TerminalLayout.Inset + 64, layout.StatusTop, Ae2TerminalLayout.GridWidth - 64,
             Ae2TerminalLayout.StatusHeight, scale, 6, false, muted, TextAlignment.Right);
 
+        AddToolbarButton(Ae2Image.Close, Ae2TerminalLayout.CloseX, Ae2TerminalLayout.CloseY, scale);
         // Toolbar buttons sit on vertical_buttons_bg.png left of the board, in game order.
-        AddToolbarButton(Ae2Image.Close, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(0), scale);
-        AddToolbarButton(Ae2Image.SortName, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(1), scale);
-        AddToolbarButton(Ae2Image.SortAscending, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2), scale);
-        AddToolbarButton(Ae2Image.TerminalStyleSmall, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(3), scale);
+        AddToolbarButton(Ae2Image.SortName, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(0), scale);
+        AddToolbarButton(Ae2Image.SortAscending, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(1), scale);
+        AddToolbarButton(Ae2Image.TerminalStyleSmall, Ae2TerminalLayout.ToolbarX, Ae2TerminalLayout.ToolbarY(2), scale);
+        foreach (UIElement element in CompositeCanvas.Children)
+            Canvas.SetTop(element, Canvas.GetTop(element) + Ae2TerminalLayout.ChromeTopPadding * scale);
 
         // State samples are shown at their own pixel size beside the terminal.
         var stateCaption = new TextBlock { Text = "交互状态", Foreground = (Brush)FindResource("AccentBrush"), FontSize = 11, FontWeight = FontWeights.SemiBold };
@@ -392,7 +397,30 @@ public partial class MainWindow : Window
     {
         y += Ae2ToolbarAppearance.OffsetY(face);
         AddImage(face, x, y, scale);
-        AddImage(icon, x + 1, y + 2, scale);
+        if (_style is null || !_style.TryGet(icon, out var region)) return;
+        try
+        {
+            var bitmap = Crop(region);
+            var rgba = new FormatConvertedBitmap(bitmap, PixelFormats.Bgra32, null, 0);
+            var stride = checked(region.Width * 4);
+            var pixels = new byte[checked(stride * region.Height)];
+            rgba.CopyPixels(pixels, stride, 0);
+            var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
+                (ix, iy) => pixels[iy * stride + ix * 4 + 3]);
+            if (visible is not { } bounds) return;
+            var size = SourceSize(face, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
+            var (dx, dy) = Ae2ToolbarAppearance.CenterIcon(bounds, size.Width, size.Height, scale);
+            var image = new Image { Source = bitmap, Width = region.Width * scale, Height = region.Height * scale,
+                Stretch = Stretch.Fill, SnapsToDevicePixels = true };
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+            Canvas.SetLeft(image, x * scale + dx);
+            Canvas.SetTop(image, y * scale + dy);
+            CompositeCanvas.Children.Add(image);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or NotSupportedException or FileFormatException or OverflowException)
+        {
+            StatusBox.Text = $"{icon}: {ex.Message}";
+        }
     }
 
 

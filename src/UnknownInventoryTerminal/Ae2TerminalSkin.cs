@@ -21,6 +21,7 @@ namespace UnknownInventoryTerminal
         private readonly ManualLogSource _log;
         private readonly Dictionary<string, Texture2D?> _textures = new Dictionary<string, Texture2D?>();
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
+        private readonly Dictionary<Ae2Image, (int X, int Y, int Width, int Height)?> _visibleBounds = new();
         private readonly Dictionary<Ae2Image, Sprite> _sprites = new Dictionary<Ae2Image, Sprite>();
         private readonly Dictionary<(Ae2Image, int, int), Sprite> _slices = new Dictionary<(Ae2Image, int, int), Sprite>();
         private Ae2ScreenStyle? _style;
@@ -53,7 +54,8 @@ namespace UnknownInventoryTerminal
                 var bytes = File.ReadAllBytes(Path.Combine(Root, "textures", name));
                 texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = "UIT.AE2." + name };
                 // LoadImage can reset texture settings during decoding.
-                if (!ImageConversion.LoadImage(texture, bytes, true)) throw new InvalidDataException("Invalid image");
+                // Keep the PNG readable so toolbar icons can be aligned to their actual alpha bounds.
+                if (!ImageConversion.LoadImage(texture, bytes, false)) throw new InvalidDataException("Invalid image");
                 texture.filterMode = FilterMode.Point;
                 texture.wrapMode = TextureWrapMode.Clamp;
                 _textures.Add(name, texture);
@@ -93,6 +95,19 @@ namespace UnknownInventoryTerminal
 
         // Source pixel size, so callers can draw an image at its own size instead of stretching it.
         internal Vector2Int? SourceSize(Ae2Image id) => Resolve(id) is { } region ? new Vector2Int(region.Width, region.Height) : null;
+
+        internal (int X, int Y, int Width, int Height)? VisibleBounds(Ae2Image id)
+        {
+            if (_visibleBounds.TryGetValue(id, out var cached)) return cached;
+            if (Resolve(id) is not { } region) return null;
+            var texture = _textures[region.Texture]!;
+            // Unity's pixel origin is bottom-left; regions and the shared alpha scan are top-left.
+            var top = texture.height - 1 - region.Y;
+            var bounds = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
+                (x, y) => texture.GetPixel(region.X + x, top - y).a > 0 ? (byte)1 : (byte)0);
+            _visibleBounds.Add(id, bounds);
+            return bounds;
+        }
 
         internal bool Draw(Rect bounds, Ae2Image id, Color fallback)
         {
@@ -208,6 +223,7 @@ namespace UnknownInventoryTerminal
             _slices.Clear();
             _textures.Clear();
             _regions.Clear();
+            _visibleBounds.Clear();
         }
     }
 }
