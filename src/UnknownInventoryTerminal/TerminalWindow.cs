@@ -82,6 +82,15 @@ namespace UnknownInventoryTerminal
             var hit = TerminalButtonInput.HitTest(_layout, pointer.x, Screen.height - pointer.y, _canReturn());
             for (var button = 0; button <= 1; button++)
             {
+                if (Input.GetMouseButtonDown(button) && hit == TerminalButton.Settings && _settingsOpen)
+                {
+                    // The toolbar remains available above the popup. A second press on it
+                    // must close the popup instead of being swallowed by the popup controls.
+                    _settingsOpen = false;
+                    _buttons.Reset();
+                    Plugin.ReleaseSearchFocus();
+                    continue;
+                }
                 if (Input.GetMouseButtonDown(button) && _buttons.Press(hit, button)) Plugin.ReleaseSearchFocus();
                 if (!Input.GetMouseButtonUp(button)) continue;
                 switch (_buttons.Release(hit, button))
@@ -239,12 +248,19 @@ namespace UnknownInventoryTerminal
             GUI.Label(title, TerminalText.Get("terminal.settings"), _titleStyle);
             var language = new Rect(panel.x + 5 * _layout.Scale, panel.y + 23 * _layout.Scale,
                 panel.width - 10 * _layout.Scale, 20 * _layout.Scale);
-            if (GUI.Button(language, TerminalText.Format("terminal.settings.language", SettingsBridge.LanguageLabel()), _settingsStyle))
-                SettingsBridge.CycleLanguage();
+            DrawSettingsAction(language, TerminalText.Format("terminal.settings.language", SettingsBridge.LanguageLabel()), SettingsBridge.CycleLanguage);
             var placement = new Rect(panel.x + 5 * _layout.Scale, panel.y + 47 * _layout.Scale,
                 panel.width - 10 * _layout.Scale, 34 * _layout.Scale);
-            if (GUI.Button(placement, TerminalText.Format("terminal.settings.placement", ContainerPlacement.Label()), _settingsStyle))
-                ContainerPlacement.Cycle();
+            DrawSettingsAction(placement, TerminalText.Format("terminal.settings.placement", ContainerPlacement.Label()), ContainerPlacement.Cycle);
+         }
+
+        private void DrawSettingsAction(Rect bounds, string text, Action activate)
+        {
+            var hovered = bounds.Contains(Event.current.mousePosition);
+            var pressed = hovered && Input.GetMouseButton(0);
+            var face = pressed ? Ae2Image.ButtonFocus : hovered ? Ae2Image.ButtonHover : Ae2Image.Button;
+            if (Event.current.type == EventType.Repaint) _skin.Draw(bounds, face, Color.clear);
+            if (GUI.Button(bounds, text, _settingsStyle)) activate();
         }
 
         private static Ae2Image StyleIcon(TerminalHeight height) => height switch
