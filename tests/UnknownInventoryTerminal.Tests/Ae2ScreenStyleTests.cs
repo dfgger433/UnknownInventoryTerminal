@@ -24,10 +24,10 @@ public sealed class Ae2ScreenStyleTests
         {
             style.TryGet(image, out var region).Should().BeTrue($"{image} must have a region");
             region.Border.Should().Be(0, $"{image} is drawn as cut from its PNG, without nine-slice stretching");
-            if (image == Ae2Image.Background)
+            if (Ae2ScreenStyle.IsBoardPart(image))
             {
-                region.Width.Should().Be(Ae2TerminalLayout.BoardWidth, "the board is drawn as one unscaled image");
-                region.Height.Should().Be(Ae2TerminalLayout.BoardHeight, "the board is drawn as one unscaled image");
+                region.Width.Should().Be(Ae2TerminalLayout.BoardWidth, "board parts are stacked unscaled");
+                region.Height.Should().Be(Ae2ScreenStyle.BoardPartHeight(image), "board parts are stacked unscaled");
             }
 
             var texturePath = TextureFilePath(region.Texture);
@@ -43,14 +43,46 @@ public sealed class Ae2ScreenStyleTests
     {
         var path = TextureFilePath("guis/terminal.png");
         using var bitmap = PngPixels.Read(path);
+        var style = Ae2ScreenStyle.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
+        style.TryGet(Ae2Image.Bottom, out var bottom).Should().BeTrue();
+        // The shipped parts are cut from the 3-row board, which is the Small layout.
+        var layout = new Ae2TerminalLayout(1280, 720);
+        bottom.Y.Should().Be(layout.StatusTop, "the bottom part starts right below the last storage row");
 
         // Top-left frame pixels of every slot grid and the scrollbar groove sit where the layout places controls.
         bitmap.IsGridCorner(Ae2TerminalLayout.Inset, Ae2TerminalLayout.Header).Should().BeTrue("storage grid starts at the header edge");
-        bitmap.IsGridCorner(Ae2TerminalLayout.Inset, Ae2TerminalLayout.EquipmentTop).Should().BeTrue("equipment grid starts below the status gap");
-        bitmap.IsGridCorner(Ae2TerminalLayout.Inset, Ae2TerminalLayout.MainTop).Should().BeTrue("main grid starts below the equipment grid");
+        bitmap.IsGridCorner(Ae2TerminalLayout.Inset, layout.EquipmentTop).Should().BeTrue("equipment grid starts below the status gap");
+        bitmap.IsGridCorner(Ae2TerminalLayout.Inset, layout.MainTop).Should().BeTrue("main grid starts below the equipment grid");
         bitmap.IsGridCorner(Ae2TerminalLayout.GrooveLeft, Ae2TerminalLayout.Header).Should().BeTrue("the scrollbar groove starts at its declared column");
-        bitmap.Alpha(Ae2TerminalLayout.BoardWidth - 1, Ae2TerminalLayout.BoardHeight - 1).Should().Be(0,
+        bitmap.Alpha(Ae2TerminalLayout.BoardWidth - 1, layout.BoardHeight - 1).Should().Be(0,
             "the area below the scrollbar is transparent in the PNG and must stay without a background");
+    }
+
+    [TestMethod]
+    public void MiddleRowRepeatsAndTheScrollbarGrooveRunsThroughEveryRow()
+    {
+        using var bitmap = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        var style = Ae2ScreenStyle.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
+        style.TryGet(Ae2Image.Row, out var row).Should().BeTrue();
+        // Repeated middle rows extend the groove, so its inside must reach the first and last pixel row of the part.
+        foreach (var y in new[] { row.Y, row.Y + row.Height - 1 })
+        {
+            bitmap.Pixel(Ae2TerminalLayout.GrooveLeft + 1, y).Should().NotBe(bitmap.Pixel(Ae2TerminalLayout.GrooveLeft - 1, y),
+                $"the middle row carries the scrollbar groove at y={y}");
+            bitmap.Pixel(Ae2TerminalLayout.GrooveLeft + 1, y).Should().Be(bitmap.Pixel(Ae2TerminalLayout.GrooveLeft + 1, row.Y + row.Height / 2));
+        }
+    }
+
+    [TestMethod]
+    public void VerticalButtonBackgroundMatchesAe2NineSliceBorders()
+    {
+        using var bitmap = PngPixels.Read(TextureFilePath("gui/sprites/vertical_buttons_bg.png"));
+        bitmap.Width.Should().Be(Ae2TerminalLayout.ButtonBarWidth);
+        bitmap.Height.Should().BeGreaterThan(Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder);
+        // Between AE2's 2-row top and 4-row bottom border, every row is the same, so stretching it keeps the art.
+        for (var y = Ae2TerminalLayout.ButtonBarTopBorder + 1; y < bitmap.Height - Ae2TerminalLayout.ButtonBarBottomBorder; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+                bitmap.Pixel(x, y).Should().Be(bitmap.Pixel(x, Ae2TerminalLayout.ButtonBarTopBorder), $"middle row {y} must repeat");
     }
 
     [TestMethod]
@@ -266,6 +298,9 @@ public sealed class Ae2ScreenStyleTests
         }
 
         internal byte Alpha(int x, int y) => _rgba[y][x * 4 + 3];
+        internal int Width => _width;
+        internal int Height => _rgba.Length;
+        internal uint Pixel(int x, int y) => BitConverter.ToUInt32(_rgba[y], x * 4);
 
         private bool IsFrame(int x, int y) => x >= 0 && x < _width && y >= 0 && y < _rgba.Length &&
             Alpha(x, y) == 255 && _rgba[y][x * 4] >= 0xF0 && _rgba[y][x * 4 + 1] >= 0xF0 && _rgba[y][x * 4 + 2] >= 0xF0;

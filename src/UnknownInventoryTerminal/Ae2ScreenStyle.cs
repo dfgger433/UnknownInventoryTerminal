@@ -7,9 +7,11 @@ namespace UnknownInventoryTerminal
 {
     internal enum Ae2Image
     {
-        Background,
+        // terminalStyle parts, as in AE2's base_terminal.json.
+        Header, FirstRow, Row, LastRow, Bottom,
         Search, SearchFocused, Tooltip, Button, ButtonHover,
-        Close, SortName, SortAmount, SortAscending, SortDescending, Back, Refresh, Thumb, ThumbDisabled, NativeButtonFace
+        Close, SortName, SortAmount, SortAscending, SortDescending, Back, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
+        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
     }
 
     // AE2 uses top-left source coordinates: [x, y, width, height].
@@ -50,7 +52,7 @@ namespace UnknownInventoryTerminal
             var style = new Ae2ScreenStyle();
             foreach (Ae2Image image in Enum.GetValues(typeof(Ae2Image)))
             {
-                var section = image == Ae2Image.Background ? "terminalStyle" : "images";
+                var section = IsBoardPart(image) ? "terminalStyle" : "images";
                 var name = image.ToString();
                 name = char.ToLowerInvariant(name[0]) + name.Substring(1);
                 var entry = (root[section] as JObject)?[name] as JObject;
@@ -59,6 +61,16 @@ namespace UnknownInventoryTerminal
             }
             return style;
         }
+
+        internal static bool IsBoardPart(Ae2Image image) => image <= Ae2Image.Bottom;
+
+        // Source height each board part must have so the layout's section positions match the PNG.
+        internal static int BoardPartHeight(Ae2Image image) => image switch
+        {
+            Ae2Image.Header => Ae2TerminalLayout.Header,
+            Ae2Image.Bottom => Ae2TerminalLayout.Bottom,
+            _ => Ae2TerminalLayout.Pitch
+        };
 
         private static bool TryParseRegion(JObject entry, out Ae2ImageRegion region)
         {

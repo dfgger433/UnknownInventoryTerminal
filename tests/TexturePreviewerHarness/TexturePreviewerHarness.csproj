@@ -10,5 +10,6 @@
     <ProjectReference Include="../../tools/TexturePreviewer/TexturePreviewer.csproj" />
     <!-- The parser is internal to the previewer, so the harness compiles its own copy. -->
     <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2ScreenStyle.cs" Link="Backend\Ae2ScreenStyle.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Backend\Ae2TerminalLayout.cs" />
   </ItemGroup>
 </Project>

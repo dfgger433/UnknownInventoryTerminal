@@ -20,6 +20,7 @@ namespace UnknownInventoryTerminal
         private readonly Dictionary<string, Texture2D?> _textures = new Dictionary<string, Texture2D?>();
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
         private readonly Dictionary<Ae2Image, Sprite> _sprites = new Dictionary<Ae2Image, Sprite>();
+        private readonly Dictionary<(Ae2Image, int, int), Sprite> _slices = new Dictionary<(Ae2Image, int, int), Sprite>();
         private Ae2ScreenStyle? _style;
         private bool _loadedStyle;
 
@@ -74,10 +75,14 @@ namespace UnknownInventoryTerminal
             {
                 if (!region.Fits(texture.width, texture.height))
                     _log.LogWarning("AE2 terminal region outside its texture (" + id + "): " + region.Texture);
-                else if (id == Ae2Image.Background &&
-                    (region.Width != Ae2TerminalLayout.BoardWidth || region.Height != Ae2TerminalLayout.BoardHeight || region.Border != 0))
-                    _log.LogWarning("AE2 terminal background must be one " + Ae2TerminalLayout.BoardWidth + "x" +
-                        Ae2TerminalLayout.BoardHeight + " image without a slice border; it is drawn as-is.");
+                else if (Ae2ScreenStyle.IsBoardPart(id) && (region.Width != Ae2TerminalLayout.BoardWidth ||
+                    region.Height != Ae2ScreenStyle.BoardPartHeight(id) || region.Border != 0))
+                    _log.LogWarning("AE2 terminal " + id + " must be " + Ae2TerminalLayout.BoardWidth + "x" +
+                        Ae2ScreenStyle.BoardPartHeight(id) + " without a slice border; it is drawn as-is.");
+                else if (id == Ae2Image.VerticalButtonsBg && (region.Width != Ae2TerminalLayout.ButtonBarWidth ||
+                    region.Height <= Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder))
+                    _log.LogWarning("AE2 vertical button background must be " + Ae2TerminalLayout.ButtonBarWidth +
+                        " px wide and taller than its borders.");
                 else resolved = region;
             }
             _regions.Add(id, resolved);
@@ -119,6 +124,19 @@ namespace UnknownInventoryTerminal
             return sprite;
         }
 
+        // Rows [top, top + height) of a region, for images that AE2 draws as a vertical nine-slice.
+        internal Sprite? GetRows(Ae2Image id, int top, int height)
+        {
+            if (Resolve(id) is not { } region || top < 0 || height <= 0 || top + height > region.Height) return null;
+            var key = (id, top, height);
+            if (_slices.TryGetValue(key, out var sprite)) return sprite;
+            var texture = _textures[region.Texture]!;
+            sprite = Sprite.Create(texture, new Rect(region.X, texture.height - region.Y - top - height, region.Width, height),
+                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
+            _slices.Add(key, sprite);
+            return sprite;
+        }
+
         // Images are used exactly as cut from their PNG: no slicing or tiling.
         internal void Apply(Image image, Ae2Image id, Color fallback)
         {
@@ -139,8 +157,10 @@ namespace UnknownInventoryTerminal
         public void Dispose()
         {
             foreach (var sprite in _sprites.Values) if (sprite) UnityEngine.Object.Destroy(sprite);
+            foreach (var sprite in _slices.Values) if (sprite) UnityEngine.Object.Destroy(sprite);
             foreach (var texture in _textures.Values) if (texture) UnityEngine.Object.Destroy(texture);
             _sprites.Clear();
+            _slices.Clear();
             _textures.Clear();
             _regions.Clear();
         }

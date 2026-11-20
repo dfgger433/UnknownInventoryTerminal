@@ -13,6 +13,13 @@ namespace UnknownInventoryTerminal
         internal const Setting.SettingCategory MenuCategory = Setting.SettingCategory.Game;
 
         internal static ConfigEntry<KeyCode> ToggleKey { get; private set; } = null!;
+        // Changed by the terminal-style toolbar button, like AE2's client-side TERMINAL_STYLE setting.
+        private static ConfigEntry<TerminalHeight>? _terminalHeight;
+        internal static TerminalHeight TerminalHeight
+        {
+            get => _terminalHeight is { } entry && System.Enum.IsDefined(typeof(TerminalHeight), entry.Value) ? entry.Value : TerminalHeight.Small;
+            set { if (_terminalHeight != null) _terminalHeight.Value = value; }
+        }
 
         internal static string Label(string name) => TerminalText.Get("settings." + name);
         internal static string Description(string name) => Label(name + ".description");
@@ -38,6 +45,10 @@ namespace UnknownInventoryTerminal
             ModOptionsRegistry.Register(ModOptionDefinition.Keybind(
                 ConfigSection + ".ToggleKey", Label("ToggleKey"), Description("ToggleKey"), MenuCategory, ToggleKey.Value,
                 value => ToggleKey.Value = value));
+
+            _terminalHeight = config.Bind(ConfigSection, "TerminalStyle", TerminalHeight.Small,
+                "Storage height: Small, Medium, Tall or Full share of the rows that fit on the screen (never below 3 rows). " +
+                "The terminal-style button in the left toolbar cycles it.");
         }
 
         internal static bool IsTogglePressed()

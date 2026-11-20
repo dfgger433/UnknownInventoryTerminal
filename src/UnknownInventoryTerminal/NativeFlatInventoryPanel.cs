@@ -72,7 +72,10 @@ namespace UnknownInventoryTerminal
         private Rect _bounds, _windowBounds;
         private Ae2TerminalLayout _layout = new Ae2TerminalLayout(1280, 720);
         private Rect BoardBounds => new Rect(_windowBounds.x + _layout.BoardLeft, _windowBounds.y,
-            Ae2TerminalLayout.BoardWidth * _layout.Scale, Ae2TerminalLayout.BoardHeight * _layout.Scale);
+            Ae2TerminalLayout.BoardWidth * _layout.Scale, _layout.Height);
+        private readonly List<Image> _boardParts = new List<Image>();
+        private Image? _barTop, _barMiddle, _barBottom;
+        private RectTransform? _buttonBar;
         private bool _visible, _dirty = true, _prefabWarning, _byAmount, _descending, _thumbEnabled;
         private int _scrollRow;
         private string _query = "";
@@ -148,7 +151,7 @@ namespace UnknownInventoryTerminal
         // Bounds use IMGUI's top-left pixel coordinates; the overlay canvas uses bottom-left coordinates.
         internal void SetLayout(Rect windowBounds, Rect bounds, Ae2TerminalLayout layout, bool byAmount, bool descending)
         {
-            var geometryChanged = _layout.Scale != layout.Scale;
+            var geometryChanged = _layout.Scale != layout.Scale || _layout.Rows != layout.Rows;
             var orderChanged = _byAmount != byAmount || _descending != descending;
             _layout = layout;
             _byAmount = byAmount;
@@ -163,6 +166,7 @@ namespace UnknownInventoryTerminal
                 Position(_panel!, _bounds);
                 Position(_windowSurface!, _windowBounds);
                 Position(_board!, BoardBounds);
+                Position(_buttonBar!, new Rect(_windowBounds.position, Vector2.zero));
             }
             if (geometryChanged) ApplyLayout();
         }
@@ -216,13 +220,18 @@ namespace UnknownInventoryTerminal
             _windowSurface = surface.GetComponent<RectTransform>();
             Position(_windowSurface, _windowBounds);
 
-            // terminal.png already contains the frame, slot grids and scrollbar groove. Draw it once,
-            // unscaled except for the integer UI scale; its transparent pixels stay transparent.
-            var board = Add(_root.transform, "AE2 terminal board", typeof(Image)).GetComponent<Image>();
-            board.raycastTarget = false;
-            _skin.Apply(board, Ae2Image.Background, Ae2TerminalSkin.Shell);
-            _board = board.rectTransform;
+            // vertical_buttons_bg.png sits behind the left toolbar and overlaps the board's left edge, as in AE2,
+            // where VerticalButtonBar draws it in the background layer after the board.
+            _board = Add(_root.transform, "AE2 terminal board").GetComponent<RectTransform>();
             Position(_board, BoardBounds);
+            _buttonBar = Add(_root.transform, "AE2 vertical button bar").GetComponent<RectTransform>();
+            Position(_buttonBar, new Rect(_windowBounds.position, Vector2.zero));
+            // AE2's sprite metadata slices it vertically: 2 top rows and 4 bottom rows stay fixed, the middle stretches.
+            var barSize = _skin.SourceSize(Ae2Image.VerticalButtonsBg);
+            _barTop = BarPart("top", 0, Ae2TerminalLayout.ButtonBarTopBorder);
+            _barMiddle = BarPart("middle", Ae2TerminalLayout.ButtonBarTopBorder, (barSize?.y ?? 0) -
+                Ae2TerminalLayout.ButtonBarTopBorder - Ae2TerminalLayout.ButtonBarBottomBorder);
+            _barBottom = BarPart("bottom", (barSize?.y ?? 0) - Ae2TerminalLayout.ButtonBarBottomBorder, Ae2TerminalLayout.ButtonBarBottomBorder);
 
             var panel = Add(_root.transform, "AE2 storage", typeof(Image), typeof(GridWheel));
             _panel = panel.GetComponent<RectTransform>();
@@ -304,16 +313,73 @@ namespace UnknownInventoryTerminal
             Position(_empty!.rectTransform, new Rect(inset * scale, 0, gridWidth, _layout.GridHeight));
             Position(_lower!, new Rect(0, _layout.GridHeight, _bounds.width, _layout.PanelHeight - _layout.GridHeight));
             _loadout.SetLayout(_layout);
+            LayoutBoard();
             // Toolbar coordinates are window-relative; the panel starts at the board's header edge.
+            // The return button follows the four IMGUI buttons (close, sort, direction, terminal style).
             Position(_backButton!.GetComponent<RectTransform>(), new Rect(
                 (Ae2TerminalLayout.ToolbarX - Ae2TerminalLayout.Rail) * scale,
-                (Ae2TerminalLayout.ToolbarY(3) - Ae2TerminalLayout.Header) * scale,
+                (Ae2TerminalLayout.ToolbarY(4) - Ae2TerminalLayout.Header) * scale,
                 Ae2TerminalLayout.ButtonWidth * scale, Ae2TerminalLayout.ButtonHeight * scale));
+            LayoutButtonBar();
             Position(_backIcon!.rectTransform, new Rect(scale, 2 * scale, 16 * scale, 16 * scale));
             _backFallback!.fontSize = 8 * scale;
             _grid!.cellSize = new Vector2(stride, stride);
             foreach (var tile in _tiles.Values) if (tile.Button) SizeTile(tile);
             UpdateScroll(_tiles.Count);
+        }
+
+        // AE2 MEStorageScreen.drawBG: header, first row, middle rows, last row, then the bottom part, each at its source size.
+        private void LayoutBoard()
+        {
+            var parts = new List<Ae2Image> { Ae2Image.Header, Ae2Image.FirstRow };
+            for (var i = 2; i < _layout.Rows; i++) parts.Add(Ae2Image.Row);
+            parts.Add(Ae2Image.LastRow);
+            parts.Add(Ae2Image.Bottom);
+            var scale = _layout.Scale;
+            var y = 0;
+            for (var i = 0; i < parts.Count; i++)
+            {
+                if (i == _boardParts.Count)
+                {
+                    var image = Add(_board!, "AE2 board part", typeof(Image)).GetComponent<Image>();
+                    image.raycastTarget = false;
+                    _boardParts.Add(image);
+                }
+                var part = _boardParts[i];
+                part.gameObject.SetActive(true);
+                part.name = "AE2 board " + parts[i];
+                // Transparent pixels in terminal.png stay transparent; a missing part is not filled in.
+                _skin.Apply(part, parts[i], Color.clear);
+                var height = Ae2ScreenStyle.BoardPartHeight(parts[i]);
+                Position(part.rectTransform, new Rect(0, y * scale, Ae2TerminalLayout.BoardWidth * scale, height * scale));
+                y += height;
+            }
+            for (var i = parts.Count; i < _boardParts.Count; i++) _boardParts[i].gameObject.SetActive(false);
+        }
+
+        // AE2 VerticalButtonBar.drawBackgroundLayer: the background spans every visible toolbar button.
+        private void LayoutButtonBar()
+        {
+            var scale = _layout.Scale;
+            var buttons = _backButton && _backButton!.gameObject.activeSelf ? 5 : 4;
+            var height = Ae2TerminalLayout.ButtonBarHeight(buttons);
+            const int top = Ae2TerminalLayout.ButtonBarTopBorder, bottom = Ae2TerminalLayout.ButtonBarBottomBorder;
+            void Place(Image image, int y, int h) => Position(image.rectTransform, new Rect(Ae2TerminalLayout.ButtonBarX * scale,
+                (Ae2TerminalLayout.ButtonBarY + y) * scale, Ae2TerminalLayout.ButtonBarWidth * scale, h * scale));
+            Place(_barTop!, 0, top);
+            Place(_barMiddle!, top, height - top - bottom);
+            Place(_barBottom!, height - bottom, bottom);
+        }
+
+        private Image BarPart(string name, int top, int height)
+        {
+            var image = Add(_buttonBar!, "Button bar " + name, typeof(Image)).GetComponent<Image>();
+            image.raycastTarget = false;
+            image.sprite = _skin.GetRows(Ae2Image.VerticalButtonsBg, top, height);
+            image.type = Image.Type.Simple;
+            // Without the PNG the toolbar keeps its buttons and simply has no bar behind them.
+            image.color = image.sprite ? Color.white : Color.clear;
+            return image;
         }
 
         private void MoveToRow(int row)
@@ -392,7 +458,11 @@ namespace UnknownInventoryTerminal
                 DestroyTile(_tiles[key]);
                 _tiles.Remove(key);
             }
-            _backButton!.gameObject.SetActive(selection != null);
+            if (_backButton!.gameObject.activeSelf != (selection != null))
+            {
+                _backButton.gameObject.SetActive(selection != null);
+                LayoutButtonBar();
+            }
             _empty!.text = TerminalText.Get(!prefab ? "inventory.unavailable" : rows.Count == 0 ? "inventory.empty" : "inventory.buttonError");
             _empty.gameObject.SetActive(_tiles.Count == 0);
             UpdateScroll(_tiles.Count);

@@ -98,9 +98,9 @@ namespace UnknownInventoryTerminal
 
         private void FitToScreen()
         {
-            // The board is fixed by terminal.png; polling the count still discovers CCL equipment slots.
+            // Storage rows follow the terminal-style setting; polling the count still discovers CCL equipment slots.
             _equipmentCount();
-            _layout = new Ae2TerminalLayout(Screen.width, Screen.height);
+            _layout = new Ae2TerminalLayout(Screen.width, Screen.height, SettingsBridge.TerminalHeight);
             _rect = new Rect(_layout.Left, _layout.Top, _layout.Width, _layout.Height);
         }
 
@@ -128,10 +128,10 @@ namespace UnknownInventoryTerminal
 
         private void DrawContents(int id)
         {
-            // The board image itself is drawn by the native canvas below this window, as one unscaled terminal.png region.
+            // The board parts and the toolbar background are drawn by the native canvas below this window.
             const int left = Ae2TerminalLayout.Rail;
             GUI.Label(Units(left + 7, 2, 46, 15), TerminalText.Get("terminal.title"), _titleStyle);
-            GUI.Label(Units(left + Ae2TerminalLayout.Inset, Ae2TerminalLayout.StatusTop, 62, Ae2TerminalLayout.StatusHeight),
+            GUI.Label(Units(left + Ae2TerminalLayout.Inset, _layout.StatusTop, 62, Ae2TerminalLayout.StatusHeight),
                 _status, _statusStyle);
 
             // A field drawn up to 79x13 pixels is shown at its own size; a wider PNG is narrowed to fit the header.
@@ -174,8 +174,29 @@ namespace UnknownInventoryTerminal
             if (IconButton(toolbar, Ae2TerminalLayout.ToolbarY(2), _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
                 _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^"))
                 _descending = !_descending;
+            // AE2 SettingToggleButton for TERMINAL_STYLE: left click goes to the next height, right click to the previous.
+            var height = _layout.Style;
+            var styleRect = Units(toolbar, Ae2TerminalLayout.ToolbarY(3), Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
+            var backwards = ev.type == EventType.MouseDown && ev.button == 1 && styleRect.Contains(ev.mousePosition);
+            if (backwards) ev.Use();
+            if (IconButton(toolbar, Ae2TerminalLayout.ToolbarY(3), StyleIcon(height),
+                TerminalText.Get("terminal.style") + ": " + TerminalText.Get("terminal.style." + height), "H") || backwards)
+            {
+                SettingsBridge.TerminalHeight = Ae2TerminalLayout.Next(height, backwards);
+                // Like AE2's reinitalize(): resize the board and storage rows right away.
+                FitToScreen();
+                ConfigureNativePanel();
+            }
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
         }
+
+        private static Ae2Image StyleIcon(TerminalHeight height) => height switch
+        {
+            TerminalHeight.Medium => Ae2Image.TerminalStyleMedium,
+            TerminalHeight.Tall => Ae2Image.TerminalStyleTall,
+            TerminalHeight.Full => Ae2Image.TerminalStyleFull,
+            _ => Ae2Image.TerminalStyleSmall
+        };
 
         private bool IconButton(int px, int py, Ae2Image icon, string tooltip, string fallback)
         {

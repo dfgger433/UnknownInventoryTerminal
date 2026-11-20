@@ -28,11 +28,11 @@ internal static class Program
             CheckSelection(window, regions, viewport, "Thumb", Expected(style, UnknownInventoryTerminal.Ae2Image.Thumb));
             viewport.ClearValue(FrameworkElement.HeightProperty);
             viewport.Width = 100;
-            CheckSelection(window, regions, viewport, "Background", Expected(style, UnknownInventoryTerminal.Ae2Image.Background));
+            CheckSelection(window, regions, viewport, "Bottom", Expected(style, UnknownInventoryTerminal.Ae2Image.Bottom));
             CheckComposite(window, style);
             if (Environment.GetEnvironmentVariable("UIT_PREVIEW_SNAPSHOT") is { Length: > 0 } snapshot) SaveComposite(window, snapshot);
             Console.WriteLine("Atlas layout passed: full atlas and aligned crops at four positions, including short and narrow viewports.");
-            Console.WriteLine("Composite passed: terminal.png is drawn once at 2x its source size with no fill behind it.");
+            Console.WriteLine("Composite passed: board parts stacked at 2x with no fill behind them, button bar behind four toolbar buttons.");
         }
         finally
         {
@@ -85,11 +85,23 @@ internal static class Program
         var canvas = (Canvas)window.FindName("CompositeCanvas");
         if (canvas.Children.OfType<System.Windows.Shapes.Rectangle>().Any())
             throw new InvalidOperationException("Composite still paints a solid fill behind the board.");
-        var expected = Expected(style, UnknownInventoryTerminal.Ae2Image.Background);
-        var boards = canvas.Children.OfType<Image>()
-            .Where(image => image.Source is CroppedBitmap crop && crop.SourceRect == expected).ToArray();
-        if (boards.Length != 1 || boards[0].Width != expected.Width * 2 || boards[0].Height != expected.Height * 2)
-            throw new InvalidOperationException($"Composite must draw the board region {expected} exactly once at 2x.");
+        // Small style: header, first, middle and last row, bottom, stacked without gaps at 2x their source size.
+        var images = canvas.Children.OfType<Image>().ToList();
+        var y = 0.0;
+        foreach (var part in new[] { UnknownInventoryTerminal.Ae2Image.Header, UnknownInventoryTerminal.Ae2Image.FirstRow,
+            UnknownInventoryTerminal.Ae2Image.Row, UnknownInventoryTerminal.Ae2Image.LastRow, UnknownInventoryTerminal.Ae2Image.Bottom })
+        {
+            var expected = Expected(style, part);
+            var match = images.FirstOrDefault(image => image.Source is CroppedBitmap crop && crop.SourceRect == expected &&
+                Canvas.GetTop(image) == y && image.Width == expected.Width * 2 && image.Height == expected.Height * 2);
+            if (match is null) throw new InvalidOperationException($"Composite must draw {part} {expected} at y={y / 2} and 2x.");
+            images.Remove(match);
+            y += expected.Height * 2;
+        }
+        var bar = canvas.Children.OfType<Image>().Where(image => Equals(image.Tag, "ButtonBar")).ToArray();
+        var barHeight = bar.Sum(image => image.Height);
+        if (bar.Length != 3 || barHeight != (4 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
+            throw new InvalidOperationException($"Button bar must be three 21 px wide slices, {4 * 22 + 6} px tall in total.");
     }
 
     // Optional visual check: writes the composite canvas to a PNG.
