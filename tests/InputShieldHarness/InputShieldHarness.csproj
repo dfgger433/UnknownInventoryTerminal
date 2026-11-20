@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/UnknownInventoryTerminal/InputShield.cs" Link="InputShield.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/TerminalHitSurface.cs" Link="TerminalHitSurface.cs" />
   </ItemGroup>
 </Project>

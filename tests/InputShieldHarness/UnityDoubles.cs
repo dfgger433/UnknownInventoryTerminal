@@ -58,6 +58,7 @@ namespace UnityEngine
         internal string Name { get; }
         internal int layer { get; set; }
         internal bool activeSelf { get { RequireAlive(); return _active; } }
+        internal bool activeInHierarchy => activeSelf && (_transform.Parent?.gameObject.activeInHierarchy ?? true);
         internal Transform transform { get { RequireAlive(); return _transform; } }
         internal void SetActive(bool value) { RequireAlive(); _active = value; }
 #nullable disable annotations
@@ -104,6 +105,7 @@ namespace UnityEngine
     internal class Behaviour : Component
     {
         internal bool enabled { get; set; } = true;
+        internal bool isActiveAndEnabled => enabled && gameObject.activeInHierarchy;
     }
 
     internal class MonoBehaviour : Behaviour
@@ -182,13 +184,33 @@ namespace UnityEngine
 
 namespace UnityEngine.UI
 {
-    internal class Graphic : Behaviour { internal bool raycastTarget { get; set; } = true; }
-    internal sealed class Image : Graphic { internal Color color { get; set; } }
+    internal sealed class CanvasRenderer { internal bool cullTransparentMesh { get; set; } = true; }
+    internal class Graphic : Behaviour
+    {
+        internal bool raycastTarget { get; set; } = true;
+        internal CanvasRenderer canvasRenderer { get; } = new();
+    }
+    internal sealed class Image : Graphic
+    {
+        internal Color color { get; set; }
+        internal float alphaHitTestMinimumThreshold { get; set; }
+    }
     internal sealed class GraphicRaycaster : Behaviour { }
+}
+
+namespace UnityEngine.EventSystems
+{
+    internal struct RaycastResult
+    {
+        internal UnityEngine.GameObject gameObject;
+        internal UnityEngine.Vector2 screenPosition;
+    }
 }
 
 namespace UnknownInventoryTerminal
 {
+    internal sealed class InvButton : UnityEngine.MonoBehaviour { }
+
     internal sealed class PlayerCamera : UnityEngine.Object
     {
         internal static PlayerCamera? main;

@@ -81,7 +81,9 @@ namespace UnknownInventoryTerminal
             var rect = _blocker.GetComponent<RectTransform>();
             rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
-            _blocker.GetComponent<Image>().color = Color.clear;
+            var blockerImage = _blocker.GetComponent<Image>();
+            blockerImage.color = Color.clear;
+            TerminalHitSurface.Enable(blockerImage);
         }
 
         private void Want<T>(GameObject? root, Func<GameObject, T> create) where T : Lease

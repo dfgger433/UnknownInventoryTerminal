@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using UnknownInventoryTerminal;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
@@ -18,6 +19,8 @@ internal static class Program
             ("Close and reopen in one frame reuse added components safely", SameFrameReopen),
             ("Destroyed shield and scene roots can be replaced without leaking menu leases", DestroyedRootsAndSceneChange),
             ("Close restores tooltip and drag visuals without hiding or replacing them", ClosePreservesVisuals),
+            ("Transparent hit surfaces do not depend on sprite alpha or transparent mesh culling", TransparentHitSurface),
+            ("Fixed cell hits relay only to live native buttons without changing pointer coordinates", RelayNativeItemHit),
         };
         var failures = 0;
         foreach (var (name, run) in tests)
@@ -41,7 +44,7 @@ internal static class Program
                 GameObject.Created.Clear();
             }
         }
-        Console.WriteLine($"{tests.Length - failures}/{tests.Length} InputShield lifecycle tests passed.");
+        Console.WriteLine($"{tests.Length - failures}/{tests.Length} InputShield and hit-surface tests passed.");
         return failures == 0 ? 0 : 1;
     }
 
@@ -194,6 +197,42 @@ internal static class Program
               tooltipRaycaster.enabled && tooltipImage.raycastTarget,
             "borrowed tooltip canvas, raycaster and graphic should recover exactly");
         shield.Dispose();
+    }
+
+    private static void TransparentHitSurface()
+    {
+        var image = new GameObject("Fixed transparent cell", typeof(Image)).GetComponent<Image>();
+        image.color = Color.clear;
+        image.raycastTarget = false;
+        image.alphaHitTestMinimumThreshold = 0.75f;
+
+        TerminalHitSurface.Enable(image);
+
+        Check(image.color.Equals(Color.clear) && image.raycastTarget && image.alphaHitTestMinimumThreshold == 0 &&
+            !image.canvasRenderer.cullTransparentMesh, "the cell must remain invisible while eligible for raycasts");
+    }
+
+    private static void RelayNativeItemHit()
+    {
+        var cell = new GameObject("Fixed cell", typeof(Image));
+        var native = new GameObject("Animated native button", typeof(InvButton));
+        native.transform.SetParent(cell.transform, false);
+        var button = native.GetComponent<InvButton>();
+        var pointer = new Vector2(123, 456);
+        var hit = new RaycastResult { gameObject = cell, screenPosition = pointer };
+
+        TerminalHitSurface.Relay(ref hit, null);
+        Check(hit.gameObject == cell, "empty or group cells should keep the original hit");
+        button.enabled = false;
+        TerminalHitSurface.Relay(ref hit, button);
+        Check(hit.gameObject == cell, "a disabled native button must not receive a hit");
+        button.enabled = true;
+        cell.SetActive(false);
+        TerminalHitSurface.Relay(ref hit, button);
+        Check(hit.gameObject == cell, "a native button under a hidden cell must not receive a hit");
+        cell.SetActive(true);
+        TerminalHitSurface.Relay(ref hit, button);
+        Check(hit.gameObject == native && hit.screenPosition == pointer, "relay should only replace the target");
     }
 
     private static bool IsHidden(GameObject menu)

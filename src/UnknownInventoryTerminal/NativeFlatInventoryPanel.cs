@@ -27,6 +27,7 @@ namespace UnknownInventoryTerminal
         {
             internal NativeFlatInventoryPanel Owner = null!;
             internal (string Type, string Parent)? Group;
+            internal InvButton? ItemButton;
             public void OnPointerClick(PointerEventData e)
             {
                 if (Group.HasValue && e.button == PointerEventData.InputButton.Left) Owner.ChangeSelection(Group);
@@ -83,6 +84,15 @@ namespace UnknownInventoryTerminal
         // clicking the IMGUI search field must not release text focus to the game.
         internal bool Contains(GameObject target) => _panel && target &&
             (target.transform == _panel || target.transform.IsChildOf(_panel!));
+
+        // Fixed cell roots own hits; the game's InvButton animates its visual transform independently.
+        internal void ResolveItemHit(ref RaycastResult hit)
+        {
+            var tile = hit.gameObject.GetComponent<TilePointer>();
+            if (tile && tile.Group.HasValue) return;
+            var button = tile ? tile.ItemButton : hit.gameObject.GetComponent<LoadoutCell>()?.Button;
+            TerminalHitSurface.Relay(ref hit, button);
+        }
 
         internal bool ContainsScreenPoint(Vector2 screenPoint) => _panel != null && _root != null && _root.activeInHierarchy &&
             RectTransformUtility.RectangleContainsScreenPoint(_panel, screenPoint, null);
@@ -207,7 +217,9 @@ namespace UnknownInventoryTerminal
             // IMGUI controls do not own an EventSystem raycast. Cover only their window,
             // below the real tiles, so a native slot underneath a toolbar button cannot fire.
             var surface = Add(_root.transform, "Terminal window hit surface", typeof(Image));
-            surface.GetComponent<Image>().color = Color.clear;
+            var surfaceImage = surface.GetComponent<Image>();
+            surfaceImage.color = Color.clear;
+            TerminalHitSurface.Enable(surfaceImage);
             _windowSurface = surface.GetComponent<RectTransform>();
             Position(_windowSurface, _windowBounds);
 
@@ -226,7 +238,9 @@ namespace UnknownInventoryTerminal
 
             var panel = Add(_root.transform, "AE2 storage", typeof(Image), typeof(GridWheel));
             _panel = panel.GetComponent<RectTransform>();
-            panel.GetComponent<Image>().color = Color.clear;
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.color = Color.clear;
+            TerminalHitSurface.Enable(panelImage);
             panel.GetComponent<GridWheel>().Owner = this;
 
             var viewport = Add(panel.transform, "Storage slot viewport", typeof(RectMask2D));
@@ -241,6 +255,7 @@ namespace UnknownInventoryTerminal
             var scroll = Add(panel.transform, "Storage scrollbar", typeof(Image), typeof(Slider));
             var track = scroll.GetComponent<Image>();
             track.color = Color.clear;
+            TerminalHitSurface.Enable(track);
             _scrollTooltip = CreateTooltip(scroll, TerminalText.Get("inventory.scroll"), TerminalText.Get("inventory.scroll.description"));
             _slider = scroll.GetComponent<Slider>();
             _slider.direction = Slider.Direction.TopToBottom;
@@ -453,10 +468,8 @@ namespace UnknownInventoryTerminal
                 tile.Button.refItem = (Item)entry.NativeItem;
                 tile.Button.UpdateGraphic();
                 tile.Pointer.Group = group;
-                // Reapply on every bind: inventory refresh can change a group to a singleton and vice versa.
-                tile.Root.GetComponent<Image>().raycastTarget = group.HasValue;
-                var image = tile.Button.GetComponent<Image>();
-                image.raycastTarget = !group.HasValue;
+                // Keep all storage cells on a fixed, non-animated hit surface. Group clicks are handled on the cell;
+                // singletons are mapped back to their native InvButton by the raycast filter.
                 tile.Count.text = count > 1 ? count.ToString(CultureInfo.InvariantCulture) : "";
                 // A group must stay a selection control, not become a native item action target.
                 // Copy the representative item's tooltip onto the object the game raycasts.
@@ -478,7 +491,9 @@ namespace UnknownInventoryTerminal
         private Tile CreateTile(GameObject prefab, InventoryEntry entry)
         {
             var root = Add(_content!, "Item " + entry.TypeId, typeof(Image), typeof(TilePointer));
-            root.GetComponent<Image>().color = Color.clear;
+            var hitSurface = root.GetComponent<Image>();
+            hitSurface.color = Color.clear;
+            TerminalHitSurface.Enable(hitSurface);
             var pointer = root.GetComponent<TilePointer>();
             pointer.Owner = this;
             var tooltip = CreateTooltip(root, "", "");
@@ -492,7 +507,8 @@ namespace UnknownInventoryTerminal
                 button.woundView = false;
                 button.refItem = (Item)entry.NativeItem;
                 button.UpdateRefs();
-                // Keep the exact InvButton raycast target, but let the AE2 texture provide its visible frame.
+                pointer.ItemButton = button;
+                // The native InvButton continues to own the item; only its frame comes from the AE2 board.
                 var image = native.GetComponent<Image>();
                 _skin.ApplyButtonFace(image);
                 foreach (var child in native.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = root.layer;

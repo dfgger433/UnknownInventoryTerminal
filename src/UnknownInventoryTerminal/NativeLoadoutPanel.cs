@@ -203,6 +203,7 @@ namespace UnknownInventoryTerminal
                 // The slot art is part of terminal.png; this face is only a hit area and the active-hand tint.
                 cell.Face = root.GetComponent<Image>();
                 cell.Face.color = Color.clear;
+                TerminalHitSurface.Enable(cell.Face);
                 cell.Highlight = Ae2TerminalSkin.CreateSlotHighlight(root.transform);
                 Ae2TerminalSkin.SizeSlotHighlight(cell.Highlight, _layout.Scale);
                 cell.Caption = NativeFlatInventoryPanel.CreateText(root.transform, "Slot label", 5, TextAlignmentOptions.Center);
@@ -266,7 +267,7 @@ namespace UnknownInventoryTerminal
             // Body buttons overwrite image.sprite every native UpdateGraphic(). Keep both faces transparent.
             button.normalSprite = button.mutedSprite = image.sprite;
             foreach (var child in root.GetComponentsInChildren<Transform>(true)) child.gameObject.layer = cell.gameObject.layer;
-            foreach (var graphic in root.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = graphic == image;
+            foreach (var graphic in root.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
             return button;
         }
 

@@ -288,8 +288,9 @@ namespace UnknownInventoryTerminal
             RaycastResult blocker = default;
             bool hasBlocker = false;
             var terminalPoint = IsTerminalPoint(Input.mousePosition);
-            foreach (var hit in hits)
+            foreach (var rawHit in hits)
             {
+                var hit = rawHit;
                 if (!hit.gameObject) continue;
                 if (plugin._shield?.IsBlocker(hit.gameObject) == true)
                 {
@@ -298,7 +299,9 @@ namespace UnknownInventoryTerminal
                 }
                 // Extension controls receive ordinary UGUI events, not native item actions.
                 if (terminalPoint && plugin._nativePanel?.ContainsExtension(hit.gameObject) == true) return result;
-                if (terminalPoint && plugin._nativePanel?.Contains(hit.gameObject) == true && ValidHit(hit)) result.Add(hit);
+                if (!terminalPoint || plugin._nativePanel?.Contains(hit.gameObject) != true) continue;
+                plugin._nativePanel.ResolveItemHit(ref hit);
+                if (ValidHit(hit)) result.Add(hit);
             }
             if (result.Count == 0 && hasBlocker) result.Add(blocker);
             return result;
