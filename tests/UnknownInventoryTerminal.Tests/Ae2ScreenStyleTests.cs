@@ -23,7 +23,7 @@ public sealed class Ae2ScreenStyleTests
         foreach (Ae2Image image in Enum.GetValues(typeof(Ae2Image)))
         {
             style.TryGet(image, out var region).Should().BeTrue($"{image} must have a region");
-            region.Border.Should().Be(0, $"{image} is drawn as cut from its PNG, without nine-slice stretching");
+            region.Border.Should().Be(image == Ae2Image.SettingsBackground ? 4 : 0);
             if (Ae2ScreenStyle.IsBoardPart(image))
             {
                 region.Width.Should().Be(Ae2TerminalLayout.BoardWidth, "board parts are stacked unscaled");
@@ -35,6 +35,23 @@ public sealed class Ae2ScreenStyleTests
             var (width, height) = ReadPngDimensions(texturePath);
             region.Fits(width, height).Should().BeTrue(
                 $"{image} source rectangle [{region.X}, {region.Y}, {region.Width}, {region.Height}] must fit {region.Texture} ({width}x{height})");
+        }
+    }
+
+    [TestMethod]
+    public void SettingsBackgroundKeepsBothEdgesAtEveryTerminalScale()
+    {
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.SettingsBackground, out var region).Should().BeTrue();
+        region.Texture.Should().Be("guis/background.png");
+        foreach (var length in new[] { 124, 82 })
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        {
+            var size = length * scale;
+            var border = region.Border * scale;
+            Ae2NineSlice.Span(size, border, 0).Should().Be((0, border));
+            Ae2NineSlice.Span(size, border, 1).Should().Be((border, size - 2 * border));
+            Ae2NineSlice.Span(size, border, 2).Should().Be((size - border, border));
         }
     }
 

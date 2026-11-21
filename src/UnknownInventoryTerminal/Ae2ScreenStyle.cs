@@ -53,6 +53,17 @@ namespace UnknownInventoryTerminal
         internal const uint HoverBorder = 0xFFDAFFFF;
     }
 
+    internal static class Ae2NineSlice
+    {
+        // Source cuts stay in texels; destination cuts reserve whole UI pixels at the terminal scale.
+        internal static (int Start, int Length) Span(int length, int border, int part) => part switch
+        {
+            0 => (0, border),
+            1 => (border, length - 2 * border),
+            _ => (length - border, border)
+        };
+    }
+
     // AE2 uses top-left source coordinates: [x, y, width, height].
     internal readonly struct Ae2ImageRegion
     {

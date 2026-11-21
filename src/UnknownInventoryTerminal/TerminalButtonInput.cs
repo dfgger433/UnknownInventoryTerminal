@@ -8,6 +8,8 @@ namespace UnknownInventoryTerminal
         private TerminalButton _pressed;
         private int _pointerButton;
         internal TerminalButton Focused { get; private set; }
+        internal bool SettingsOpen { get; private set; }
+        internal void DismissSettings() => SettingsOpen = false;
 
         internal static (int X, int Y) Origin(TerminalButton button) => button == TerminalButton.Close
             ? (Ae2TerminalLayout.CloseX, Ae2TerminalLayout.CloseY)
@@ -46,9 +48,15 @@ namespace UnknownInventoryTerminal
             if (_pressed == TerminalButton.None || _pointerButton != pointerButton) return TerminalButton.None;
             var pressed = _pressed;
             _pressed = TerminalButton.None;
-            return hit == pressed ? pressed : TerminalButton.None;
+            if (hit != pressed) return TerminalButton.None;
+            if (pressed == TerminalButton.Settings) SettingsOpen = !SettingsOpen;
+            return pressed;
         }
 
-        internal void Reset() => Focused = _pressed = TerminalButton.None;
+        internal void Reset()
+        {
+            Focused = _pressed = TerminalButton.None;
+            DismissSettings();
+        }
     }
 }

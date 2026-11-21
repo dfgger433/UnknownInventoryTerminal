@@ -89,6 +89,7 @@ namespace UnknownInventoryTerminal
                 HoldInput();
                 _shield?.SetVisible(true);
                 _nativePanel?.SetVisible(true);
+                _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput);
             }
         }
 
@@ -297,10 +298,9 @@ namespace UnknownInventoryTerminal
                     if (!hasBlocker) { blocker = hit; hasBlocker = true; }
                     continue;
                 }
+                // Keep the blocker hit, but exclude all item targets while settings own the pointer.
+                if (plugin._window?.BlocksInventoryInput == true) continue;
                 // Extension controls receive ordinary UGUI events, not native item actions.
-                // The settings popup is IMGUI, so its screen rectangle is consumed by the
-                // terminal input gate rather than leaking clicks into inventory cells.
-                if (terminalPoint && plugin._window?.SettingsOpen == true) return result;
                 if (terminalPoint && plugin._nativePanel?.ContainsExtension(hit.gameObject) == true) return result;
                 if (!terminalPoint || plugin._nativePanel?.Contains(hit.gameObject) != true) continue;
                 plugin._nativePanel.ResolveItemHit(ref hit);

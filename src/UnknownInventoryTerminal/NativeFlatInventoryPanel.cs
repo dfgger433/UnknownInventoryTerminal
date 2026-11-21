@@ -180,6 +180,15 @@ namespace UnknownInventoryTerminal
             if (geometryChanged) ApplyLayout();
         }
 
+        internal void BlockPointerInput(bool block)
+        {
+            if (!_windowSurface) return;
+            // EventSystem clicks (groups, sliders, extensions) bypass the game's filtered raycasts.
+            var surface = _windowSurface!;
+            if (block) surface.SetAsLastSibling();
+            else surface.SetAsFirstSibling();
+        }
+
         internal void SetVisible(bool visible)
         {
             _visible = visible;

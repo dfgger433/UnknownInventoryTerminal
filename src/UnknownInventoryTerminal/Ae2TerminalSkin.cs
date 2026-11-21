@@ -130,6 +130,30 @@ namespace UnknownInventoryTerminal
             return false;
         }
 
+        internal void DrawPanel(Rect bounds, Ae2Image id, int scale, Color fallback)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            if (Resolve(id) is not { Border: > 0 } region)
+            {
+                Draw(bounds, id, fallback);
+                return;
+            }
+            var texture = _textures[region.Texture]!;
+            var border = Math.Min(region.Border, (int)Math.Min(bounds.width, bounds.height) / (2 * scale));
+            for (var row = 0; row < 3; row++)
+            for (var column = 0; column < 3; column++)
+            {
+                var (sx, sw) = Ae2NineSlice.Span(region.Width, region.Border, column);
+                var (sy, sh) = Ae2NineSlice.Span(region.Height, region.Border, row);
+                var (x, w) = Ae2NineSlice.Span((int)bounds.width, border * scale, column);
+                var (y, h) = Ae2NineSlice.Span((int)bounds.height, border * scale, row);
+                if (w == 0 || h == 0) continue;
+                GUI.DrawTextureWithTexCoords(new Rect(bounds.x + x, bounds.y + y, w, h), texture,
+                    new Rect((float)(region.X + sx) / texture.width, (float)(texture.height - region.Y - sy - sh) / texture.height,
+                        (float)sw / texture.width, (float)sh / texture.height));
+            }
+        }
+
         internal Sprite? GetSprite(Ae2Image id)
         {
             if (_sprites.TryGetValue(id, out var sprite)) return sprite;

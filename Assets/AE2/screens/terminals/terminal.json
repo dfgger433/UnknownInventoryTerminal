@@ -24,7 +24,7 @@
     "thumb": { "texture": "gui/sprites/big_scroller.png", "srcRect": [0, 0, 12, 15] },
     "thumbDisabled": { "texture": "gui/sprites/big_scroller_disabled.png", "srcRect": [0, 0, 12, 15] },
     "nativeButtonFace": { "texture": "gui/sprites/transparent.png", "srcRect": [0, 0, 1, 1] },
-    "settingsBackground": { "texture": "guis/background.png", "srcRect": [0, 0, 256, 256] },
+    "settingsBackground": { "texture": "guis/background.png", "srcRect": [0, 0, 256, 256], "border": 4 },
     "settingsCheckbox": { "texture": "guis/checkbox.png", "srcRect": [0, 0, 16, 16] },
     "terminalStyleSmall": { "texture": "guis/states.png", "srcRect": [0, 112, 16, 16] },
     "terminalStyleMedium": { "texture": "guis/states.png", "srcRect": [16, 112, 16, 16] },

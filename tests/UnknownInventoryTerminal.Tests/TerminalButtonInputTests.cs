@@ -61,6 +61,29 @@ public sealed class TerminalButtonInputTests
     }
 
     [TestMethod]
+    public void SettingsOpensAndClosesOnlyOnCompletedLeftClicks()
+    {
+        var input = new TerminalButtonInput();
+        input.Press(TerminalButton.Settings, 0).Should().BeTrue();
+        input.SettingsOpen.Should().BeFalse();
+        input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.Settings);
+        input.SettingsOpen.Should().BeTrue();
+
+        input.Press(TerminalButton.Settings, 1).Should().BeFalse();
+        input.Release(TerminalButton.Settings, 1).Should().Be(TerminalButton.None);
+        input.Press(TerminalButton.Settings, 0).Should().BeTrue();
+        input.Release(TerminalButton.None, 0).Should().Be(TerminalButton.None);
+        input.SettingsOpen.Should().BeTrue();
+
+        input.Press(TerminalButton.Settings, 0).Should().BeTrue();
+        input.SettingsOpen.Should().BeTrue();
+        input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.Settings);
+        input.SettingsOpen.Should().BeFalse();
+        input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.None);
+        input.SettingsOpen.Should().BeFalse();
+    }
+
+    [TestMethod]
     public void OnlyStyleAcceptsRightClickAndOtherButtonsCannotReleaseItsCapture()
     {
         var input = new TerminalButtonInput();

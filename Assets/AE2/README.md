@@ -10,10 +10,23 @@
 | [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），垫在左侧工具栏按钮下方。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
-| [checkbox.png](textures/guis/checkbox.png) | 设置面板的加速/使用状态贴图。 |
+| [checkbox.png](textures/guis/checkbox.png) | 保留的复选框图集。 |
 | [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 原版 AE2 仓储终端的独立滑块（各 12×15），分别绑定 `thumb` 和 `thumbDisabled`。没有可滚动行时显示禁用贴图。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
 | [NOTICE.txt](NOTICE.txt) | AE2 原图来源和授权条件。 |
+
+## 设置面板手绘尺寸
+
+| 部件 | PNG 源尺寸或裁切 `[x, y, 宽, 高]` | 游戏内 1× 尺寸 |
+|---|---|---|
+| 设置面板背景 | [background.png](textures/guis/background.png)，256×256，四边各保留 4 px | 124×82，四角和边框厚度保持 4 px |
+| 普通按钮 | [states.png](textures/guis/states.png)，`[145, 65, 18, 20]` | 18×20 |
+| 聚焦按钮 | [states.png](textures/guis/states.png)，`[163, 65, 18, 20]` | 18×20 |
+| 悬停按钮 | [states.png](textures/guis/states.png)，`[181, 65, 18, 19]` | 18×19，向下移 1 px |
+| 左侧设置图标 | [states.png](textures/guis/states.png)，`[32, 48, 16, 16]` | 16×16 裁切，按可见像素居中 |
+| 单行可点击区域 | 界面布局 | 110×24，文字在按钮右侧 |
+
+制作背景时，把角和边框画在最外侧 4 px 内。九宫格保留四角，沿边长方向缩放边条，并缩放中间填充。显示尺寸随终端倍率整体放大。
 
 ## 替换或拆分图集
 
