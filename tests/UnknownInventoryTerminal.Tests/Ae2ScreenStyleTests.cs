@@ -61,6 +61,28 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    public void SettingsDropdownUsesOriginalFourClosedAndOpenHoverSlices()
+    {
+        var style = ReadBundledStyle();
+        foreach (var image in new[] { Ae2Image.SettingsDropDownClosed, Ae2Image.SettingsDropDownClosedHover,
+            Ae2Image.SettingsDropDownOpen, Ae2Image.SettingsDropDownOpenHover })
+        {
+            style.TryGet(image, out var region).Should().BeTrue();
+            region.Texture.Should().Be("gui/sprites/drop_down_list.png");
+            var expected = image switch
+            {
+                Ae2Image.SettingsDropDownClosed => (X: 0, Y: 0, Width: 111, Height: 20),
+                Ae2Image.SettingsDropDownClosedHover => (X: 0, Y: 32, Width: 111, Height: 18),
+                Ae2Image.SettingsDropDownOpen => (X: 112, Y: 64, Width: 111, Height: 19),
+                _ => (X: 112, Y: 96, Width: 111, Height: 18)
+            };
+            (region.X, region.Y, region.Width, region.Height).Should().Be(expected);
+            ReadPngDimensions(TextureFilePath(region.Texture)).Should().Be((256, 256));
+            region.Fits(256, 256).Should().BeTrue();
+        }
+    }
+
+    [TestMethod]
     public void SettingsBackgroundKeepsBothEdgesAtEveryTerminalScale()
     {
         var style = ReadBundledStyle();

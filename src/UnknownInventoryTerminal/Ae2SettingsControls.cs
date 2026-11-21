@@ -9,19 +9,22 @@ namespace UnknownInventoryTerminal
         internal Ae2SettingsControls(Ae2TerminalSkin skin) => _skin = skin;
 
         internal bool Button(Rect bounds, int scale, string text, string marker, GUIStyle label,
-            GUIStyle icon, bool option = false, bool selected = false)
+            GUIStyle icon, bool option = false, bool selected = false, bool open = false)
         {
             if (Event.current.type == EventType.Repaint)
             {
                 var hover = bounds.Contains(Event.current.mousePosition);
                 var highlight = hover || selected;
                 var face = option ? (highlight ? Ae2Image.SettingsOptionSelected : Ae2Image.SettingsOption) :
-                    (highlight ? Ae2Image.SettingsFieldHover : Ae2Image.SettingsField);
-                var offset = hover ? scale : 0;
-                _skin.DrawPanel(new Rect(bounds.x, bounds.y + offset, bounds.width, bounds.height - offset),
-                    face, scale, highlight ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
-                GUI.Label(new Rect(bounds.x + 3 * scale, bounds.y + offset, bounds.width - 15 * scale, bounds.height), text, label);
-                GUI.Label(new Rect(bounds.xMax - 11 * scale, bounds.y + offset, 9 * scale, bounds.height), marker, icon);
+                    (open ? (hover ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownOpen) :
+                        (hover ? Ae2Image.SettingsDropDownClosedHover : Ae2Image.SettingsDropDownClosed));
+                var size = _skin.SourceSize(face) ?? new Vector2Int(111, 20);
+                var x = bounds.xMax - size.x * scale;
+                _skin.Draw(new Rect(x, bounds.y, size.x * scale, size.y * scale), face,
+                    highlight ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
+                var rightInset = option ? 0 : size.x * scale;
+                GUI.Label(new Rect(bounds.x + 4 * scale, bounds.y, bounds.width - rightInset - 6 * scale, bounds.height), text, label);
+                if (option) GUI.Label(new Rect(bounds.xMax - 11 * scale, bounds.y, 9 * scale, bounds.height), marker, icon);
             }
             return GUI.Button(bounds, GUIContent.none, GUIStyle.none);
         }

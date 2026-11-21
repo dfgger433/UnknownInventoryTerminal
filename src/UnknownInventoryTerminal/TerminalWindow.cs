@@ -245,11 +245,11 @@ namespace UnknownInventoryTerminal
         {
             get
             {
-                const int designWidth = 124, designHeight = 82;
-                var panelScale = _layout.Scale;
-                var width = designWidth * panelScale;
-                var height = designHeight * panelScale;
-                var rowHeight = OptionHeight * panelScale;
+                const int panelWidth = 124, panelHeight = 82;
+                var scale = _layout.Scale;
+                var width = panelWidth * scale;
+                var height = panelHeight * scale;
+                var rowHeight = OptionHeight * scale;
                 var maximumOptions = Math.Max(TerminalText.Languages.Count, PlacementOptions.Length);
                 var visibleRows = Math.Min(4, maximumOptions);
                 var reserve = _expanded == SettingsDropdown.None ? 0 : visibleRows * rowHeight;
@@ -283,7 +283,7 @@ namespace UnknownInventoryTerminal
                 GUI.Label(Area(7, 26, 110, 11), TerminalText.Get("terminal.settings.language"), _titleStyle);
                 Field(SettingsDropdown.Language, Area(7, 38, 110, 14), TerminalText.LanguageName(SettingsBridge.Language));
                 GUI.Label(Area(7, 54, 110, 10), TerminalText.Get("terminal.settings.placement"), _titleStyle);
-                Field(SettingsDropdown.Placement, Area(7, 65, 110, 13), ContainerPlacement.Label());
+                DrawPlacementField(Area(7, 65, 110, 13), ContainerPlacement.Label());
 
             }
             finally { GUI.EndGroup(); }
@@ -303,9 +303,28 @@ namespace UnknownInventoryTerminal
             Rect Area(float x, float y, float width, float height) => new Rect(x * scale, y * scale, width * scale, height * scale);
             void Field(SettingsDropdown id, Rect bounds, string caption)
             {
-                if (_settingsControls.Button(bounds, scale, caption, _expanded == id ? "^" : "v", _settingsStyle!, _iconStyle!))
+                if (_settingsControls.Button(bounds, scale, caption, "", _settingsStyle!, _iconStyle!, open: _expanded == id))
                     ToggleDropdown(id);
             }
+        }
+
+        private void DrawPlacementField(Rect bounds, string caption)
+        {
+            var scale = _layout.Scale;
+            if (Event.current.type == EventType.Repaint)
+            {
+                var hovered = bounds.Contains(Event.current.mousePosition);
+                var open = _expanded == SettingsDropdown.Placement;
+                var face = open
+                    ? hovered ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownOpen
+                    : hovered ? Ae2Image.SettingsDropDownClosedHover : Ae2Image.SettingsDropDownClosed;
+                var size = _skin.SourceSize(face) ?? new Vector2Int(111, 20);
+                var x = bounds.xMax - size.x * scale;
+                _skin.Draw(new Rect(x, bounds.y, size.x * scale, size.y * scale), face,
+                    hovered ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
+                GUI.Label(new Rect(bounds.x, bounds.y, bounds.width - size.x * scale, bounds.height), caption, _settingsStyle);
+            }
+            if (GUI.Button(bounds, GUIContent.none, GUIStyle.none)) ToggleDropdown(SettingsDropdown.Placement);
         }
 
         private void DrawOptions<T>(Rect bounds, IReadOnlyList<T> options, T selected, Func<T, string> label, Action<T> apply)

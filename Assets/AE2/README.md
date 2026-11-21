@@ -11,7 +11,8 @@
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
 | [checkbox.png](textures/guis/checkbox.png) | 语言选择的未选、已选与悬停状态。 |
-| [button.png](textures/gui/sprites/button.png) / [button_highlighted.png](textures/gui/sprites/button_highlighted.png) | 容器摆放的当前值字段及展开箭头状态。 |
+| [drop_down_list.png](textures/gui/sprites/drop_down_list.png) | 容器摆放下拉字段的原始开/闭、普通/悬停图块，引用于 `terminal.json`，不改动源图。 |
+| [button.png](textures/gui/sprites/button.png) / [button_highlighted.png](textures/gui/sprites/button_highlighted.png) | 其它容器摆放按钮和选项项底图。 |
 | [cpu_selector.png](textures/guis/cpu_selector.png) | 复用 AE2 CPU 选择列表的普通和选中项背景。 |
 | [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 原版 AE2 仓储终端的独立滑块（各 12×15），分别绑定 `thumb` 和 `thumbDisabled`。没有可滚动行时显示禁用贴图。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
