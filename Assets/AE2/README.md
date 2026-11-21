@@ -10,10 +10,8 @@
 | [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），垫在左侧工具栏按钮下方。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
-| [checkbox.png](textures/guis/checkbox.png) | 语言选择的未选、已选与悬停状态。 |
-| [drop_down_list.png](textures/gui/sprites/drop_down_list.png) | 容器摆放下拉字段的原始开/闭、普通/悬停图块，引用于 `terminal.json`，不改动源图。 |
-| [button.png](textures/gui/sprites/button.png) / [button_highlighted.png](textures/gui/sprites/button_highlighted.png) | 其它容器摆放按钮和选项项底图。 |
-| [cpu_selector.png](textures/guis/cpu_selector.png) | 复用 AE2 CPU 选择列表的普通和选中项背景。 |
+| [checkbox.png](textures/guis/checkbox.png) | 保留给独立开关控件的状态图。 |
+| [drop_down_list.png](textures/gui/sprites/drop_down_list.png) | 语言和容器摆放共用的手绘下拉图集，包含字段与选项的各状态，两列裁切均保留完整 112 px。 |
 | [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 原版 AE2 仓储终端的独立滑块（各 12×15），分别绑定 `thumb` 和 `thumbDisabled`。没有可滚动行时显示禁用贴图。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
 | [NOTICE.txt](NOTICE.txt) | AE2 原图来源和授权条件。 |
@@ -22,12 +20,11 @@
 
 | 部件 | PNG 源尺寸或裁切 `[x, y, 宽, 高]` | 游戏内 1× 尺寸 |
 |---|---|---|
-| 设置页背景 | [background.png](textures/guis/background.png) 的 `[0, 0, 124, 82]`，四边各保留 4 px | 124×82，按整数倍率绘制 |
-| 下拉列表项 | [cpu_selector.png](textures/guis/cpu_selector.png)：普通 `[100,0,67,22]`、选中 `[100,22,67,22]` | 110×17，列表超出时滚动 |
+| 设置页背景 | [background.png](textures/guis/background.png) 的 `[0, 0, 124, 82]`，四边各保留 4 px | 收起 124×82，展开时每行增加 19 px，四角和边框不缩放变形 |
+| 下拉字段及列表项 | [drop_down_list.png](textures/gui/sprites/drop_down_list.png)，字段按左右列和状态行裁切，选项裁切见[界面描述](screens/terminals/terminal.json) | 同宽 112 px；字段 20 px 命中区，列表行 19 px，超出四行可滚轮翻动 |
 | 右上返回按钮 | [states.png](textures/guis/states.png)，底图源尺寸 18×20；悬停为 18×19 | 原尺寸绘制，悬停下移 1 px |
 | 左侧设置图标 | [states.png](textures/guis/states.png)，`[32, 48, 16, 16]` | 16×16 裁切，按可见像素居中 |
-| 语言选择 | [checkbox.png](textures/guis/checkbox.png)，未选 `[29,1,12,12]`、已选 `[29,16,12,11]`，悬停两态分别为 `[43,2,12,11]`、`[43,16,12,11]` | 按源像素尺寸绘制，文字在右侧 |
-| 容器下拉 | [button.png](textures/gui/sprites/button.png) 与 [button_highlighted.png](textures/gui/sprites/button_highlighted.png)，200×20，边框 3 px | 字段 110×13、选项 110×18，保持边角 |
+| 独立开关 | [checkbox.png](textures/guis/checkbox.png)，未选 `[29,1,12,12]`、已选 `[29,16,12,11]`，悬停两态分别为 `[43,2,12,11]`、`[43,16,12,11]` | 按源像素尺寸绘制，文字在右侧 |
 
 制作背景时，把角和边框画在最外侧 4 px 内。九宫格保留四角，沿边长方向缩放边条，并缩放中间填充。显示尺寸随终端倍率整体放大。
 

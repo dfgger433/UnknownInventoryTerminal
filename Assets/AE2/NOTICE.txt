@@ -10,9 +10,10 @@ License text: https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode
 Source: https://github.com/AppliedEnergistics/Applied-Energistics-2/tree/f0ee8bf4bf35431b9f43788401aa609ca2adbcef/src/main/resources/assets/ae2/textures
 Original files: guis/text_field.png, guis/cpu_selector.png,
 gui/sprites/button.png, gui/sprites/button_highlighted.png,
-gui/sprites/drop_down_list.png, gui/sprites/big_scroller.png,
+gui/sprites/big_scroller.png,
 gui/sprites/big_scroller_disabled.png, gui/sprites/vertical_buttons_bg.png.
 guis/terminal.png and guis/states.png contain local edits to AE2 artwork.
+gui/sprites/drop_down_list.png was supplied by the terminal project operator.
 The local transparent.png is not an AE2 asset. The mod slices, scales and
 rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to
 the same CC BY-NC-SA 3.0 terms. Do not use them commercially without permission.

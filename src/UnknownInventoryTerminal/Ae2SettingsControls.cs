@@ -1,32 +1,39 @@
+using System;
 using UnityEngine;
 
 namespace UnknownInventoryTerminal
 {
-    // The hit rectangle stays fixed; the face, caption and marker are painted in one moving group.
     internal sealed class Ae2SettingsControls
     {
         private readonly Ae2TerminalSkin _skin;
         internal Ae2SettingsControls(Ae2TerminalSkin skin) => _skin = skin;
 
-        internal bool Button(Rect bounds, int scale, string text, string marker, GUIStyle label,
-            GUIStyle icon, bool option = false, bool selected = false, bool open = false)
+        internal bool Dropdown(Rect bounds, int scale, string text, GUIStyle label, bool open, bool enabled)
         {
-            if (Event.current.type == EventType.Repaint)
-            {
-                var hover = bounds.Contains(Event.current.mousePosition);
-                var highlight = hover || selected;
-                var face = option ? (highlight ? Ae2Image.SettingsOptionSelected : Ae2Image.SettingsOption) :
-                    (open ? (hover ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownOpen) :
-                        (hover ? Ae2Image.SettingsDropDownClosedHover : Ae2Image.SettingsDropDownClosed));
-                var size = _skin.SourceSize(face) ?? new Vector2Int(111, 20);
-                var x = bounds.xMax - size.x * scale;
-                _skin.Draw(new Rect(x, bounds.y, size.x * scale, size.y * scale), face,
-                    highlight ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
-                var rightInset = option ? 0 : size.x * scale;
-                GUI.Label(new Rect(bounds.x + 4 * scale, bounds.y, bounds.width - rightInset - 6 * scale, bounds.height), text, label);
-                if (option) GUI.Label(new Rect(bounds.xMax - 11 * scale, bounds.y, 9 * scale, bounds.height), marker, icon);
-            }
-            return GUI.Button(bounds, GUIContent.none, GUIStyle.none);
+            var hover = bounds.Contains(Event.current.mousePosition);
+            var face = Ae2DropdownAppearance.Field(open, enabled, hover, hover && Input.GetMouseButton(0));
+            // Short states are inset from the top. The lower edge always meets the first option.
+            var height = Math.Min(bounds.height, (_skin.SourceSize(face)?.y ?? Ae2SettingsLayout.FieldHeight) * scale);
+            var painted = new Rect(bounds.x, bounds.yMax - height, bounds.width, height);
+            _skin.Draw(painted, face, enabled && (hover || open) ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
+            DrawText(painted, scale, text, label, 21);
+            return enabled && GUI.Button(bounds, GUIContent.none, GUIStyle.none);
+        }
+
+        internal bool Option(Rect bounds, int scale, string text, GUIStyle label, bool selected, bool enabled = true)
+        {
+            var hover = bounds.Contains(Event.current.mousePosition);
+            var face = Ae2DropdownAppearance.Option(enabled, hover, selected);
+            // Preserve full-width edges and corners while keeping the row hit box stable on hover.
+            _skin.DrawPanel(bounds, face, scale, enabled && (hover || selected) ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
+            DrawText(bounds, scale, text, label, 4);
+            return enabled && GUI.Button(bounds, GUIContent.none, GUIStyle.none);
+        }
+
+        private static void DrawText(Rect bounds, int scale, string text, GUIStyle label, int rightInset)
+        {
+            var caption = new Rect(bounds.x + 4 * scale, bounds.y, bounds.width - (4 + rightInset) * scale, bounds.height);
+            GUI.Label(caption, text, label);
         }
 
         // Kept for future independent on/off settings. The caption shares the sprite's hover displacement.

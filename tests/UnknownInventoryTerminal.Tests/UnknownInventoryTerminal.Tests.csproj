@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\src\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2ScreenStyle.cs" Link="Ae2ScreenStyle.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalText.cs" Link="TerminalText.cs" />
+    <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\Assets\AE2\screens\terminals\terminal.json" Link="Assets\AE2\screens\terminals\terminal.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\Assets\AE2\textures\**\*" Link="Assets\AE2\textures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Ae2TerminalLayout.cs" />

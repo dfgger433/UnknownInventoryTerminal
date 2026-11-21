@@ -9,8 +9,7 @@ namespace UnknownInventoryTerminal
         private int _pointerButton;
         internal TerminalButton Focused { get; private set; }
         internal bool SettingsOpen { get; private set; }
-        internal const int SettingsWidth = 124, SettingsHeight = 82;
-        internal const int SettingsCloseX = SettingsWidth - 22, SettingsCloseY = 2;
+        internal const int SettingsCloseX = Ae2SettingsLayout.PanelWidth - 22, SettingsCloseY = 2;
 
         internal static TerminalButton SettingsHitTest(float x, float y) =>
             x >= SettingsCloseX && x < SettingsCloseX + Ae2TerminalLayout.ButtonWidth &&

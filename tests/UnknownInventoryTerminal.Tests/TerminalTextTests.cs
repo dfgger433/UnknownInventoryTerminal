@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -53,6 +54,20 @@ public sealed class TerminalTextTests
         TerminalText.Get("missing.key").Should().Be("missing.key");
         ResolveLanguage("XX").Should().Be("xx");
         ResolveLanguage("unknown").Should().Be("en");
+    }
+
+    [TestMethod]
+    [DataRow("en", "Terminal language", "Container placement")]
+    [DataRow("zh-CN", "终端语言", "容器放置规则")]
+    public void SettingsReadPlainFieldLabelsEvenWithLegacyFormatKeys(string language, string languageTitle, string placementTitle)
+    {
+        var shipped = TerminalText.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Lang", language + ".json")));
+        shipped["settings.Language"].Should().Be(languageTitle).And.NotContain("{0}");
+        shipped["settings.ContainerPlacement"].Should().Be(placementTitle).And.NotContain("{0}");
+        shipped["language.name"].Should().NotBeNullOrWhiteSpace();
+        shipped["settings.ContainerPlacement.BestFit"].Should().NotContain("{0}");
+        shipped["settings.ContainerPlacement.WeightReduction"].Should().NotContain("{0}");
+        shipped["settings.ContainerPlacement.Manual"].Should().NotContain("{0}");
     }
 
     private static Dictionary<string, string> Dict(params (string Key, string Value)[] entries)

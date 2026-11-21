@@ -26,8 +26,7 @@ public sealed class Ae2ScreenStyleTests
             region.Border.Should().Be(image switch
             {
                 Ae2Image.SettingsBackground => 4,
-                Ae2Image.SettingsField or Ae2Image.SettingsFieldHover => 3,
-                Ae2Image.SettingsOption or Ae2Image.SettingsOptionSelected => 2,
+                Ae2Image.SettingsOption or Ae2Image.SettingsOptionDisabled or Ae2Image.SettingsOptionHover or Ae2Image.SettingsOptionSelected => 2,
                 _ => 0
             });
             if (Ae2ScreenStyle.IsBoardPart(image))
@@ -45,41 +44,53 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    public void SettingsListRowsUseTheUnscaledAe2CpuSelectorSprites()
+    [DataRow((int)Ae2Image.SettingsDropDownClosed, 0, 0, 20)]
+    [DataRow((int)Ae2Image.SettingsDropDownClosedDisabled, 0, 32, 18)]
+    [DataRow((int)Ae2Image.SettingsDropDownClosedHover, 0, 96, 18)]
+    [DataRow((int)Ae2Image.SettingsDropDownClosedPressed, 0, 64, 19)]
+    [DataRow((int)Ae2Image.SettingsDropDownOpen, 112, 64, 19)]
+    [DataRow((int)Ae2Image.SettingsDropDownOpenDisabled, 112, 32, 18)]
+    [DataRow((int)Ae2Image.SettingsDropDownOpenHover, 112, 96, 18)]
+    [DataRow((int)Ae2Image.SettingsOption, 0, 128, 19)]
+    [DataRow((int)Ae2Image.SettingsOptionDisabled, 0, 160, 17)]
+    [DataRow((int)Ae2Image.SettingsOptionHover, 112, 192, 17)]
+    [DataRow((int)Ae2Image.SettingsOptionSelected, 0, 192, 18)]
+    public void SettingsDropdownKeepsAllSourceEdges(int image, int x, int y, int height)
     {
         var style = ReadBundledStyle();
-        foreach (var image in new[] { Ae2Image.SettingsOption, Ae2Image.SettingsOptionSelected })
-        {
-            style.TryGet(image, out var region).Should().BeTrue();
-            region.Texture.Should().Be("guis/cpu_selector.png");
-            (region.Width, region.Height, region.Border).Should().Be((67, 22, 2));
-            var texture = TextureFilePath(region.Texture);
-            File.Exists(texture).Should().BeTrue();
-            var dimensions = ReadPngDimensions(texture);
-            region.Fits(dimensions.Width, dimensions.Height).Should().BeTrue();
-        }
+        style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
+        region.Texture.Should().Be("gui/sprites/drop_down_list.png");
+        (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, Ae2SettingsLayout.FieldWidth, height));
+        using var png = PngPixels.Read(TextureFilePath(region.Texture));
+        png.Alpha(x + region.Width - 1, y + 1).Should().BeGreaterThan(0);
+        png.Alpha(x + region.Width / 2, y + region.Height).Should().Be(0);
     }
 
     [TestMethod]
-    public void SettingsDropdownUsesOriginalFourClosedAndOpenHoverSlices()
+    public void SettingsStatesGiveDisabledAndHoverDistinctSprites()
     {
-        var style = ReadBundledStyle();
-        foreach (var image in new[] { Ae2Image.SettingsDropDownClosed, Ae2Image.SettingsDropDownClosedHover,
-            Ae2Image.SettingsDropDownOpen, Ae2Image.SettingsDropDownOpenHover })
-        {
-            style.TryGet(image, out var region).Should().BeTrue();
-            region.Texture.Should().Be("gui/sprites/drop_down_list.png");
-            var expected = image switch
-            {
-                Ae2Image.SettingsDropDownClosed => (X: 0, Y: 0, Width: 111, Height: 20),
-                Ae2Image.SettingsDropDownClosedHover => (X: 0, Y: 32, Width: 111, Height: 18),
-                Ae2Image.SettingsDropDownOpen => (X: 112, Y: 64, Width: 111, Height: 19),
-                _ => (X: 112, Y: 96, Width: 111, Height: 18)
-            };
-            (region.X, region.Y, region.Width, region.Height).Should().Be(expected);
-            ReadPngDimensions(TextureFilePath(region.Texture)).Should().Be((256, 256));
-            region.Fits(256, 256).Should().BeTrue();
-        }
+        Ae2DropdownAppearance.Field(false, false, true, true).Should().Be(Ae2Image.SettingsDropDownClosedDisabled);
+        Ae2DropdownAppearance.Field(false, true, true, false).Should().Be(Ae2Image.SettingsDropDownClosedHover);
+        Ae2DropdownAppearance.Field(true, true, false, false).Should().Be(Ae2Image.SettingsDropDownOpen);
+        Ae2DropdownAppearance.Field(true, true, true, false).Should().Be(Ae2Image.SettingsDropDownOpenHover);
+        Ae2DropdownAppearance.Option(false, true, true).Should().Be(Ae2Image.SettingsOptionDisabled);
+        Ae2DropdownAppearance.Option(true, false, true).Should().Be(Ae2Image.SettingsOptionSelected);
+        Ae2DropdownAppearance.Option(true, true, true).Should().Be(Ae2Image.SettingsOptionHover);
+        Ae2DropdownAppearance.Option(true, false, false).Should().Be(Ae2Image.SettingsOption);
+    }
+
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(4)]
+    public void ExpandedSettingsOptionsStayJoinedAndDoNotCoverTheNextField(int rows)
+    {
+        var list = Ae2SettingsLayout.ListY(placement: false);
+        list.Should().Be(Ae2SettingsLayout.LanguageY + Ae2SettingsLayout.FieldHeight);
+        var placement = Ae2SettingsLayout.FieldY(placement: true, rows);
+        (placement - Ae2SettingsLayout.LabelHeight).Should().BeGreaterThanOrEqualTo(list + rows * Ae2SettingsLayout.OptionHeight);
+        (placement + Ae2SettingsLayout.FieldHeight).Should().BeLessThan(Ae2SettingsLayout.PageHeight(rows));
+        (Ae2SettingsLayout.ListY(placement: true) + rows * Ae2SettingsLayout.OptionHeight).Should().BeLessThan(Ae2SettingsLayout.PageHeight(rows));
     }
 
     [TestMethod]

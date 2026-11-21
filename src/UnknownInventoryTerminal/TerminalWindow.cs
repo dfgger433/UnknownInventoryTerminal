@@ -31,7 +31,7 @@ namespace UnknownInventoryTerminal
         internal bool BlocksInventoryInput => SettingsOpen || _settingsClosedFrame == Time.frameCount;
         private enum SettingsDropdown { None, Language, Placement }
         private SettingsDropdown _expanded;
-        private Vector2 _optionScroll;
+        private int _optionScroll;
         private readonly Ae2SettingsControls _settingsControls;
         private int _styleScale;
         private readonly TerminalButtonInput _buttons = new TerminalButtonInput();
@@ -245,24 +245,30 @@ namespace UnknownInventoryTerminal
         {
             get
             {
-                const int panelWidth = 124, panelHeight = 82;
                 var scale = _layout.Scale;
-                var width = panelWidth * scale;
-                var height = panelHeight * scale;
-                var rowHeight = OptionHeight * scale;
-                var maximumOptions = Math.Max(TerminalText.Languages.Count, PlacementOptions.Length);
-                var visibleRows = Math.Min(4, maximumOptions);
-                var reserve = _expanded == SettingsDropdown.None ? 0 : visibleRows * rowHeight;
-                var y = Math.Max(0, Math.Min((Screen.height - height) / 2, Screen.height - height - reserve));
+                var width = Ae2SettingsLayout.PanelWidth * scale;
+                var height = Ae2SettingsLayout.PageHeight(VisibleOptionRows) * scale;
+                var maxRows = Math.Min(OptionCapacity, Math.Max(TerminalText.Languages.Count, PlacementOptions.Length));
+                var maxHeight = Ae2SettingsLayout.PageHeight(maxRows) * scale;
+                var y = Math.Max(0, Math.Min((Screen.height - Ae2SettingsLayout.PanelHeight * scale) / 2, Screen.height - maxHeight));
                 return new Rect((Screen.width - width) / 2, y, width, height);
             }
         }
 
-        private const int OptionHeight = 17;
+        private int OptionCapacity => Math.Max(0, Math.Min(Ae2SettingsLayout.MaxVisibleOptions,
+            (Screen.height / _layout.Scale - Ae2SettingsLayout.PanelHeight) / Ae2SettingsLayout.OptionHeight));
+
+        private int VisibleOptionRows => _expanded switch
+        {
+            SettingsDropdown.Language => Math.Min(OptionCapacity, TerminalText.Languages.Count),
+            SettingsDropdown.Placement => Math.Min(OptionCapacity, PlacementOptions.Length),
+            _ => 0
+        };
+
         private void ToggleDropdown(SettingsDropdown dropdown)
         {
             _expanded = _expanded == dropdown ? SettingsDropdown.None : dropdown;
-            _optionScroll = Vector2.zero;
+            _optionScroll = 0;
         }
         private static readonly ContainerPlacementMode[] PlacementOptions =
             (ContainerPlacementMode[])Enum.GetValues(typeof(ContainerPlacementMode));
@@ -271,84 +277,69 @@ namespace UnknownInventoryTerminal
         {
             var page = SettingsBounds;
             var scale = _layout.Scale;
+            // Keep layout stable for the whole IMGUI pass, even if a button changes the state.
+            var expanded = _expanded;
+            var rows = VisibleOptionRows;
             GUI.BeginGroup(page);
             try
             {
                 _skin.DrawPanel(new Rect(0, 0, page.width, page.height), Ae2Image.SettingsBackground, scale, Ae2TerminalSkin.Shell);
-                GUI.Label(Area(7, 5, 90, 18), TerminalText.Get("terminal.settings"), _titleStyle);
+                GUI.Label(Area(7, 4, 90, 12), TerminalText.Get("terminal.settings"), _titleStyle);
                 var close = Area(TerminalButtonInput.SettingsCloseX, TerminalButtonInput.SettingsCloseY,
                     Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
                 PaintButton(close, TerminalButton.SettingsBack, Ae2Image.Back, "<");
 
-                GUI.Label(Area(7, 26, 110, 11), TerminalText.Get("terminal.settings.language"), _titleStyle);
-                Field(SettingsDropdown.Language, Area(7, 38, 110, 14), TerminalText.LanguageName(SettingsBridge.Language));
-                GUI.Label(Area(7, 54, 110, 10), TerminalText.Get("terminal.settings.placement"), _titleStyle);
-                DrawPlacementField(Area(7, 65, 110, 13), ContainerPlacement.Label());
+                Field(SettingsDropdown.Language, Ae2SettingsLayout.LanguageY,
+                    SettingsBridge.Label(SettingsBridge.LanguageSetting), SettingsBridge.LanguageLabel(), TerminalText.Languages.Count);
+                var placementY = Ae2SettingsLayout.FieldY(placement: true, expanded == SettingsDropdown.Language ? rows : 0);
+                Field(SettingsDropdown.Placement, placementY, SettingsBridge.Label("ContainerPlacement"),
+                    ContainerPlacement.Label(), PlacementOptions.Length);
 
+                if (rows > 0 && _expanded == expanded)
+                {
+                    var list = Area(Ae2SettingsLayout.FieldX, Ae2SettingsLayout.ListY(expanded == SettingsDropdown.Placement),
+                        Ae2SettingsLayout.FieldWidth, rows * Ae2SettingsLayout.OptionHeight);
+                    if (expanded == SettingsDropdown.Language)
+                        DrawOptions(list, rows, TerminalText.Languages, SettingsBridge.Language, TerminalText.LanguageName, SettingsBridge.SetLanguage);
+                    else
+                        DrawOptions(list, rows, PlacementOptions, ContainerPlacement.Mode,
+                            mode => SettingsBridge.ChoiceLabel("ContainerPlacement", mode.ToString()), mode => ContainerPlacement.Mode = mode);
+                }
             }
             finally { GUI.EndGroup(); }
 
-            if (_expanded != SettingsDropdown.None)
+            Rect Area(int x, int y, int width, int height) => new Rect(x * scale, y * scale, width * scale, height * scale);
+            void Field(SettingsDropdown id, int y, string title, string caption, int optionCount)
             {
-                var count = _expanded == SettingsDropdown.Language ? TerminalText.Languages.Count : PlacementOptions.Length;
-                var rowHeight = OptionHeight * scale;
-                var list = new Rect(page.x + 7 * scale, page.yMax, 110 * scale, Math.Min(4, count) * rowHeight);
-                if (_expanded == SettingsDropdown.Language)
-                    DrawOptions(list, TerminalText.Languages, SettingsBridge.Language, TerminalText.LanguageName, SettingsBridge.SetLanguage);
-                else
-                    DrawOptions(list, PlacementOptions, ContainerPlacement.Mode,
-                        mode => SettingsBridge.ChoiceLabel("ContainerPlacement", mode.ToString()), mode => ContainerPlacement.Mode = mode);
-            }
-
-            Rect Area(float x, float y, float width, float height) => new Rect(x * scale, y * scale, width * scale, height * scale);
-            void Field(SettingsDropdown id, Rect bounds, string caption)
-            {
-                if (_settingsControls.Button(bounds, scale, caption, "", _settingsStyle!, _iconStyle!, open: _expanded == id))
+                GUI.Label(Area(Ae2SettingsLayout.FieldX, y - Ae2SettingsLayout.LabelHeight,
+                    Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.LabelHeight), title, _titleStyle);
+                if (_settingsControls.Dropdown(Area(Ae2SettingsLayout.FieldX, y, Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.FieldHeight),
+                    scale, caption, _settingsStyle!, expanded == id, optionCount > 1 && OptionCapacity > 0))
                     ToggleDropdown(id);
             }
         }
 
-        private void DrawPlacementField(Rect bounds, string caption)
+        private void DrawOptions<T>(Rect bounds, int rows, IReadOnlyList<T> options, T selected, Func<T, string> label, Action<T> apply)
         {
             var scale = _layout.Scale;
-            if (Event.current.type == EventType.Repaint)
+            var pitch = Ae2SettingsLayout.OptionHeight * scale;
+            var ev = Event.current;
+            var maxScroll = Math.Max(0, options.Count - rows);
+            _optionScroll = Mathf.Clamp(_optionScroll, 0, maxScroll);
+            if (maxScroll > 0 && ev.type == EventType.ScrollWheel && bounds.Contains(ev.mousePosition))
             {
-                var hovered = bounds.Contains(Event.current.mousePosition);
-                var open = _expanded == SettingsDropdown.Placement;
-                var face = open
-                    ? hovered ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownOpen
-                    : hovered ? Ae2Image.SettingsDropDownClosedHover : Ae2Image.SettingsDropDownClosed;
-                var size = _skin.SourceSize(face) ?? new Vector2Int(111, 20);
-                var x = bounds.xMax - size.x * scale;
-                _skin.Draw(new Rect(x, bounds.y, size.x * scale, size.y * scale), face,
-                    hovered ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
-                GUI.Label(new Rect(bounds.x, bounds.y, bounds.width - size.x * scale, bounds.height), caption, _settingsStyle);
+                _optionScroll = Mathf.Clamp(_optionScroll + Math.Sign(ev.delta.y), 0, maxScroll);
+                ev.Use();
             }
-            if (GUI.Button(bounds, GUIContent.none, GUIStyle.none)) ToggleDropdown(SettingsDropdown.Placement);
-        }
-
-        private void DrawOptions<T>(Rect bounds, IReadOnlyList<T> options, T selected, Func<T, string> label, Action<T> apply)
-        {
-            var scale = _layout.Scale;
-            var pitch = OptionHeight * scale;
-            var overflow = options.Count * pitch > bounds.height;
-            var width = bounds.width - (overflow ? GUI.skin.verticalScrollbar.fixedWidth + scale : 0);
-            if (Event.current.type == EventType.Repaint) _optionScroll.y = Mathf.Clamp(_optionScroll.y, 0, Mathf.Max(0, options.Count * pitch - bounds.height));
-            _optionScroll = GUI.BeginScrollView(bounds, _optionScroll, new Rect(0, 0, width, options.Count * pitch));
-            try
+            for (var i = 0; i < rows; i++)
             {
-                for (var i = 0; i < options.Count; i++)
-                {
-                    var option = options[i];
-                    var isSelected = EqualityComparer<T>.Default.Equals(option, selected);
-                    if (!_settingsControls.Button(new Rect(0, i * pitch, width, pitch - scale), scale, label(option),
-                        isSelected ? "*" : "", _settingsStyle!, _iconStyle!, option: true, selected: isSelected)) continue;
-                    apply(option);
-                    ToggleDropdown(SettingsDropdown.None);
-                    break;
-                }
+                var option = options[_optionScroll + i];
+                var row = new Rect(bounds.x, bounds.y + i * pitch, bounds.width, pitch);
+                if (!_settingsControls.Option(row, scale, label(option), _settingsStyle!, EqualityComparer<T>.Default.Equals(option, selected))) continue;
+                apply(option);
+                ToggleDropdown(SettingsDropdown.None);
+                break;
             }
-            finally { GUI.EndScrollView(); }
         }
 
         private static Ae2Image StyleIcon(TerminalHeight height) => height switch
