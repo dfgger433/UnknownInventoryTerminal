@@ -23,7 +23,12 @@ public sealed class Ae2ScreenStyleTests
         foreach (Ae2Image image in Enum.GetValues(typeof(Ae2Image)))
         {
             style.TryGet(image, out var region).Should().BeTrue($"{image} must have a region");
-            region.Border.Should().Be(image == Ae2Image.SettingsBackground ? 4 : 0);
+            region.Border.Should().Be(image switch
+            {
+                Ae2Image.SettingsBackground => 4,
+                Ae2Image.SettingsField or Ae2Image.SettingsFieldHover => 3,
+                _ => 0
+            });
             if (Ae2ScreenStyle.IsBoardPart(image))
             {
                 region.Width.Should().Be(Ae2TerminalLayout.BoardWidth, "board parts are stacked unscaled");
@@ -44,6 +49,11 @@ public sealed class Ae2ScreenStyleTests
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.SettingsBackground, out var region).Should().BeTrue();
         region.Texture.Should().Be("guis/background.png");
+        (region.X, region.Y, region.Width, region.Height).Should().Be((0, 0, 124, 82));
+        using var bitmap = PngPixels.Read(TextureFilePath(region.Texture));
+        foreach (var x in new[] { region.X, region.X + region.Width - 1 })
+        foreach (var y in new[] { region.Y, region.Y + region.Height - 1 })
+            bitmap.Alpha(x, y).Should().BeGreaterThan(0, "the crop must include the actual border, not transparent atlas padding");
         foreach (var length in new[] { 124, 82 })
         foreach (var scale in new[] { 1, 2, 3, 4 })
         {

@@ -1,6 +1,6 @@
 namespace UnknownInventoryTerminal
 {
-    internal enum TerminalButton { None, Close, Sort, Direction, Style, Settings, Return }
+    internal enum TerminalButton { None, Close, Sort, Direction, Style, Settings, Return, SettingsBack }
 
     // The same rectangles drive drawing and input, but clicks do not depend on IMGUI control IDs or repaint order.
     internal sealed class TerminalButtonInput
@@ -9,7 +9,13 @@ namespace UnknownInventoryTerminal
         private int _pointerButton;
         internal TerminalButton Focused { get; private set; }
         internal bool SettingsOpen { get; private set; }
-        internal void DismissSettings() => SettingsOpen = false;
+        internal const int SettingsWidth = 124, SettingsHeight = 82;
+        internal const int SettingsCloseX = SettingsWidth - 21, SettingsCloseY = 3;
+
+        internal static TerminalButton SettingsHitTest(float x, float y) =>
+            x >= SettingsCloseX && x < SettingsCloseX + Ae2TerminalLayout.ButtonWidth &&
+            y >= SettingsCloseY && y < SettingsCloseY + Ae2TerminalLayout.ButtonHeight
+                ? TerminalButton.SettingsBack : TerminalButton.None;
 
         internal static (int X, int Y) Origin(TerminalButton button) => button == TerminalButton.Close
             ? (Ae2TerminalLayout.CloseX, Ae2TerminalLayout.CloseY)
@@ -49,14 +55,15 @@ namespace UnknownInventoryTerminal
             var pressed = _pressed;
             _pressed = TerminalButton.None;
             if (hit != pressed) return TerminalButton.None;
-            if (pressed == TerminalButton.Settings) SettingsOpen = !SettingsOpen;
+            if (pressed == TerminalButton.Settings) SettingsOpen = true;
+            if (pressed == TerminalButton.SettingsBack) SettingsOpen = false;
             return pressed;
         }
 
         internal void Reset()
         {
             Focused = _pressed = TerminalButton.None;
-            DismissSettings();
+            SettingsOpen = false;
         }
     }
 }

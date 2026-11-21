@@ -52,7 +52,7 @@ namespace UnknownInventoryTerminal
         private readonly Dictionary<(string Key, string Parent, bool Picker), Tile> _tiles = new Dictionary<(string, string, bool), Tile>();
         private GameObject? _root;
         private RectTransform? _windowSurface, _board, _panel, _viewport, _content, _lower, _extensionRoot;
-        internal RectTransform? ExtensionRoot => _visible && _extensionRoot ? _extensionRoot : null;
+        internal RectTransform? ExtensionRoot => _visible && _root && _root!.activeInHierarchy && _extensionRoot ? _extensionRoot : null;
         internal bool ContainsExtension(GameObject target) => _extensionRoot && target &&
             (target.transform == _extensionRoot || target.transform.IsChildOf(_extensionRoot!));
         private GridLayoutGroup? _grid;
@@ -189,8 +189,14 @@ namespace UnknownInventoryTerminal
             else surface.SetAsFirstSibling();
         }
 
-        internal void SetVisible(bool visible)
+        internal void SetVisible(bool visible, bool settingsOpen = false)
         {
+            if (visible && settingsOpen)
+            {
+                // Suspend the canvas without clearing the current search, group or scroll position.
+                if (_root && _root!.activeSelf) _root.SetActive(false);
+                return;
+            }
             _visible = visible;
             if (!visible)
             {
@@ -279,10 +285,13 @@ namespace UnknownInventoryTerminal
             _slider.direction = Slider.Direction.TopToBottom;
             _slider.wholeNumbers = true;
             _slider.navigation = new Navigation { mode = Navigation.Mode.None };
-            _slider.transition = Selectable.Transition.None;
+            // Let Unity's Selectable drive hover/press/disabled transitions on the stock thumb.
+            _slider.transition = Selectable.Transition.ColorTint;
             var handleLane = Add(scroll.transform, "Thumb travel").GetComponent<RectTransform>();
             Stretch(handleLane, Vector2.zero, Vector2.zero);
             _thumb = Add(handleLane, "AE2 thumb", typeof(Image)).GetComponent<Image>();
+            // The track is the hit surface. Otherwise the thumb can obscure the native UITooltip.
+            _thumb.raycastTarget = false;
             _thumb.rectTransform.anchorMin = new Vector2(0, 1);
             _thumb.rectTransform.anchorMax = Vector2.one;
             _slider.handleRect = _thumb.rectTransform;

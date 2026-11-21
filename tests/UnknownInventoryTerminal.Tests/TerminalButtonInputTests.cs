@@ -61,7 +61,7 @@ public sealed class TerminalButtonInputTests
     }
 
     [TestMethod]
-    public void SettingsOpensAndClosesOnlyOnCompletedLeftClicks()
+    public void SettingsOpensFromToolbarAndReturnsFromItsOwnTopRightButton()
     {
         var input = new TerminalButtonInput();
         input.Press(TerminalButton.Settings, 0).Should().BeTrue();
@@ -69,18 +69,18 @@ public sealed class TerminalButtonInputTests
         input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.Settings);
         input.SettingsOpen.Should().BeTrue();
 
-        input.Press(TerminalButton.Settings, 1).Should().BeFalse();
-        input.Release(TerminalButton.Settings, 1).Should().Be(TerminalButton.None);
-        input.Press(TerminalButton.Settings, 0).Should().BeTrue();
+        TerminalButtonInput.SettingsHitTest(8, 69).Should().Be(TerminalButton.None);
+        var back = TerminalButtonInput.SettingsHitTest(103, 3);
+        back.Should().Be(TerminalButton.SettingsBack);
+        input.Press(back, 1).Should().BeFalse();
+        input.Press(back, 0).Should().BeTrue();
         input.Release(TerminalButton.None, 0).Should().Be(TerminalButton.None);
         input.SettingsOpen.Should().BeTrue();
 
-        input.Press(TerminalButton.Settings, 0).Should().BeTrue();
-        input.SettingsOpen.Should().BeTrue();
-        input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.Settings);
+        input.Press(back, 0).Should().BeTrue();
+        input.Release(back, 0).Should().Be(TerminalButton.SettingsBack);
         input.SettingsOpen.Should().BeFalse();
-        input.Release(TerminalButton.Settings, 0).Should().Be(TerminalButton.None);
-        input.SettingsOpen.Should().BeFalse();
+        input.Release(back, 0).Should().Be(TerminalButton.None);
     }
 
     [TestMethod]

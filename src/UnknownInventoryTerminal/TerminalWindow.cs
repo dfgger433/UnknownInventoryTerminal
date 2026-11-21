@@ -27,8 +27,9 @@ namespace UnknownInventoryTerminal
         private bool _closeRequested, _focusSearch, _sortByAmount, _descending;
         private GUIStyle? _titleStyle, _statusStyle, _searchStyle, _tooltipStyle, _iconStyle, _settingsStyle;
         private int _settingsClosedFrame = -1;
-        private bool SettingsOpen => _buttons.SettingsOpen;
+        internal bool SettingsOpen => _buttons.SettingsOpen;
         internal bool BlocksInventoryInput => SettingsOpen || _settingsClosedFrame == Time.frameCount;
+        private bool _placementExpanded;
         private int _styleScale;
         private readonly TerminalButtonInput _buttons = new TerminalButtonInput();
         internal bool Visible { get; private set; }
@@ -59,6 +60,7 @@ namespace UnknownInventoryTerminal
             Visible = false;
             _focusSearch = false;
             _settingsClosedFrame = -1;
+            _placementExpanded = false;
             _buttons.Reset();
             _snapshot = Array.Empty<InventoryEntry>();
             _rows = Array.Empty<InventoryRow>();
@@ -72,7 +74,7 @@ namespace UnknownInventoryTerminal
             if (_closeRequested) return;
             FitToScreen();
             UpdateButtons();
-            if (_closeRequested) return;
+            if (_closeRequested || SettingsOpen) return;
             ConfigureNativePanel();
             if (Time.unscaledTime >= _nextRefresh) Refresh();
             else if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
@@ -82,16 +84,9 @@ namespace UnknownInventoryTerminal
         {
             var pointer = Input.mousePosition;
             var topLeft = new Vector2(pointer.x, Screen.height - pointer.y);
-            var hit = TerminalButtonInput.HitTest(_layout, topLeft.x, topLeft.y, _canReturn());
-            if (SettingsOpen && hit == TerminalButton.None && Input.GetMouseButtonDown(0) &&
-                !SettingsBounds.Contains(topLeft - _rect.position))
-            {
-                _buttons.Reset();
-                _settingsClosedFrame = Time.frameCount;
-                Plugin.ReleaseSearchFocus();
-                return;
-            }
-            if (SettingsOpen && hit is not (TerminalButton.Settings or TerminalButton.Close)) hit = TerminalButton.None;
+            var local = (topLeft - SettingsBounds.position) / _layout.Scale;
+            var hit = SettingsOpen ? TerminalButtonInput.SettingsHitTest(local.x, local.y) :
+                TerminalButtonInput.HitTest(_layout, topLeft.x, topLeft.y, _canReturn());
             for (var button = 0; button <= 1; button++)
             {
                 if (Input.GetMouseButtonDown(button) && _buttons.Press(hit, button)) Plugin.ReleaseSearchFocus();
@@ -109,7 +104,9 @@ namespace UnknownInventoryTerminal
                         FitToScreen();
                         break;
                     case TerminalButton.Settings:
+                    case TerminalButton.SettingsBack:
                         if (!SettingsOpen) _settingsClosedFrame = Time.frameCount;
+                        _focusSearch = _placementExpanded = false;
                         Plugin.ReleaseSearchFocus();
                         break;
                     case TerminalButton.Return: _returnToGroups(); break;
@@ -166,6 +163,11 @@ namespace UnknownInventoryTerminal
             if (!Visible) return;
             EnsureStyles();
             _tooltip = null;
+            if (SettingsOpen)
+            {
+                DrawSettingsPage();
+                return;
+            }
             // A layout group clips the drawing but does not create a full-window IMGUI input target.
             GUI.BeginGroup(_rect);
             try { DrawContents(); }
@@ -231,39 +233,86 @@ namespace UnknownInventoryTerminal
             if (_canReturn()) DrawButton(TerminalButton.Return, Ae2Image.Back, TerminalText.Get("inventory.backTooltip"), "<");
             DrawButton(TerminalButton.Settings, Ae2Image.Settings, TerminalText.Get("terminal.settings"), "S");
             if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
-            DrawSettingsPanel();
         }
 
-        private Rect SettingsBounds => Units(Ae2TerminalLayout.Rail + 9, Ae2TerminalLayout.Header + 12, 124, 82);
-
-        private void DrawSettingsPanel()
+        private Rect SettingsBounds
         {
-            if (!SettingsOpen) return;
-            var panel = SettingsBounds;
-            var scale = _layout.Scale;
-            _skin.DrawPanel(panel, Ae2Image.SettingsBackground, scale, Ae2TerminalSkin.Shell);
-            GUI.Label(new Rect(panel.x + 7 * scale, panel.y + 5 * scale, panel.width - 14 * scale, 14 * scale),
-                TerminalText.Get("terminal.settings"), _titleStyle);
-            DrawSettingsAction(Row(22), TerminalText.Format("terminal.settings.language", SettingsBridge.LanguageLabel()), SettingsBridge.CycleLanguage);
-            DrawSettingsAction(Row(50), TerminalText.Format("terminal.settings.placement", ContainerPlacement.Label()), ContainerPlacement.Cycle);
-
-            Rect Row(int y) => new Rect(panel.x + 7 * scale, panel.y + y * scale, panel.width - 14 * scale, 24 * scale);
+            get
+            {
+                var width = TerminalButtonInput.SettingsWidth * _layout.Scale;
+                var height = TerminalButtonInput.SettingsHeight * _layout.Scale;
+                // Keep the return button fixed and let the expanded list grow downward.
+                var reserve = PlacementOptions.Length * PlacementOptionHeight * _layout.Scale;
+                var y = Math.Max(0, Math.Min((Screen.height - height) / 2, Screen.height - height - reserve));
+                return new Rect((Screen.width - width) / 2, y, width, height + (_placementExpanded ? reserve : 0));
+            }
         }
 
-        private void DrawSettingsAction(Rect bounds, string text, Action activate)
+        private const int PlacementOptionHeight = 20;
+        private static readonly ContainerPlacementMode[] PlacementOptions =
+            (ContainerPlacementMode[])Enum.GetValues(typeof(ContainerPlacementMode));
+
+        private void DrawSettingsPage()
+        {
+            var page = SettingsBounds;
+            var scale = _layout.Scale;
+            GUI.BeginGroup(page);
+            try
+            {
+                _skin.DrawPanel(new Rect(0, 0, page.width, page.height), Ae2Image.SettingsBackground, scale, Ae2TerminalSkin.Shell);
+                GUI.Label(Area(7, 5, 90, 18), TerminalText.Get("terminal.settings"), _titleStyle);
+                var close = Area(TerminalButtonInput.SettingsCloseX, TerminalButtonInput.SettingsCloseY,
+                    Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
+                PaintButton(close, TerminalButton.SettingsBack, Ae2Image.Close, "X");
+
+                GUI.Label(Area(7, 26, 110, 11), SettingsBridge.Label(SettingsBridge.LanguageSetting), _titleStyle);
+                DrawLanguageChoice(Area(7, 38, 52, 14), TerminalText.English);
+                DrawLanguageChoice(Area(63, 38, 54, 14), TerminalText.Chinese);
+
+                GUI.Label(Area(7, 54, 110, 10), SettingsBridge.Label("ContainerPlacement"), _titleStyle);
+                if (DrawSettingsField(Area(7, 65, 110, 13), ContainerPlacement.Label(),
+                    _placementExpanded ? "-" : "v")) _placementExpanded = !_placementExpanded;
+
+                if (_placementExpanded)
+                    for (var i = 0; i < PlacementOptions.Length; i++)
+                    {
+                        var mode = PlacementOptions[i];
+                        if (!DrawSettingsField(Area(7, 82 + i * PlacementOptionHeight, 110, 18),
+                            SettingsBridge.ChoiceLabel("ContainerPlacement", mode.ToString()),
+                            mode == ContainerPlacement.Mode ? "*" : "")) continue;
+                        ContainerPlacement.Mode = mode;
+                        _placementExpanded = false;
+                        break;
+                    }
+            }
+            finally { GUI.EndGroup(); }
+
+            Rect Area(int x, int y, int width, int height) => new Rect(x * scale, y * scale, width * scale, height * scale);
+        }
+
+        private void DrawLanguageChoice(Rect bounds, string language)
         {
             var scale = _layout.Scale;
-            // The whole row is clickable; only the native-size face moves on hover.
+            var selected = SettingsBridge.Language == language;
             var hovered = bounds.Contains(Event.current.mousePosition);
-            var face = hovered && Input.GetMouseButton(0) ? Ae2Image.ButtonFocus : Ae2ToolbarAppearance.Face(hovered, false);
-            var offset = Ae2ToolbarAppearance.OffsetY(face);
-            var size = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
-            var faceRect = new Rect(bounds.x, bounds.y + (2 + offset) * scale, size.x * scale, size.y * scale);
-            _skin.Draw(faceRect, face, Ae2TerminalSkin.Slot);
-            GUI.Label(faceRect, ">", _iconStyle);
-            const int labelInset = Ae2TerminalLayout.ButtonWidth + 4;
-            GUI.Label(new Rect(bounds.x + labelInset * scale, bounds.y, bounds.width - labelInset * scale, bounds.height), text, _settingsStyle);
-            if (GUI.Button(bounds, GUIContent.none, GUIStyle.none)) activate();
+            var face = selected ? (hovered ? Ae2Image.SettingsToggleOnHover : Ae2Image.SettingsToggleOn) :
+                (hovered ? Ae2Image.SettingsToggleOffHover : Ae2Image.SettingsToggleOff);
+            var size = _skin.SourceSize(face) ?? new Vector2Int(12, 12);
+            _skin.Draw(new Rect(bounds.x, bounds.y + (14 - size.y) * scale / 2, size.x * scale, size.y * scale), face,
+                selected ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
+            GUI.Label(new Rect(bounds.x + 14 * scale, bounds.y, bounds.width - 14 * scale, bounds.height),
+                SettingsBridge.ChoiceLabel(SettingsBridge.LanguageSetting, language), _settingsStyle);
+            if (GUI.Button(bounds, GUIContent.none, GUIStyle.none)) SettingsBridge.SetLanguage(language);
+        }
+
+        private bool DrawSettingsField(Rect bounds, string text, string marker)
+        {
+            var scale = _layout.Scale;
+            var hovered = bounds.Contains(Event.current.mousePosition);
+            _skin.DrawPanel(bounds, hovered ? Ae2Image.SettingsFieldHover : Ae2Image.SettingsField, scale, Ae2TerminalSkin.Slot);
+            GUI.Label(new Rect(bounds.x + 3 * scale, bounds.y, bounds.width - 15 * scale, bounds.height), text, _settingsStyle);
+            GUI.Label(new Rect(bounds.xMax - 11 * scale, bounds.y, 9 * scale, bounds.height), marker, _iconStyle);
+            return GUI.Button(bounds, GUIContent.none, GUIStyle.none);
         }
 
         private static Ae2Image StyleIcon(TerminalHeight height) => height switch
@@ -276,23 +325,28 @@ namespace UnknownInventoryTerminal
 
         private void DrawButton(TerminalButton button, Ae2Image icon, string tooltip, string fallback, bool tooltipBelow = false)
         {
-            var ev = Event.current;
-            if (ev.type != EventType.Repaint) return;
             var (x, y) = TerminalButtonInput.Origin(button);
             var hit = Units(x, y, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
+            PaintButton(hit, button, icon, fallback);
+            SetTooltip(hit, tooltip, below: tooltipBelow);
+        }
+
+        private void PaintButton(Rect hit, TerminalButton button, Ae2Image icon, string fallback)
+        {
+            var ev = Event.current;
+            if (ev.type != EventType.Repaint) return;
+            var scale = _layout.Scale;
             var face = Ae2ToolbarAppearance.Face(hit.Contains(ev.mousePosition), _buttons.Focused == button);
             var offset = Ae2ToolbarAppearance.OffsetY(face);
             var faceSize = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
-            _skin.Draw(Units(x, y + offset, faceSize.x, faceSize.y), face, Ae2TerminalSkin.Shell);
+            var faceRect = new Rect(hit.x, hit.y + offset * scale, faceSize.x * scale, faceSize.y * scale);
+            _skin.Draw(faceRect, face, Ae2TerminalSkin.Shell);
             if (_skin.SourceSize(icon) is { } size && _skin.VisibleBounds(icon) is { } visible)
             {
-                var (dx, dy) = Ae2ToolbarAppearance.CenterIcon(visible, faceSize.x, faceSize.y, _layout.Scale);
-                var iconRect = Units(x, y + offset, size.x, size.y);
-                iconRect.position += new Vector2(dx, dy);
-                _skin.Draw(iconRect, icon, Color.clear);
+                var (dx, dy) = Ae2ToolbarAppearance.CenterIcon(visible, faceSize.x, faceSize.y, scale);
+                _skin.Draw(new Rect(faceRect.x + dx, faceRect.y + dy, size.x * scale, size.y * scale), icon, Color.clear);
             }
-            else GUI.Label(Units(x, y + offset, faceSize.x, faceSize.y), fallback, _iconStyle);
-            if (!SettingsOpen || button == TerminalButton.Close) SetTooltip(hit, tooltip, below: tooltipBelow);
+            else GUI.Label(faceRect, fallback, _iconStyle);
         }
 
         private void SetTooltip(Rect control, string text, bool below)

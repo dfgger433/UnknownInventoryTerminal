@@ -20,6 +20,8 @@ $files = @(
     (Join-Path $assetSubdir 'textures\guis\text_field.png'),
     (Join-Path $assetSubdir 'textures\guis\background.png'),
     (Join-Path $assetSubdir 'textures\guis\checkbox.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\button.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\button_highlighted.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller_disabled.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\transparent.png'),

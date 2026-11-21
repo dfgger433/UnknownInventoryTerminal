@@ -88,7 +88,8 @@ namespace UnknownInventoryTerminal
             {
                 HoldInput();
                 _shield?.SetVisible(true);
-                _nativePanel?.SetVisible(true);
+                if (_window.SettingsOpen && _sessionCamera is { } settingsCamera && settingsCamera.dragItem) CancelDrag(settingsCamera);
+                _nativePanel?.SetVisible(true, _window.SettingsOpen);
                 _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput);
             }
         }
