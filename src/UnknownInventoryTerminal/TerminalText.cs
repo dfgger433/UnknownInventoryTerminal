@@ -13,7 +13,9 @@ namespace UnknownInventoryTerminal
         internal const string Chinese = "zh-CN";
         private static IReadOnlyDictionary<string, string> _fallback = new Dictionary<string, string>();
         private static IReadOnlyDictionary<string, string> _english = new Dictionary<string, string>();
-        private static IReadOnlyDictionary<string, string> _chinese = new Dictionary<string, string>();
+        private static readonly Dictionary<string, IReadOnlyDictionary<string, string>> Translations = new(StringComparer.OrdinalIgnoreCase);
+        private static IReadOnlyList<string> _languages = new[] { English, Chinese };
+        internal static IReadOnlyList<string> Languages => _languages;
         internal static string Language { get; private set; } = English;
 
         internal static void Initialize(string pluginPath, Action<string> warn)
@@ -27,25 +29,119 @@ namespace UnknownInventoryTerminal
             var english = new Dictionary<string, string>(_fallback, StringComparer.Ordinal);
             foreach (var entry in englishOverrides) english[entry.Key] = entry.Value;
             _english = english;
-            _chinese = Load(Path.Combine(directory, Chinese + ".json"), warn, optional: false);
+            Translations.Clear();
+            Translations.Add(English, _english);
+            Translations.Add(Chinese, Load(Path.Combine(directory, Chinese + ".json"), warn, optional: false));
+            var languages = new List<string> { English, Chinese };
+            try
+            {
+                if (Directory.Exists(directory))
+                {
+                    var files = Directory.GetFiles(directory, "*.json");
+                    Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+                    foreach (var path in files)
+                    {
+                        var id = Path.GetFileNameWithoutExtension(path);
+                        if (Translations.ContainsKey(id)) continue;
+                        var messages = Load(path, warn, optional: false);
+                        // A language file declares its own display name before it can appear in the menu.
+                        if (!messages.ContainsKey("language.name")) continue;
+                        Translations.Add(id, messages);
+                        languages.Add(id);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            { warn("Could not enumerate terminal languages: " + ex.Message); }
+            _languages = languages.AsReadOnly();
+            Select(Language);
         }
 
-        internal static void Select(string? language) => Language =
-            string.Equals(language, Chinese, StringComparison.OrdinalIgnoreCase) ? Chinese : English;
+        internal static string ResolveLanguage(string? language)
+        {
+            foreach (var id in _languages)
+                if (string.Equals(id, language, StringComparison.OrdinalIgnoreCase)) return id;
+            return English;
+        }
+
+        internal static void Select(string? language) => Language = ResolveLanguage(language);
+
+        internal static string LanguageName(string id) => Translations.TryGetValue(id, out var messages) &&
+            messages.TryGetValue("language.name", out var name) ? name : Get("settings.Language." + id, id);
 
         internal static string Get(string key, string? fallback = null) =>
-            (Language == Chinese && _chinese.TryGetValue(key, out var translated)) ? translated :
+            (Translations.TryGetValue(Language, out var messages) && messages.TryGetValue(key, out var translated)) ? translated :
             _english.TryGetValue(key, out var english) ? english : fallback ?? key;
 
         internal static string Format(string key, params object[] args)
         {
-            try { return string.Format(CultureInfo.InvariantCulture, Get(key), args); }
-            catch (FormatException)
+            var selected = Translations.TryGetValue(Language, out var messages) && messages.TryGetValue(key, out var text)
+                ? text : null;
+            var english = _english.TryGetValue(key, out var englishText) ? englishText : null;
+            var builtin = _fallback.TryGetValue(key, out var builtinText) ? builtinText : null;
+            if (TryFormat(selected, english ?? builtin, args, out var result) ||
+                TryFormat(english, builtin, args, out result) ||
+                TryFormat(builtin, null, args, out result))
+                return result;
+            return key;
+        }
+
+        private static bool TryFormat(string? format, string? requiredTemplate, object[] args, out string result)
+        {
+            result = "";
+            if (format == null || !HasRequiredArguments(format, requiredTemplate, args.Length)) return false;
+            try { result = string.Format(CultureInfo.InvariantCulture, format, args); return true; }
+            catch (FormatException) { return false; }
+        }
+
+        private static bool HasRequiredArguments(string format, string? requiredTemplate, int count)
+        {
+            if (!TryArgumentSet(format, out var actual)) return false;
+            foreach (var index in actual) if (index >= count) return false;
+            if (requiredTemplate == null) return true;
+            if (!TryArgumentSet(requiredTemplate, out var required)) return false;
+            foreach (var index in required) if (!actual.Contains(index)) return false;
+            return true;
+        }
+
+        private static bool TryArgumentSet(string format, out HashSet<int> arguments)
+        {
+            arguments = new HashSet<int>();
+            for (var i = 0; i < format.Length; i++)
             {
-                // An invalid user-edited format must not break a terminal refresh.
-                return _fallback.TryGetValue(key, out var original)
-                    ? string.Format(CultureInfo.InvariantCulture, original, args) : key;
+                if (format[i] == '{')
+                {
+                    if (i + 1 < format.Length && format[i + 1] == '{') { i++; continue; }
+                    var start = i + 1;
+                    var end = start;
+                    while (end < format.Length && char.IsDigit(format[end])) end++;
+                    if (end == start || !int.TryParse(format.Substring(start, end - start), NumberStyles.None,
+                        CultureInfo.InvariantCulture, out var index)) return false;
+                    if (end >= format.Length || (format[end] != ',' && format[end] != ':' && format[end] != '}')) return false;
+                    if (format[end] == ',')
+                    {
+                        end++;
+                        while (end < format.Length && format[end] == ' ') end++;
+                        if (end < format.Length && (format[end] == '-' || format[end] == '+')) end++;
+                        var digits = end;
+                        while (end < format.Length && char.IsDigit(format[end])) end++;
+                        if (end == digits || end >= format.Length || (format[end] != ':' && format[end] != '}')) return false;
+                    }
+                    if (format[end] == ':')
+                    {
+                        end++;
+                        while (end < format.Length && format[end] != '}') end++;
+                        if (end >= format.Length) return false;
+                    }
+                    if (format[end] == '}') { arguments.Add(index); i = end; }
+                }
+                else if (format[i] == '}')
+                {
+                    if (i + 1 < format.Length && format[i + 1] == '}') { i++; continue; }
+                    return false;
+                }
             }
+            return true;
         }
 
         private static IReadOnlyDictionary<string, string> Load(string path, Action<string> warn, bool optional)

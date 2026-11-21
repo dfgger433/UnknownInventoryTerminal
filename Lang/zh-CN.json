@@ -1,4 +1,5 @@
 {
+  "language.name": "简体中文",
   "settings.Language": "终端语言",
   "settings.Language.description": "切换物品终端及其设置的显示语言，不改变游戏语言。",
   "settings.Language.en": "English",
@@ -22,6 +23,9 @@
   "terminal.sortAscending": "升序排列",
   "terminal.sortDescending": "降序排列",
   "terminal.style": "终端风格",
+  "terminal.style.current": "终端风格：{0}",
+  "terminal.button.toggle": "打开或关闭终端设置",
+  "terminal.button.return": "返回终端",
   "terminal.style.Small": "短",
   "terminal.style.Medium": "中等",
   "terminal.style.Tall": "长",

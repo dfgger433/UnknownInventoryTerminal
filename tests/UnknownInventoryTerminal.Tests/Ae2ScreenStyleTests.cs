@@ -27,6 +27,7 @@ public sealed class Ae2ScreenStyleTests
             {
                 Ae2Image.SettingsBackground => 4,
                 Ae2Image.SettingsField or Ae2Image.SettingsFieldHover => 3,
+                Ae2Image.SettingsOption or Ae2Image.SettingsOptionSelected => 2,
                 _ => 0
             });
             if (Ae2ScreenStyle.IsBoardPart(image))
@@ -40,6 +41,22 @@ public sealed class Ae2ScreenStyleTests
             var (width, height) = ReadPngDimensions(texturePath);
             region.Fits(width, height).Should().BeTrue(
                 $"{image} source rectangle [{region.X}, {region.Y}, {region.Width}, {region.Height}] must fit {region.Texture} ({width}x{height})");
+        }
+    }
+
+    [TestMethod]
+    public void SettingsListRowsUseTheUnscaledAe2CpuSelectorSprites()
+    {
+        var style = ReadBundledStyle();
+        foreach (var image in new[] { Ae2Image.SettingsOption, Ae2Image.SettingsOptionSelected })
+        {
+            style.TryGet(image, out var region).Should().BeTrue();
+            region.Texture.Should().Be("guis/cpu_selector.png");
+            (region.Width, region.Height, region.Border).Should().Be((67, 22, 2));
+            var texture = TextureFilePath(region.Texture);
+            File.Exists(texture).Should().BeTrue();
+            var dimensions = ReadPngDimensions(texture);
+            region.Fits(dimensions.Width, dimensions.Height).Should().BeTrue();
         }
     }
 

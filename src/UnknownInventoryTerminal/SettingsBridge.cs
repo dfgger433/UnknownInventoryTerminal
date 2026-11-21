@@ -20,11 +20,8 @@ namespace UnknownInventoryTerminal
         internal static event Action? LanguageChanged;
 
         internal static string Language => TerminalText.Language;
-        internal static string LanguageLabel() => ChoiceLabel(LanguageSetting, Language);
-        internal static void SetLanguage(string language) => _language.Value =
-            string.Equals(language, TerminalText.Chinese, System.StringComparison.OrdinalIgnoreCase)
-                ? TerminalText.Chinese : TerminalText.English;
-        internal static void CycleLanguage() => SetLanguage(Language == TerminalText.Chinese ? TerminalText.English : TerminalText.Chinese);
+        internal static string LanguageLabel() => TerminalText.LanguageName(Language);
+        internal static void SetLanguage(string language) => _language.Value = TerminalText.ResolveLanguage(language);
 
         // Changed by the terminal-style toolbar button, like AE2's client-side TERMINAL_STYLE setting.
         private static ConfigEntry<TerminalHeight>? _terminalHeight;

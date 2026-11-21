@@ -1,4 +1,5 @@
 {
+  "language.name": "English",
   "settings.Language": "Terminal language",
   "settings.Language.description": "Change the inventory terminal and its settings labels without changing the game's language.",
   "settings.Language.en": "English",
@@ -22,6 +23,9 @@
   "terminal.sortAscending": "Sort ascending",
   "terminal.sortDescending": "Sort descending",
   "terminal.style": "Terminal Style",
+  "terminal.style.current": "Terminal style: {0}",
+  "terminal.button.toggle": "Toggle terminal settings",
+  "terminal.button.return": "Return to terminal",
   "terminal.style.Small": "Small",
   "terminal.style.Medium": "Medium",
   "terminal.style.Tall": "Tall",

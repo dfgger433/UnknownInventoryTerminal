@@ -1,0 +1,84 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using FluentAssertions;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace UnknownInventoryTerminal.Tests;
+
+[TestClass]
+public sealed class TerminalTextTests
+{
+    [TestMethod]
+    public void InvalidSelectedTemplateFallsBackToValidEnglishOverrideThenBuiltin()
+    {
+        SetField("_fallback", Dict(("count", "Builtin {0}/{1}")));
+        SetField("_english", Dict(("count", "English override {0}/{1}")));
+        SetTranslations(("en", Dict(("count", "English override {0}/{1}"))),
+            ("xx", Dict(("count", "Broken {7}"))));
+        SetLanguages("en", "xx");
+        Select("xx");
+
+        TerminalText.Format("count", 3, 9).Should().Be("English override 3/9");
+
+        SetField("_english", Dict());
+        SetTranslations(("en", Dict()), ("xx", Dict(("count", "Only {0}"))));
+        Select("xx");
+        TerminalText.Format("count", 3, 9).Should().Be("Builtin 3/9");
+    }
+
+    [TestMethod]
+    public void SelectedLanguageCanReorderAllRequiredArguments()
+    {
+        SetField("_fallback", Dict(("count", "{0}/{1}")));
+        SetField("_english", Dict(("count", "{0}/{1}")));
+        SetTranslations(("en", Dict(("count", "{0}/{1}"))), ("xx", Dict(("count", "{1} then {0}"))));
+        SetLanguages("en", "xx");
+        Select("xx");
+
+        TerminalText.Format("count", "first", "second").Should().Be("second then first");
+    }
+
+    [TestMethod]
+    public void MissingSelectedTranslationUsesEnglishAndUnknownKeysHonorExplicitFallback()
+    {
+        SetField("_fallback", Dict(("known", "Builtin")));
+        SetField("_english", Dict(("known", "English")));
+        SetTranslations(("en", Dict(("known", "English"))), ("xx", Dict()));
+        SetLanguages("en", "xx");
+        Select("xx");
+
+        TerminalText.Get("known").Should().Be("English");
+        TerminalText.Get("slot.custom", "Custom slot").Should().Be("Custom slot");
+        TerminalText.Get("missing.key").Should().Be("missing.key");
+        ResolveLanguage("XX").Should().Be("xx");
+        ResolveLanguage("unknown").Should().Be("en");
+    }
+
+    private static Dictionary<string, string> Dict(params (string Key, string Value)[] entries)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in entries) result.Add(entry.Key, entry.Value);
+        return result;
+    }
+
+    private static void SetTranslations(params (string Key, Dictionary<string, string> Value)[] entries)
+    {
+        var translations = (Dictionary<string, IReadOnlyDictionary<string, string>>)typeof(TerminalText)
+            .GetField("Translations", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        translations.Clear();
+        foreach (var entry in entries) translations.Add(entry.Key, entry.Value);
+    }
+
+    private static void SetLanguages(params string[] languages) => SetField("_languages", languages);
+
+    private static void SetField(string name, object value) =>
+        typeof(TerminalText).GetField(name, BindingFlags.Static | BindingFlags.NonPublic)!.SetValue(null, value);
+
+    private static void Select(string value) =>
+        typeof(TerminalText).GetMethod("Select", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object?[] { value });
+
+    private static string ResolveLanguage(string value) =>
+        (string)typeof(TerminalText).GetMethod("ResolveLanguage", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, new object?[] { value })!;
+}

@@ -12,7 +12,7 @@ namespace UnknownInventoryTerminal
         Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
         Close, SortName, SortAmount, SortAscending, SortDescending, Back, Settings, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
         SettingsBackground, SettingsToggleOff, SettingsToggleOn, SettingsToggleOffHover, SettingsToggleOnHover,
-        SettingsField, SettingsFieldHover, TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
+        SettingsField, SettingsFieldHover, SettingsOption, SettingsOptionSelected, TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
     }
 
     internal static class Ae2ToolbarAppearance

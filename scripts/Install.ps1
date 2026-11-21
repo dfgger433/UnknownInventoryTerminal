@@ -20,6 +20,7 @@ $files = @(
     (Join-Path $assetSubdir 'textures\guis\text_field.png'),
     (Join-Path $assetSubdir 'textures\guis\background.png'),
     (Join-Path $assetSubdir 'textures\guis\checkbox.png'),
+    (Join-Path $assetSubdir 'textures\guis\cpu_selector.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\button.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\button_highlighted.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller.png'),
@@ -35,5 +36,15 @@ foreach ($file in $files) {
     $destination = Join-Path $destinationDir $file
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $sourceDir $file) -Destination $destination -Force
+}
+# Install optional language packs from the build output only when the user has not already supplied one.
+$sourceLanguages = Join-Path $sourceDir $langSubdir
+$destinationLanguages = Join-Path $destinationDir $langSubdir
+foreach ($language in Get-ChildItem -LiteralPath $sourceLanguages -Filter '*.json' -File) {
+    if ($language.Name -in @('en.json', 'zh-CN.json')) { continue }
+    $destination = Join-Path $destinationLanguages $language.Name
+    if (Test-Path -LiteralPath $destination) { continue }
+    New-Item -ItemType Directory -Path $destinationLanguages -Force | Out-Null
+    Copy-Item -LiteralPath $language.FullName -Destination $destination
 }
 Write-Output "Installed in $destinationDir"
