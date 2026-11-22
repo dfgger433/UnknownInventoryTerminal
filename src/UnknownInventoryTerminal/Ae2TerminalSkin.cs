@@ -160,7 +160,7 @@ namespace UnknownInventoryTerminal
             if (Resolve(id) is not { } region) return null;
             var texture = _textures[region.Texture]!;
             sprite = Sprite.Create(texture, new Rect(region.X, texture.height - region.Y - region.Height, region.Width, region.Height),
-                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
+                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect, Vector4.one * region.Border, false);
             _sprites.Add(id, sprite);
             return sprite;
         }
@@ -186,6 +186,37 @@ namespace UnknownInventoryTerminal
             image.sprite = sprite;
             image.type = Image.Type.Simple;
             image.color = sprite ? Color.white : fallback;
+        }
+
+        internal void ApplyHintFrame(Image image, int scale)
+        {
+            var sprite = GetSprite(Ae2Image.Tooltip);
+            image.sprite = sprite;
+            image.color = sprite ? Color.white : Shell;
+            image.type = image.hasBorder ? Image.Type.Sliced : Image.Type.Simple;
+            var multiplier = 1f / scale;
+            if (image.hasBorder && image.pixelsPerUnitMultiplier != multiplier) image.pixelsPerUnitMultiplier = multiplier;
+        }
+
+        // Shared by ordinary toolbar buttons and fixed use/drain hit targets.
+        internal bool ApplyToolbarFace(Image image, Image glyph, Vector2 origin, Ae2Image icon, int scale, bool hovered, bool focused)
+        {
+            var face = Ae2ToolbarAppearance.Face(hovered, focused);
+            var offset = Ae2ToolbarAppearance.OffsetY(face);
+            var size = SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
+            NativeFlatInventoryPanel.Position(image.rectTransform, new Rect(origin.x, origin.y + offset * scale,
+                size.x * scale, size.y * scale));
+            Apply(image, face, Shell);
+            if (SourceSize(icon) is not { } iconSize || VisibleBounds(icon) is not { } bounds)
+            {
+                glyph.gameObject.SetActive(false);
+                return false;
+            }
+            var (x, y) = Ae2ToolbarAppearance.CenterIcon(bounds, size.x, size.y, scale);
+            NativeFlatInventoryPanel.Position(glyph.rectTransform, new Rect(x, y, iconSize.x * scale, iconSize.y * scale));
+            Apply(glyph, icon, Color.clear);
+            glyph.gameObject.SetActive(true);
+            return true;
         }
 
         private static Color32 Argb(uint value) => new Color32((byte)(value >> 16), (byte)(value >> 8), (byte)value, (byte)(value >> 24));

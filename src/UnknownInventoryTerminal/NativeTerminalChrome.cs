@@ -12,17 +12,18 @@ namespace UnknownInventoryTerminal
     {
         private readonly Ae2TerminalSkin _skin;
         private readonly RectTransform _root, _searchViewport;
-        private readonly TextMeshProUGUI _title, _status, _placeholder, _hintText;
-        private readonly Image _searchFace, _hint;
+        private readonly TextMeshProUGUI _title, _status, _placeholder;
+        private readonly Image _searchFace;
+        private readonly TerminalControlHint _hint;
         private readonly TMP_InputField _search;
         private readonly ButtonVisual?[] _buttons = new ButtonVisual[(int)TerminalButton.Return + 1];
         private Vector2 _pointer;
         private Ae2TerminalLayout _layout;
-        private bool _hasHint;
 
-        internal NativeTerminalChrome(Transform parent, Ae2TerminalSkin skin)
+        internal NativeTerminalChrome(Transform parent, Ae2TerminalSkin skin, TerminalControlHint hint)
         {
             _skin = skin;
+            _hint = hint;
             _root = NativeFlatInventoryPanel.Add(parent, "UIT.InventoryChrome").GetComponent<RectTransform>();
             NativeFlatInventoryPanel.Stretch(_root, Vector2.zero, Vector2.zero);
             _title = Label(_root, "Terminal title", TextAlignmentOptions.Left);
@@ -55,11 +56,6 @@ namespace UnknownInventoryTerminal
             _searchFace.gameObject.SetActive(true);
             var caret = _searchViewport.GetComponentInChildren<TMP_SelectionCaret>();
             if (caret) caret.raycastTarget = false;
-
-            _hint = Picture(_root, "Control hint");
-            _hintText = Label(_hint.transform, "Hint text", TextAlignmentOptions.Center);
-            _hintText.color = Color.white;
-            _hint.gameObject.SetActive(false);
         }
 
         internal bool SearchFocused => _search.isActiveAndEnabled && _search.isFocused;
@@ -82,7 +78,6 @@ namespace UnknownInventoryTerminal
             _layout = layout;
             _pointer = Input.mousePosition;
             _pointer.y = Screen.height - _pointer.y;
-            _hasHint = false;
             _title.text = TerminalText.Get("terminal.title");
             _status.text = status;
             Place(_title, Area(Ae2TerminalLayout.Rail + 7, 2, 46, 15), 8);
@@ -105,7 +100,7 @@ namespace UnknownInventoryTerminal
                 _search.ActivateInputField();
             }
             _skin.Apply(_searchFace, SearchFocused ? Ae2Image.SearchFocused : Ae2Image.Search, new Color32(91, 95, 117, 255));
-            if (search.Contains(_pointer)) ShowHint(search, TerminalText.Get("terminal.searchHint"), below: true);
+            if (search.Contains(_pointer)) _hint.Offer(search, TerminalText.Get("terminal.searchHint"), below: true);
         }
 
         internal void DrawButton(TerminalButton button, TerminalButton focused, Ae2Image icon, string hint, string fallback,
@@ -121,51 +116,19 @@ namespace UnknownInventoryTerminal
             {
                 var image = Picture(_root, button.ToString());
                 visual = new ButtonVisual(image, Picture(image.transform, "Icon"), Label(image.transform, "Fallback", TextAlignmentOptions.Center));
-                _hint.transform.SetAsLastSibling();
             }
             visual.Face.gameObject.SetActive(true);
             var (x, y) = TerminalButtonInput.Origin(button);
             var hit = Area(x, y, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
             var hovered = hit.Contains(_pointer);
-            var face = Ae2ToolbarAppearance.Face(hovered, focused == button);
-            var offset = Ae2ToolbarAppearance.OffsetY(face);
-            var faceSize = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
-            NativeFlatInventoryPanel.Position(visual.Face.rectTransform, Area(x, y + offset, faceSize.x, faceSize.y));
-            _skin.Apply(visual.Face, face, Ae2TerminalSkin.Shell);
-            if (_skin.SourceSize(icon) is { } size && _skin.VisibleBounds(icon) is { } bounds)
+            var iconVisible = _skin.ApplyToolbarFace(visual.Face, visual.Icon, hit.position, icon, _layout.Scale, hovered, focused == button);
+            visual.Fallback.gameObject.SetActive(!iconVisible);
+            if (!iconVisible)
             {
-                var scale = _layout.Scale;
-                var (dx, dy) = Ae2ToolbarAppearance.CenterIcon(bounds, faceSize.x, faceSize.y, scale);
-                NativeFlatInventoryPanel.Position(visual.Icon.rectTransform, new Rect(dx, dy, size.x * scale, size.y * scale));
-                _skin.Apply(visual.Icon, icon, Color.clear);
-                visual.Icon.gameObject.SetActive(true);
-                visual.Fallback.gameObject.SetActive(false);
-            }
-            else
-            {
-                visual.Icon.gameObject.SetActive(false);
-                visual.Fallback.gameObject.SetActive(true);
                 visual.Fallback.text = fallback;
                 visual.Fallback.fontSize = 8 * _layout.Scale;
             }
-            if (hovered) ShowHint(hit, hint, hintBelow);
-        }
-
-        internal void FinishDraw() => _hint.gameObject.SetActive(_hasHint);
-
-        private void ShowHint(Rect control, string text, bool below)
-        {
-            _hasHint = true;
-            var scale = _layout.Scale;
-            _hintText.fontSize = 8 * scale;
-            var gap = 2 * scale;
-            var width = Mathf.Min(_hintText.GetPreferredValues(text).x + 12 * scale, _layout.Width - 2 * gap);
-            var x = Mathf.Clamp(below ? control.x : control.xMax + gap, _layout.Left + gap, _layout.Left + _layout.Width - width - gap);
-            var y = below ? control.yMax + gap : control.y + gap;
-            NativeFlatInventoryPanel.Position(_hint.rectTransform,
-                new Rect(x, y, width, (_skin.SourceSize(Ae2Image.Tooltip)?.y ?? 15) * scale));
-            _skin.Apply(_hint, Ae2Image.Tooltip, Ae2TerminalSkin.Ink);
-            _hintText.text = text;
+            if (hovered) _hint.Offer(hit, hint, hintBelow);
         }
 
         private Rect Area(int x, int y, int width, int height) => new Rect(_layout.Left + x * _layout.Scale,

@@ -105,7 +105,7 @@ namespace UnknownInventoryTerminal
                     _shield?.SetVisible(true);
                     if (_nativePanel?.Chrome is { } chrome) _window!.DrawInventoryChrome(chrome);
                     UpdateDragActions(_sessionCamera!);
-                    _nativePanel?.UpdateItemTooltip(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
+                    _nativePanel?.UpdateTooltips(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
                 }
             }
         }

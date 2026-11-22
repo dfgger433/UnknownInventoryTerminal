@@ -348,9 +348,8 @@ public partial class MainWindow : Window
         AddImage(Ae2Image.ThumbDisabled, stateX + 60, y, scale);
         AddLabel("禁用", stateX + 80, y, 35, 14, scale, 6, false, caption);
         y += 24;
-        AddImage(Ae2Image.Tooltip, stateX, y, scale);
-        AddLabel("Tooltip sample", stateX + 2, y, 108, SourceSize(Ae2Image.Tooltip, 0, 12).Height, scale, 6, false, Colors.White);
-        y += 20;
+        AddTooltipSample(stateX, y, scale);
+        y += 22;
         // Terminal style icons, in the order the button cycles through them.
         var styles = new[] { Ae2Image.TerminalStyleSmall, Ae2Image.TerminalStyleMedium, Ae2Image.TerminalStyleTall, Ae2Image.TerminalStyleFull };
         for (var i = 0; i < styles.Length; i++) AddImage(styles[i], stateX + i * 20, y, scale);
@@ -442,9 +441,32 @@ public partial class MainWindow : Window
         if (_style is not null && _style.TryGet(id, out var region)) AddRegion(id, x, y, region.Width, region.Height, scale);
     }
 
+    private void AddTooltipSample(int x, int y, int scale)
+    {
+        const int width = 72, height = 17;
+        if (_style is null || !_style.TryGet(Ae2Image.Tooltip, out var region)) return;
+        var border = Math.Min(region.Border, Math.Min(width, height) / 2);
+        for (var row = 0; row < 3; row++)
+        for (var column = 0; column < 3; column++)
+        {
+            var (sx, sw) = Ae2NineSlice.Span(region.Width, region.Border, column);
+            var (sy, sh) = Ae2NineSlice.Span(region.Height, region.Border, row);
+            var (dx, w) = Ae2NineSlice.Span(width, border, column);
+            var (dy, h) = Ae2NineSlice.Span(height, border, row);
+            if (w == 0 || h == 0) continue;
+            var crop = new Ae2ImageRegion(region.Texture, region.X + sx, region.Y + sy, sw, sh, 0);
+            AddRegion(Ae2Image.Tooltip, crop, x + dx, y + dy, w, h, scale);
+        }
+        AddLabel("Tooltip sample", x + 4, y, width - 8, height, scale, 6, false, tag: Ae2Image.Tooltip.ToString());
+    }
+
     private void AddRegion(Ae2Image id, int x, int y, int width, int height, int scale)
     {
-        if (_style is null || !_style.TryGet(id, out var region)) return;
+        if (_style is not null && _style.TryGet(id, out var region)) AddRegion(id, region, x, y, width, height, scale);
+    }
+
+    private void AddRegion(Ae2Image id, Ae2ImageRegion region, int x, int y, int width, int height, int scale)
+    {
         try
         {
             var image = new Image { Source = Crop(region), Width = width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true, Tag = id.ToString() };
@@ -503,9 +525,9 @@ public partial class MainWindow : Window
 
 
     private void AddLabel(string text, int x, int y, int width, int height, int scale, int fontSize, bool bold, Color? color = null,
-        TextAlignment alignment = TextAlignment.Left)
+        TextAlignment alignment = TextAlignment.Left, string? tag = null)
     {
-        var label = new TextBlock { Text = text, Width = width * scale, Height = height * scale, FontSize = fontSize * scale, TextAlignment = alignment,
+        var label = new TextBlock { Text = text, Width = width * scale, Height = height * scale, FontSize = fontSize * scale, TextAlignment = alignment, Tag = tag,
             FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = color is { } c ? new SolidColorBrush(c) : new SolidColorBrush(Color.FromRgb(48, 50, 58)),
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Canvas.SetLeft(label, x * scale);

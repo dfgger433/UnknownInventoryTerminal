@@ -19,6 +19,7 @@ internal static class Program
             ("Close and reopen in one frame reuse added components safely", SameFrameReopen),
             ("Destroyed shield and scene roots can be replaced without leaking menu leases", DestroyedRootsAndSceneChange),
             ("Close restores tooltip and drag visuals without hiding or replacing them", ClosePreservesVisuals),
+            ("Control hints render above item and native visuals without consuming input", TooltipLayers),
             ("Transparent hit surfaces do not depend on sprite alpha or transparent mesh culling", TransparentHitSurface),
             ("Fixed cell hits relay only to live native buttons without changing pointer coordinates", RelayNativeItemHit),
         };
@@ -182,10 +183,10 @@ internal static class Program
         var shield = new InputShield();
 
         shield.SetVisible(true);
-        Check(image.enabled && !image.raycastTarget && cursor.GetComponent<Canvas>().sortingOrder == short.MaxValue &&
+        Check(image.enabled && !image.raycastTarget && cursor.GetComponent<Canvas>().sortingOrder == TerminalCanvasOrder.NativeVisuals &&
               !shield.IsBlocker(cursor), "active drag visual should render above the terminal and not accept input");
         Check(tooltipCanvas.enabled && tooltipCanvas.overrideSorting && tooltipCanvas.sortingLayerID == 0 &&
-              tooltipCanvas.sortingOrder == short.MaxValue && !tooltipRaycaster.enabled && !tooltipImage.raycastTarget,
+              tooltipCanvas.sortingOrder == TerminalCanvasOrder.NativeVisuals && !tooltipRaycaster.enabled && !tooltipImage.raycastTarget,
             "borrowed tooltip canvas should render above the terminal without intercepting input");
         shield.SetVisible(false);
         Object.EndFrame();
@@ -197,6 +198,33 @@ internal static class Program
               tooltipRaycaster.enabled && tooltipImage.raycastTarget,
             "borrowed tooltip canvas, raycaster and graphic should recover exactly");
         shield.Dispose();
+    }
+
+    private static void TooltipLayers()
+    {
+        var inventory = new GameObject("Inventory", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster)) { layer = 5 };
+        var item = TerminalCanvasOrder.AddTooltipLayer(inventory.transform, "Item tooltip", TerminalCanvasOrder.ItemTooltip);
+        var hint = TerminalCanvasOrder.AddTooltipLayer(inventory.transform, "Control hint", TerminalCanvasOrder.ControlHint);
+        var itemCanvas = item.gameObject.GetComponent<Canvas>();
+        var hintCanvas = hint.gameObject.GetComponent<Canvas>();
+        Check(TerminalCanvasOrder.Shield < TerminalCanvasOrder.Inventory &&
+            TerminalCanvasOrder.Inventory < TerminalCanvasOrder.NativeVisuals &&
+            TerminalCanvasOrder.NativeVisuals < itemCanvas.sortingOrder &&
+            itemCanvas.sortingOrder < hintCanvas.sortingOrder && hintCanvas.sortingOrder <= short.MaxValue,
+            "every overlay must have an unambiguous order on the default sorting layer");
+        foreach (var overlay in new[] { item, hint })
+        {
+            var canvas = overlay.gameObject.GetComponent<Canvas>();
+            var group = overlay.gameObject.GetComponent<CanvasGroup>();
+            Check(overlay.Parent == inventory.transform && overlay.gameObject.layer == 5 && canvas.overrideSorting && canvas.sortingLayerID == 0 &&
+                overlay.anchorMin == Vector2.zero && overlay.anchorMax == Vector2.one &&
+                overlay.offsetMin == Vector2.zero && overlay.offsetMax == Vector2.zero,
+                "tooltips must stretch across the inventory canvas, not be clipped to a cell or control");
+            Check(!group.blocksRaycasts && !group.interactable && !overlay.gameObject.GetComponent<GraphicRaycaster>(),
+                "tooltip layers must never become pointer targets");
+        }
+        inventory.SetActive(false);
+        Check(!hint.gameObject.activeInHierarchy && !item.gameObject.activeInHierarchy, "settings and close can hide both layers together");
     }
 
     private static void TransparentHitSurface()

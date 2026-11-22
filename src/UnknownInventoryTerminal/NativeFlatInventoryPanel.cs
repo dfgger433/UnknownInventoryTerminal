@@ -62,6 +62,7 @@ namespace UnknownInventoryTerminal
         private TextMeshProUGUI? _empty;
         private UITooltip? _scrollTooltip;
         private TerminalItemTooltip? _itemTooltip;
+        private TerminalControlHint? _controlHint;
         internal NativeTerminalChrome? Chrome { get; private set; }
         private readonly List<RaycastResult> _hoverHits = new List<RaycastResult>();
         private PointerEventData? _hoverPointer;
@@ -70,7 +71,7 @@ namespace UnknownInventoryTerminal
         internal void ReturnToGroups() => ChangeSelection(null);
         private Image? _storageHighlight;
         private TerminalDragActionTarget? _drainAction, _useAction;
-        private RectTransform? _actionBar;
+        private RectTransform? _actionBar, _actionBarBackground;
         private Image[] _actionBarParts = null!;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
@@ -112,10 +113,22 @@ namespace UnknownInventoryTerminal
         internal bool IsNativeItemTooltip(GameObject target) => Contains(target) && !ContainsExtension(target) &&
             (target.GetComponent<InvButton>() || target.GetComponent<TilePointer>() || target.GetComponent<LoadoutCell>());
 
-        internal void UpdateItemTooltip(PlayerCamera camera, bool blocked)
+        internal void UpdateTooltips(PlayerCamera camera, bool blocked)
         {
-            if (_itemTooltip == null) return;
+            if (_itemTooltip == null || _controlHint == null) return;
             var pointer = (Vector2)Input.mousePosition;
+            if (blocked || !_root!.activeInHierarchy) _controlHint.Hide();
+            else
+            {
+                // Resolve after chrome and drag actions so only the current hovered control wins.
+                OfferDragActionHint(pointer);
+                if (_controlHint.Present(_layout.Scale))
+                {
+                    _itemTooltip.Hide();
+                    return;
+                }
+            }
+
             var events = EventSystem.current;
             if (blocked || InteractionInProgress() || !events || !ContainsScreenPoint(pointer))
             {
@@ -247,6 +260,7 @@ namespace UnknownInventoryTerminal
                 // Suspend the canvas without clearing the current search, group or scroll position.
                 Chrome?.ReleaseSearchFocus();
                 _itemTooltip?.Hide();
+                _controlHint?.Hide();
                 HideDragActions();
                 _loadout.ClearDragHighlight();
                 if (_root && _root!.activeSelf) _root.SetActive(false);
@@ -261,6 +275,7 @@ namespace UnknownInventoryTerminal
                 _loadout.Reset();
                 Chrome?.ReleaseSearchFocus();
                 _itemTooltip?.Hide();
+                _controlHint?.Hide();
                 HideDragActions();
                 _loadout.ClearDragHighlight();
                 if (_automaticTarget) _automaticTarget!.refItem = null!;
@@ -294,7 +309,7 @@ namespace UnknownInventoryTerminal
             UnityEngine.Object.DontDestroyOnLoad(_root);
             var canvas = _root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = short.MaxValue - 1;
+            canvas.sortingOrder = TerminalCanvasOrder.Inventory;
 
             // The toolbar is polled, not raycast. Shield the window without covering live item slots or search.
             var surface = Add(_root.transform, "Terminal window hit surface", typeof(Image));
@@ -364,13 +379,16 @@ namespace UnknownInventoryTerminal
             _empty = CreateText(panel.transform, "Empty storage", 17, TextAlignmentOptions.Center);
             _lower = Add(panel.transform, "Container storage base").GetComponent<RectTransform>();
             _loadout.Attach(_lower);
-            _actionBar = Add(_root.transform, "AE2 drag action bar").GetComponent<RectTransform>();
-            _actionBarParts = CreateBarParts(_actionBar, barSize?.y ?? 0, flushWithBoardTop: false);
+            _actionBar = Add(_root.transform, "AE2 drag action controls").GetComponent<RectTransform>();
+            // Both rails composite over the board and below the inventory cells.
+            _actionBarBackground = Add(_buttonBar, "AE2 drag action rail").GetComponent<RectTransform>();
+            _actionBarParts = CreateBarParts(_actionBarBackground, barSize?.y ?? 0, flushWithBoardTop: false);
             _drainAction = CreateDragAction(TerminalDragAction.Drain, Ae2Image.DragDrain);
             _useAction = CreateDragAction(TerminalDragAction.Use, Ae2Image.DragUse);
             HideDragActions();
-            Chrome = new NativeTerminalChrome(_root.transform, _skin);
             _itemTooltip = new TerminalItemTooltip(_root.transform, _log);
+            _controlHint = new TerminalControlHint(_root.transform, _skin);
+            Chrome = new NativeTerminalChrome(_root.transform, _skin, _controlHint);
             Position(_panel, _bounds);
             ApplyLayout();
             _dirty = true;
@@ -460,15 +478,13 @@ namespace UnknownInventoryTerminal
             target.Icon = Add(target.Face.transform, "Icon", typeof(Image)).GetComponent<Image>();
             target.Icon.raycastTarget = false;
             target.IconArt = sprite;
-            _skin.Apply(target.Icon, sprite, Color.clear);
-            var key = action == TerminalDragAction.Drain ? "inventory.drag.drain" : "inventory.drag.use";
-            CreateTooltip(node, TerminalText.Get(key), TerminalText.Get(key + ".description"));
             return target;
         }
 
         internal void HideDragActions()
         {
             if (_actionBar && _actionBar!.gameObject.activeSelf) _actionBar.gameObject.SetActive(false);
+            if (_actionBarBackground && _actionBarBackground!.gameObject.activeSelf) _actionBarBackground.gameObject.SetActive(false);
         }
 
         internal void UpdateDragActions(PlayerCamera camera, Item? item, TerminalDragAction? armed)
@@ -481,7 +497,9 @@ namespace UnknownInventoryTerminal
             var scale = _layout.Scale;
             var (x, y, width, height) = _layout.DragActionBackgroundBounds(drain, use);
             Position(_actionBar!, new Rect(_windowBounds.x + x, _windowBounds.y + y, width, height));
+            Position(_actionBarBackground!, new Rect(x, y, width, height));
             LayoutBarParts(_actionBarParts, 0, 0, height / scale, scale, flushWithBoardTop: false);
+            _actionBarBackground!.gameObject.SetActive(true);
             SetAction(_drainAction!, drain);
             SetAction(_useAction!, use);
             if (!_actionBar!.gameObject.activeSelf) _actionBar.gameObject.SetActive(true);
@@ -493,6 +511,21 @@ namespace UnknownInventoryTerminal
                 var (left, topEdge, faceWidth, faceHeight) = _layout.DragActionBounds(target.Action);
                 Position((RectTransform)target.transform, new Rect(left - x, topEdge - y, faceWidth, faceHeight));
                 target.Draw(_skin, scale, HitsDragAction(target.Action, Input.mousePosition), armed == target.Action);
+            }
+        }
+
+        private void OfferDragActionHint(Vector2 pointer)
+        {
+            OfferIfHovered(_drainAction!);
+            OfferIfHovered(_useAction!);
+
+            void OfferIfHovered(TerminalDragActionTarget target)
+            {
+                if (!target.gameObject.activeInHierarchy || !HitsDragAction(target.Action, pointer)) return;
+                var (x, y, width, height) = _layout.DragActionBounds(target.Action);
+                var key = target.HintKey;
+                _controlHint!.Offer(new Rect(_layout.Left + x, _layout.Top + y, width, height),
+                    TerminalText.Get(key) + "\n" + TerminalText.Get(key + ".description"));
             }
         }
 
@@ -787,6 +820,7 @@ namespace UnknownInventoryTerminal
             _root = null;
             Chrome = null;
             _itemTooltip = null;
+            _controlHint = null;
             _hoverEvents = null;
             _hoverPointer = null;
             _tiles.Clear();

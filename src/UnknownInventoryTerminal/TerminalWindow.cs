@@ -181,7 +181,6 @@ namespace UnknownInventoryTerminal
             Draw(TerminalButton.Return, Ae2Image.Back, "terminal.button.return", "<", visible: _canReturn());
             var settings = TerminalText.Get("terminal.button.toggle");
             chrome.DrawButton(TerminalButton.Settings, _buttons.Focused, Ae2Image.Settings, settings, settings);
-            chrome.FinishDraw();
 
             void Draw(TerminalButton button, Ae2Image icon, string key, string fallback, bool visible = true, bool hintBelow = false) =>
                 chrome.DrawButton(button, _buttons.Focused, icon, TerminalText.Get(key), fallback, visible, hintBelow);

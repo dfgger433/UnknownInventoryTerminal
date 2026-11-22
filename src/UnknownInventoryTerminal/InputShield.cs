@@ -10,7 +10,6 @@ namespace UnknownInventoryTerminal
     // The blocker sits below the terminal. Only the drag cursor and tooltip are lifted above it.
     internal sealed class InputShield
     {
-        internal const int BackOrder = short.MaxValue - 3;
         private GameObject? _root, _blocker;
         private LeaseCleanup? _cleanup;
         private readonly List<Lease> _leases = new List<Lease>();
@@ -73,7 +72,7 @@ namespace UnknownInventoryTerminal
             Object.DontDestroyOnLoad(_root);
             var canvas = _root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = BackOrder;
+            canvas.sortingOrder = TerminalCanvasOrder.Shield;
             _cleanup = _root.AddComponent<LeaseCleanup>();
             _blocker = new GameObject("Block clicks", typeof(RectTransform), typeof(Image));
             _blocker.layer = _root.layer;
@@ -239,7 +238,7 @@ namespace UnknownInventoryTerminal
                     canvas.enabled = true;
                     canvas.overrideSorting = true;
                     canvas.sortingLayerID = 0;
-                    canvas.sortingOrder = short.MaxValue;
+                    canvas.sortingOrder = TerminalCanvasOrder.NativeVisuals;
                 }
                 else
                 {

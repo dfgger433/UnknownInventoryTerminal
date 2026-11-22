@@ -18,4 +18,18 @@ public sealed class TerminalItemTooltipLayoutTests
 
         position.Should().Be((x, y));
     }
+
+    [TestMethod]
+    [DataRow(20f, 60f, 38f, 80f, false, 41f, 60f)] // Left toolbar: float over the board, not within the control.
+    [DataRow(302f, 20f, 320f, 40f, false, 149f, 20f)]
+    [DataRow(280f, 10f, 310f, 22f, true, 166f, 25f)]
+    [DataRow(280f, 208f, 310f, 228f, true, 166f, 155f)]
+    [DataRow(20f, 214f, 38f, 234f, false, 41f, 186f)]
+    public void ControlHintsStayInsideTheScreen(float left, float top, float right, float bottom, bool below, float x, float y)
+    {
+        var position = TerminalItemTooltipLayout.PlaceControl(left, top, right, bottom, below,
+            width: 150, height: 50, screenWidth: 320, screenHeight: 240, gap: 3, margin: 4);
+
+        position.Should().Be((x, y));
+    }
 }

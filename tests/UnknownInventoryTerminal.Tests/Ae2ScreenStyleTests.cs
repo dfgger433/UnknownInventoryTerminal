@@ -25,7 +25,7 @@ public sealed class Ae2ScreenStyleTests
             style.TryGet(image, out var region).Should().BeTrue($"{image} must have a region");
             region.Border.Should().Be(image switch
             {
-                Ae2Image.SettingsBackground => 4,
+                Ae2Image.SettingsBackground or Ae2Image.Tooltip => 4,
                 Ae2Image.SettingsOption or Ae2Image.SettingsOptionDisabled or Ae2Image.SettingsOptionHover or Ae2Image.SettingsOptionSelected => 2,
                 _ => 0
             });
@@ -180,6 +180,25 @@ public sealed class Ae2ScreenStyleTests
         (region.X, region.Y, region.Width, region.Height).Should().Be((x, 65, 18, height));
         (region.Height + offset).Should().Be(Ae2TerminalLayout.ButtonHeight,
             "the shorter inset face still fills the button down to the same bottom edge");
+    }
+
+    [TestMethod]
+    public void ControlHintUsesTheOpaqueToolbarFrameWithFixedBevel()
+    {
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.Tooltip, out var hint).Should().BeTrue();
+        style.TryGet(Ae2Image.Button, out var button).Should().BeTrue();
+        (hint.Texture, hint.X, hint.Y, hint.Width, hint.Height).Should()
+            .Be((button.Texture, button.X, button.Y, button.Width, button.Height));
+
+        using var png = PngPixels.Read(TextureFilePath(hint.Texture));
+        for (var y = 0; y < hint.Height; y++)
+            for (var x = 0; x < hint.Width; x++)
+                png.Alpha(hint.X + x, hint.Y + y).Should().Be(255, "the grid must not show through the hint frame");
+        var fill = png.Pixel(hint.X + hint.Border, hint.Y + hint.Border);
+        for (var y = hint.Border; y < hint.Height - hint.Border; y++)
+            for (var x = hint.Border; x < hint.Width - hint.Border; x++)
+                png.Pixel(hint.X + x, hint.Y + y).Should().Be(fill, "only the flat face may stretch in both directions");
     }
 
     [TestMethod]
