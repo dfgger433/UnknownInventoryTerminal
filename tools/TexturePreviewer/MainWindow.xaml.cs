@@ -457,7 +457,7 @@ public partial class MainWindow : Window
             var crop = new Ae2ImageRegion(region.Texture, region.X + sx, region.Y + sy, sw, sh, 0);
             AddRegion(Ae2Image.Tooltip, crop, x + dx, y + dy, w, h, scale);
         }
-        AddLabel("Tooltip sample", x + 4, y, width - 8, height, scale, 6, false, tag: Ae2Image.Tooltip.ToString());
+        AddLabel("悬浮提示 Tooltip", x + 4, y, width - 8, height, scale, 8, false, tag: Ae2Image.Tooltip.ToString());
     }
 
     private void AddRegion(Ae2Image id, int x, int y, int width, int height, int scale)

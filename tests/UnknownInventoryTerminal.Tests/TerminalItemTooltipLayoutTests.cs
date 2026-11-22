@@ -25,6 +25,8 @@ public sealed class TerminalItemTooltipLayoutTests
     [DataRow(280f, 10f, 310f, 22f, true, 166f, 25f)]
     [DataRow(280f, 208f, 310f, 228f, true, 166f, 155f)]
     [DataRow(20f, 214f, 38f, 234f, false, 41f, 186f)]
+    [DataRow(133f, 106f, 145f, 106f, false, 148f, 106f)] // Scroll track: align to cursor Y and clear the thumb.
+    [DataRow(285f, 230f, 297f, 230f, false, 132f, 186f)]
     public void ControlHintsStayInsideTheScreen(float left, float top, float right, float bottom, bool below, float x, float y)
     {
         var position = TerminalItemTooltipLayout.PlaceControl(left, top, right, bottom, below,

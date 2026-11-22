@@ -188,11 +188,11 @@ namespace UnknownInventoryTerminal
             image.color = sprite ? Color.white : fallback;
         }
 
-        internal void ApplyHintFrame(Image image, int scale)
+        internal void ApplyTooltipFrame(Image image, int scale)
         {
             var sprite = GetSprite(Ae2Image.Tooltip);
             image.sprite = sprite;
-            image.color = sprite ? Color.white : Shell;
+            image.color = sprite ? Color.white : new Color32(154, 159, 180, 255);
             image.type = image.hasBorder ? Image.Type.Sliced : Image.Type.Simple;
             var multiplier = 1f / scale;
             if (image.hasBorder && image.pixelsPerUnitMultiplier != multiplier) image.pixelsPerUnitMultiplier = multiplier;

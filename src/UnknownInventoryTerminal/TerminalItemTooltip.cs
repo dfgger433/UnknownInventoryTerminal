@@ -10,27 +10,31 @@ namespace UnknownInventoryTerminal
     internal sealed class TerminalItemTooltip
     {
         private readonly ManualLogSource _log;
-        private readonly RectTransform _bounds, _background, _divider;
+        private readonly Ae2TerminalSkin _skin;
+        private readonly Image _frame;
+        private readonly RectTransform _divider;
         private readonly TextMeshProUGUI _title, _body;
         private Item? _lastFailure;
         private float _width, _height;
         private int _screenWidth, _screenHeight, _scale;
 
-        internal TerminalItemTooltip(Transform parent, ManualLogSource log)
+        internal TerminalItemTooltip(Transform parent, ManualLogSource log, Ae2TerminalSkin skin)
         {
             _log = log;
+            _skin = skin;
             var overlay = TerminalCanvasOrder.AddTooltipLayer(parent, "UIT.ItemTooltipOverlay", TerminalCanvasOrder.ItemTooltip);
-            _bounds = Fill(overlay, "Item tooltip", new Color32(102, 66, 138, 255));
-            _background = Fill(_bounds, "Background", new Color32(21, 14, 29, 250));
-            _divider = Fill(_bounds, "Title separator", new Color32(73, 53, 90, 255));
+            _frame = NativeFlatInventoryPanel.Add(overlay, "Item tooltip", typeof(Image)).GetComponent<Image>();
+            _frame.raycastTarget = false;
+            var divider = NativeFlatInventoryPanel.Add(_frame.transform, "Title separator", typeof(Image)).GetComponent<Image>();
+            divider.raycastTarget = false;
+            divider.color = Ae2TerminalSkin.Ink;
+            _divider = divider.rectTransform;
             _title = CreateLabel("Item name", GlobalDark.main ? GlobalDark.main.tooltipNameObj : null);
             _body = CreateLabel("Item details", GlobalDark.main ? GlobalDark.main.tooltipDescObj : null);
-            _title.color = new Color32(252, 247, 255, 255);
-            _body.color = new Color32(224, 212, 236, 255);
             Hide();
         }
 
-        internal void Hide() => _bounds.gameObject.SetActive(false);
+        internal void Hide() => _frame.gameObject.SetActive(false);
 
         internal void Show(Item item, int count, Vector2 pointer, int scale)
         {
@@ -69,8 +73,8 @@ namespace UnknownInventoryTerminal
             }
             var (x, y) = TerminalItemTooltipLayout.Place(pointer.x, screenHeight - pointer.y,
                 _width, _height, screenWidth, screenHeight, 5 * scale, margin);
-            NativeFlatInventoryPanel.Position(_bounds, new Rect(x, y, _width, _height));
-            _bounds.gameObject.SetActive(true);
+            NativeFlatInventoryPanel.Position(_frame.rectTransform, new Rect(x, y, _width, _height));
+            _frame.gameObject.SetActive(true);
         }
 
         private void Layout(string title, string body, float availableWidth, float availableHeight, int scale, float padding)
@@ -85,7 +89,7 @@ namespace UnknownInventoryTerminal
             var bodyHeight = Mathf.Min(Mathf.Ceil(_body.GetPreferredValues(body, width, 0).y), availableHeight - bodyY - padding);
             _width = width + 2 * padding;
             _height = bodyY + bodyHeight + padding;
-            NativeFlatInventoryPanel.Position(_background, new Rect(scale, scale, _width - 2 * scale, _height - 2 * scale));
+            _skin.ApplyTooltipFrame(_frame, scale);
             NativeFlatInventoryPanel.Position(_divider, new Rect(padding, titleHeight + 2 * padding, width, scale));
             NativeFlatInventoryPanel.Position(_title.rectTransform, new Rect(padding, padding, width, titleHeight));
             NativeFlatInventoryPanel.Position(_body.rectTransform, new Rect(padding, bodyY, width, bodyHeight));
@@ -95,21 +99,19 @@ namespace UnknownInventoryTerminal
 
         private TextMeshProUGUI CreateLabel(string name, TextMeshProUGUI? source)
         {
-            var label = NativeFlatInventoryPanel.CreateText(_bounds, name, 14, TextAlignmentOptions.TopLeft);
+            var label = NativeFlatInventoryPanel.CreateText(_frame.transform, name, 14, TextAlignmentOptions.TopLeft);
             // Keep the native font's locale fallbacks and inline stat sprites, but use terminal-owned labels.
             if (source && source!.font) label.font = source.font;
             if (source && source!.spriteAsset) label.spriteAsset = source.spriteAsset;
+            if (label.font)
+            {
+                // Some inline game colors are very light. Outline glyphs without changing their meaning.
+                label.outlineColor = Ae2TerminalSkin.Ink;
+                label.outlineWidth = 0.18f;
+            }
             label.richText = true;
             label.enableWordWrapping = true;
             return label;
-        }
-
-        private static RectTransform Fill(Transform parent, string name, Color color)
-        {
-            var image = NativeFlatInventoryPanel.Add(parent, name, typeof(Image)).GetComponent<Image>();
-            image.raycastTarget = false;
-            image.color = color;
-            return image.rectTransform;
         }
     }
 }

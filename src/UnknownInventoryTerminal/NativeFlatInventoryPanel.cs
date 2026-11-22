@@ -60,7 +60,6 @@ namespace UnknownInventoryTerminal
         private Image? _thumb;
         private InvButton? _automaticTarget;
         private TextMeshProUGUI? _empty;
-        private UITooltip? _scrollTooltip;
         private TerminalItemTooltip? _itemTooltip;
         private TerminalControlHint? _controlHint;
         internal NativeTerminalChrome? Chrome { get; private set; }
@@ -75,7 +74,7 @@ namespace UnknownInventoryTerminal
         private Image[] _actionBarParts = null!;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
-        private Rect _bounds, _windowBounds;
+        private Rect _bounds, _windowBounds, _scrollTrackBounds;
         private Ae2TerminalLayout _layout = new Ae2TerminalLayout(1280, 720);
         private Rect BoardBounds => new Rect(_windowBounds.x + _layout.BoardLeft, _windowBounds.y,
             Ae2TerminalLayout.BoardWidth * _layout.Scale, _layout.Height);
@@ -89,7 +88,6 @@ namespace UnknownInventoryTerminal
         internal NativeFlatInventoryPanel(ManualLogSource log, Ae2TerminalSkin skin)
         {
             _log = log; _skin = skin; _loadout = new NativeLoadoutPanel(log, skin);
-            SettingsBridge.LanguageChanged += RefreshScrollTooltip;
         }
 
         // The transparent chrome is a blocker, not an inventory control. In particular,
@@ -116,37 +114,29 @@ namespace UnknownInventoryTerminal
         internal void UpdateTooltips(PlayerCamera camera, bool blocked)
         {
             if (_itemTooltip == null || _controlHint == null) return;
-            var pointer = (Vector2)Input.mousePosition;
-            if (blocked || !_root!.activeInHierarchy) _controlHint.Hide();
-            else
+            if (blocked || !_root!.activeInHierarchy)
             {
-                // Resolve after chrome and drag actions so only the current hovered control wins.
-                OfferDragActionHint(pointer);
-                if (_controlHint.Present(_layout.Scale))
-                {
-                    _itemTooltip.Hide();
-                    return;
-                }
-            }
-
-            var events = EventSystem.current;
-            if (blocked || InteractionInProgress() || !events || !ContainsScreenPoint(pointer))
-            {
+                _controlHint.Hide();
                 _itemTooltip.Hide();
                 return;
             }
-            if (_hoverEvents != events)
+
+            var pointer = (Vector2)Input.mousePosition;
+            var target = ContainsScreenPoint(pointer) ? TopHoverTarget(pointer) : null;
+            // The track owns the thumb's hit area even when the slider cannot scroll.
+            if (target && _slider && target == _slider!.gameObject)
             {
-                _hoverEvents = events;
-                _hoverPointer = new PointerEventData(events);
+                var anchor = _scrollTrackBounds;
+                anchor.position += _bounds.position;
+                // Follow the pointer vertically instead of anchoring to the top of a long track.
+                anchor.y = Screen.height - pointer.y;
+                anchor.height = 0;
+                _controlHint.Offer(anchor, TerminalText.Get("inventory.scroll") + "\n" + TerminalText.Get("inventory.scroll.description"));
             }
-            _hoverHits.Clear();
-            _hoverPointer!.position = pointer;
-            events.RaycastAll(_hoverPointer, _hoverHits);
-            // Only the top visual hit wins. Empty cells, the scrollbar and extensions must occlude items.
-            var target = _hoverHits.Count > 0 ? _hoverHits[0].gameObject : null;
-            _hoverHits.Clear();
-            if (target != null && Contains(target) && !ContainsExtension(target))
+            // Resolve after chrome and drag actions so only the current hovered control wins.
+            OfferDragActionHint(pointer);
+            if (!_controlHint.Present(_layout.Scale) && !InteractionInProgress() &&
+                target != null && Contains(target) && !ContainsExtension(target))
             {
                 var tile = target.GetComponent<TilePointer>();
                 var loadout = target.GetComponent<LoadoutCell>();
@@ -164,6 +154,23 @@ namespace UnknownInventoryTerminal
                 }
             }
             _itemTooltip.Hide();
+        }
+
+        private GameObject? TopHoverTarget(Vector2 pointer)
+        {
+            var events = EventSystem.current;
+            if (!events) return null;
+            if (_hoverEvents != events)
+            {
+                _hoverEvents = events;
+                _hoverPointer = new PointerEventData(events);
+            }
+            _hoverPointer!.position = pointer;
+            events.RaycastAll(_hoverPointer, _hoverHits);
+            // Empty cells, controls and extensions occlude anything below them.
+            var target = _hoverHits.Count > 0 ? _hoverHits[0].gameObject : null;
+            _hoverHits.Clear();
+            return target;
         }
 
         internal int EquipmentCount()
@@ -196,15 +203,6 @@ namespace UnknownInventoryTerminal
             }
             _automaticTarget!.refItem = candidate.Item;
             return _automaticTarget;
-        }
-
-        private void RefreshScrollTooltip()
-        {
-            if (_scrollTooltip)
-            {
-                _scrollTooltip!.tipName = TerminalText.Get("inventory.scroll");
-                _scrollTooltip.tipDesc = TerminalText.Get("inventory.scroll.description");
-            }
         }
 
         internal void SetEntries(IEnumerable<InventoryEntry> entries)
@@ -349,7 +347,6 @@ namespace UnknownInventoryTerminal
             var track = scroll.GetComponent<Image>();
             track.color = Color.clear;
             TerminalHitSurface.Enable(track);
-            _scrollTooltip = CreateTooltip(scroll, TerminalText.Get("inventory.scroll"), TerminalText.Get("inventory.scroll.description"));
             _slider = scroll.GetComponent<Slider>();
             _slider.direction = Slider.Direction.TopToBottom;
             _slider.wholeNumbers = true;
@@ -362,7 +359,7 @@ namespace UnknownInventoryTerminal
             var handleLane = Add(scroll.transform, "Thumb travel").GetComponent<RectTransform>();
             Stretch(handleLane, Vector2.zero, Vector2.zero);
             _thumb = Add(handleLane, "AE2 thumb", typeof(Image)).GetComponent<Image>();
-            // The track is the hit surface. Otherwise the thumb can obscure the native UITooltip.
+            // The track owns both hover and slider input, even over the thumb.
             _thumb.raycastTarget = false;
             _thumb.rectTransform.anchorMin = new Vector2(0, 1);
             _thumb.rectTransform.anchorMax = Vector2.one;
@@ -386,7 +383,7 @@ namespace UnknownInventoryTerminal
             _drainAction = CreateDragAction(TerminalDragAction.Drain, Ae2Image.DragDrain);
             _useAction = CreateDragAction(TerminalDragAction.Use, Ae2Image.DragUse);
             HideDragActions();
-            _itemTooltip = new TerminalItemTooltip(_root.transform, _log);
+            _itemTooltip = new TerminalItemTooltip(_root.transform, _log, _skin);
             _controlHint = new TerminalControlHint(_root.transform, _skin);
             Chrome = new NativeTerminalChrome(_root.transform, _skin, _controlHint);
             Position(_panel, _bounds);
@@ -406,8 +403,9 @@ namespace UnknownInventoryTerminal
             // The thumb keeps its sprite's pixel size and is centered on the groove drawn in terminal.png.
             var thumbSize = _skin.SourceSize(Ae2Image.Thumb) ??
                 new Vector2Int(Ae2TerminalLayout.DefaultThumbWidth, Ae2TerminalLayout.DefaultThumbHeight);
-            Position(_slider!.GetComponent<RectTransform>(), new Rect(Ae2TerminalLayout.ThumbLeft(thumbSize.x) * scale,
-                Ae2TerminalLayout.GrooveBorder * scale, thumbSize.x * scale, _layout.ScrollTrackHeight * scale));
+            _scrollTrackBounds = new Rect(Ae2TerminalLayout.ThumbLeft(thumbSize.x) * scale,
+                Ae2TerminalLayout.GrooveBorder * scale, thumbSize.x * scale, _layout.ScrollTrackHeight * scale);
+            Position(_slider!.GetComponent<RectTransform>(), _scrollTrackBounds);
             var handle = _thumb!.rectTransform;
             handle.sizeDelta = new Vector2(0, thumbSize.y * scale);
             handle.anchoredPosition = Vector2.zero;
@@ -760,15 +758,6 @@ namespace UnknownInventoryTerminal
             highlight.gameObject.SetActive(true);
         }
 
-        private static UITooltip CreateTooltip(GameObject target, string name, string description)
-        {
-            var tooltip = target.AddComponent<UITooltip>();
-            tooltip.skipLocale = true;
-            tooltip.tipName = name;
-            tooltip.tipDesc = description;
-            return tooltip;
-        }
-
         internal static GameObject Add(Transform parent, string name, params Type[] components)
         {
             var node = new GameObject(name, typeof(RectTransform)) { layer = parent.gameObject.layer };
@@ -815,7 +804,6 @@ namespace UnknownInventoryTerminal
 
         public void Dispose()
         {
-            SettingsBridge.LanguageChanged -= RefreshScrollTooltip;
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
             Chrome = null;

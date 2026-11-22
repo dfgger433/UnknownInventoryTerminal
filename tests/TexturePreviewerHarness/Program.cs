@@ -39,7 +39,7 @@ internal static class Program
             CheckComposite(window, style);
             if (Environment.GetEnvironmentVariable("UIT_PREVIEW_SNAPSHOT") is { Length: > 0 } snapshot) SaveComposite(window, snapshot);
             Console.WriteLine("Asset root and atlas layout passed: source textures preferred; five crops including independent scrollers.");
-            Console.WriteLine("Composite passed: board, toolbar states and scroll thumb render at 2x with aligned layers.");
+            Console.WriteLine("Composite passed: board, toolbar states, scroll thumb and shared tooltip frame render at 2x.");
         }
         finally
         {
@@ -140,6 +140,13 @@ internal static class Program
         if (!images.Any(image => image.Source is CroppedBitmap crop && crop.SourceRect == Expected(style, UnknownInventoryTerminal.Ae2Image.Settings)))
             throw new InvalidOperationException("Composite is missing the settings icon.");
         CheckCenteredIcon(hover, UnknownInventoryTerminal.Ae2Image.SortName, new Int32Rect(3, 4, 10, 9));
+
+        var tooltip = images.Where(image => Equals(image.Tag, UnknownInventoryTerminal.Ae2Image.Tooltip.ToString())).ToArray();
+        if (tooltip.Length != 9 || tooltip[0].Source is not CroppedBitmap corner ||
+            corner.SourceRect != new Int32Rect(0, 0, 3, 3) || tooltip[0].Width != 6 || tooltip[0].Height != 6 ||
+            tooltip[4].Source is not CroppedBitmap fill || fill.SourceRect != new Int32Rect(3, 3, 122, 6) ||
+            tooltip[4].Width != 132 || tooltip[4].Height != 22)
+            throw new InvalidOperationException("The shared tooltip must stretch the original search frame without scaling its corners.");
 
         void CheckCenteredIcon(Image face, UnknownInventoryTerminal.Ae2Image id, Int32Rect bounds)
         {

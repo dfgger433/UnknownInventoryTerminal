@@ -9,7 +9,7 @@
   "images": {
     "search": { "texture": "guis/text_field.png", "srcRect": [0, 0, 128, 12] },
     "searchFocused": { "texture": "guis/text_field.png", "srcRect": [0, 24, 128, 12] },
-    "tooltip": { "texture": "guis/states.png", "srcRect": [145, 65, 18, 20], "border": 4 },
+    "tooltip": { "texture": "guis/text_field.png", "srcRect": [0, 0, 128, 12], "border": 3 },
     "button": { "texture": "guis/states.png", "srcRect": [145, 65, 18, 20] },
     "buttonFocus": { "texture": "guis/states.png", "srcRect": [163, 65, 18, 20] },
     "buttonHover": { "texture": "guis/states.png", "srcRect": [181, 65, 18, 19] },

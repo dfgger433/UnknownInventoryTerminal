@@ -25,7 +25,8 @@ public sealed class Ae2ScreenStyleTests
             style.TryGet(image, out var region).Should().BeTrue($"{image} must have a region");
             region.Border.Should().Be(image switch
             {
-                Ae2Image.SettingsBackground or Ae2Image.Tooltip => 4,
+                Ae2Image.SettingsBackground => 4,
+                Ae2Image.Tooltip => 3,
                 Ae2Image.SettingsOption or Ae2Image.SettingsOptionDisabled or Ae2Image.SettingsOptionHover or Ae2Image.SettingsOptionSelected => 2,
                 _ => 0
             });
@@ -183,13 +184,12 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    public void ControlHintUsesTheOpaqueToolbarFrameWithFixedBevel()
+    public void TooltipUsesTheOriginalSearchFrameWithFixedBevel()
     {
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.Tooltip, out var hint).Should().BeTrue();
-        style.TryGet(Ae2Image.Button, out var button).Should().BeTrue();
-        (hint.Texture, hint.X, hint.Y, hint.Width, hint.Height).Should()
-            .Be((button.Texture, button.X, button.Y, button.Width, button.Height));
+        (hint.Texture, hint.X, hint.Y, hint.Width, hint.Height, hint.Border).Should()
+            .Be(("guis/text_field.png", 0, 0, 128, 12, 3));
 
         using var png = PngPixels.Read(TextureFilePath(hint.Texture));
         for (var y = 0; y < hint.Height; y++)

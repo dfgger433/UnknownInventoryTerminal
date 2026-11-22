@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace UnknownInventoryTerminal
 {
-    // A single tooltip for search, ordinary toolbar buttons and drag actions.
+    // A single tooltip for search, the toolbar, the scrollbar and drag actions.
     internal sealed class TerminalControlHint
     {
         private readonly Ae2TerminalSkin _skin;
@@ -46,7 +46,7 @@ namespace UnknownInventoryTerminal
                 hint.Anchor.yMax, hint.Below, width + 2 * padding, height + 2 * padding, Screen.width, Screen.height, 3 * scale, margin);
             NativeFlatInventoryPanel.Position(_frame.rectTransform, new Rect(x, y, width + 2 * padding, height + 2 * padding));
             NativeFlatInventoryPanel.Position(_label.rectTransform, new Rect(padding, padding, width, height));
-            _skin.ApplyHintFrame(_frame, scale);
+            _skin.ApplyTooltipFrame(_frame, scale);
             _label.text = hint.Text;
             _frame.gameObject.SetActive(true);
             return true;
