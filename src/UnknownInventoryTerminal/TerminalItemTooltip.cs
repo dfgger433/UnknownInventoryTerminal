@@ -19,8 +19,10 @@ namespace UnknownInventoryTerminal
         internal TerminalItemTooltip(Transform parent, ManualLogSource log)
         {
             _log = log;
-            var overlay = NativeFlatInventoryPanel.Add(parent, "UIT.ItemTooltipOverlay", typeof(Canvas));
+            var overlay = NativeFlatInventoryPanel.Add(parent, "UIT.ItemTooltipOverlay", typeof(Canvas), typeof(CanvasGroup));
             NativeFlatInventoryPanel.Stretch(overlay.GetComponent<RectTransform>(), Vector2.zero, Vector2.zero);
+            overlay.GetComponent<CanvasGroup>().blocksRaycasts = false;
+            // The inventory chrome uses the parent canvas, so this order covers buttons as well as item slots.
             var canvas = overlay.GetComponent<Canvas>();
             canvas.overrideSorting = true;
             canvas.sortingOrder = short.MaxValue;
