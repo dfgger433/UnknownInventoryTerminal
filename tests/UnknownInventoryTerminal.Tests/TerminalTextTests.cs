@@ -71,12 +71,16 @@ public sealed class TerminalTextTests
     }
 
     [TestMethod]
-    [DataRow("en", "Keep dragging after use")]
-    [DataRow("zh-CN", "使用后保持拖动")]
-    public void KeepDraggingToggleHasALocalizedLabel(string language, string label)
+    [DataRow("en", "Keep item after action")]
+    [DataRow("zh-CN", "动作后保留物品")]
+    public void KeepDraggingToggleHasALocalizedLabelAndActionDescription(string language, string label)
     {
         var shipped = TerminalText.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Lang", language + ".json")));
         shipped["settings.KeepDraggingAfterUse"].Should().Be(label);
+        var description = shipped["settings.KeepDraggingAfterUse.description"];
+        (description.Contains("Drain", StringComparison.Ordinal) || description.Contains("倒液", StringComparison.Ordinal))
+            .Should().BeTrue();
+        description.Should().Contain(language == "en" ? "once" : "一次");
     }
 
     private static Dictionary<string, string> Dict(params (string Key, string Value)[] entries)

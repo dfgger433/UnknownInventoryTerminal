@@ -31,15 +31,15 @@ public sealed class TerminalDragGestureTests
     }
 
     [TestMethod]
-    [DataRow(false, true, false, (int)TerminalDragAfterUse.End)]
-    [DataRow(false, true, true, (int)TerminalDragAfterUse.End)]
-    [DataRow(true, false, false, (int)TerminalDragAfterUse.End)]
-    [DataRow(true, false, true, (int)TerminalDragAfterUse.End)]
-    [DataRow(true, true, false, (int)TerminalDragAfterUse.KeepArmed)]
-    [DataRow(true, true, true, (int)TerminalDragAfterUse.ResumeDrag)]
-    public void UseOnlyRetainsAnEligibleItemWhenTheSwitchIsOn(bool keep, bool sameTarget, bool held, int expected)
+    [DataRow(false, true, false, (int)TerminalDragAfterAction.End)]
+    [DataRow(false, true, true, (int)TerminalDragAfterAction.End)]
+    [DataRow(true, false, false, (int)TerminalDragAfterAction.End)]
+    [DataRow(true, false, true, (int)TerminalDragAfterAction.End)]
+    [DataRow(true, true, false, (int)TerminalDragAfterAction.KeepArmed)]
+    [DataRow(true, true, true, (int)TerminalDragAfterAction.ResumeDrag)]
+    public void ActionOnlyRetainsAnEligibleItemWhenTheSwitchIsOn(bool keep, bool sameTarget, bool held, int expected)
     {
-        TerminalDragGesture.AfterUse(keep, sameTarget, held).Should().Be((TerminalDragAfterUse)expected);
+        TerminalDragGesture.AfterAction(keep, sameTarget, held).Should().Be((TerminalDragAfterAction)expected);
     }
 
     [TestMethod]
@@ -49,15 +49,17 @@ public sealed class TerminalDragGestureTests
             TerminalDragGesture.Step(TerminalDragAction.Use, true, false, pressed, held, false);
 
         AtUse(true, true).Should().Be(TerminalDragStep.Use);
-        TerminalDragGesture.AfterUse(keepDragging: true, sameUseTarget: true, dragKeyStillHeld: false)
-            .Should().Be(TerminalDragAfterUse.KeepArmed);
+        TerminalDragGesture.AfterAction(keepDragging: true, sameActionTarget: true, dragKeyStillHeld: false)
+            .Should().Be(TerminalDragAfterAction.KeepArmed);
+        TerminalDragGesture.Step(TerminalDragAction.Use, true, false, false, true, false)
+            .Should().Be(TerminalDragStep.Wait, "the retained item must not auto-use while the click stays held");
         AtUse(false, true).Should().Be(TerminalDragStep.Wait, "holding the first click must not use it again");
         AtUse(false, false).Should().Be(TerminalDragStep.Wait, "releasing is not a second use");
         AtUse(true, true).Should().Be(TerminalDragStep.Use);
     }
 
     [TestMethod]
-    public void DrainRequiresAFreshPressAndStopsOnRelease()
+    public void DrainRequiresANewClickAndNeverRepeatsWhileHeld()
     {
         TerminalDragStep AtButton(bool pressed, bool held, bool draining) =>
             TerminalDragGesture.Step(TerminalDragAction.Drain, true, false, pressed, held, draining);
@@ -65,8 +67,24 @@ public sealed class TerminalDragGestureTests
         AtButton(false, false, false).Should().Be(TerminalDragStep.Wait);
         AtButton(false, true, false).Should().Be(TerminalDragStep.Wait);
         AtButton(true, true, false).Should().Be(TerminalDragStep.Drain);
-        AtButton(false, true, true).Should().Be(TerminalDragStep.Drain);
-        AtButton(false, false, true).Should().Be(TerminalDragStep.Cancel);
+        AtButton(false, true, true).Should().Be(TerminalDragStep.Wait, "holding after the initial click does not repeat the drain");
+        AtButton(false, false, true).Should().Be(TerminalDragStep.StopDrain);
+        AtButton(true, true, false).Should().Be(TerminalDragStep.Drain, "a later click starts one more drain step");
+    }
+
+    [TestMethod]
+    [DataRow(false, true, false, (int)TerminalDragAfterAction.End)]
+    [DataRow(true, true, false, (int)TerminalDragAfterAction.KeepArmed)]
+    [DataRow(true, true, true, (int)TerminalDragAfterAction.ResumeDrag)]
+    [DataRow(true, false, false, (int)TerminalDragAfterAction.End)]
+    public void DrainUsesTheSharedRetentionSwitchWithoutAutoRepeating(bool keep, bool sameTarget, bool dragHeld, int expected)
+    {
+        TerminalDragStep AtButton(bool pressed, bool held, bool draining) =>
+            TerminalDragGesture.Step(TerminalDragAction.Drain, true, false, pressed, held, draining);
+
+        AtButton(true, true, false).Should().Be(TerminalDragStep.Drain);
+        AtButton(false, true, false).Should().Be(TerminalDragStep.Wait);
+        TerminalDragGesture.AfterAction(keep, sameTarget, dragHeld).Should().Be((TerminalDragAfterAction)expected);
     }
 
     [TestMethod]
