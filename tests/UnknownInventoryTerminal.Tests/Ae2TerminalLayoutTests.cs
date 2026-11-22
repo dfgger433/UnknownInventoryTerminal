@@ -92,14 +92,15 @@ public sealed class Ae2TerminalLayoutTests
         left.Should().Be(121);
         (left * 2 + Ae2TerminalLayout.DefaultThumbWidth).Should().Be(2 * Ae2TerminalLayout.GrooveLeft + Ae2TerminalLayout.GrooveWidth);
         (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder).Should().Be(18);
-        layout.ScrollTrackHeight.Should().Be(trackHeight);
+        layout.ScrollTrackHeight().Should().Be(trackHeight);
+        layout.ScrollTrackHeight(hasPinnedRow: true).Should().Be(trackHeight - Ae2TerminalLayout.Pitch);
         (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder + trackHeight).Should().Be(layout.StatusTop - 1);
     }
 
     [TestMethod]
     [DataRow(320, 240, (int)TerminalHeight.Small)]
     [DataRow(1920, 1080, (int)TerminalHeight.Full)]
-    public void DragActionsShareALeftRailWithoutCoveringTheExpandedToolbarOrSlots(int width, int height, int style)
+    public void DragActionsFitTheLeftRailBelowTheToolbarAndBesideTheSlots(int width, int height, int style)
     {
         var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
         var drain = layout.DragActionBounds(TerminalDragAction.Drain);
@@ -112,7 +113,7 @@ public sealed class Ae2TerminalLayoutTests
 
         var both = layout.DragActionBackgroundBounds(drain: true, use: true);
         both.Y.Should().BeGreaterThan((Ae2TerminalLayout.ButtonBarY +
-            Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons + 1)) * scale);
+            Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons)) * scale);
         (both.Y + both.Height).Should().BeLessThanOrEqualTo(layout.Height);
         both.Width.Should().Be(21 * scale);
         both.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(2) * scale);
@@ -126,6 +127,15 @@ public sealed class Ae2TerminalLayoutTests
         var singleHeight = Ae2TerminalLayout.ButtonBarHeight(1) * scale;
         layout.DragActionBackgroundBounds(drain: true, use: false).Should().Be((both.X, both.Y, both.Width, singleHeight));
         layout.DragActionBackgroundBounds(drain: false, use: true).Should().Be((both.X, use.Y - topInset, both.Width, singleHeight));
+        var pin = layout.DragActionBounds(TerminalDragAction.Pin);
+        (pin.Y - use.Y).Should().Be(Ae2TerminalLayout.ToolbarPitch * scale);
+        var all = layout.DragActionBackgroundBounds(drain: true, use: true, pin: true);
+        all.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(3) * scale);
+        (all.Y + all.Height).Should().BeLessThanOrEqualTo(layout.Height);
+        layout.DragActionBackgroundBounds(drain: false, use: false, pin: true).Should()
+            .Be((both.X, pin.Y - topInset, both.Width, singleHeight));
+        layout.StorageRows(false).Should().Be(layout.Rows);
+        layout.StorageRows(true).Should().Be(layout.Rows - 1);
     }
 
     [TestMethod]
@@ -134,7 +144,7 @@ public sealed class Ae2TerminalLayoutTests
     public void DragActionHitsUseTheExactAbsoluteFaceRatherThanTheBackground(int width, int height, int style)
     {
         var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
-        foreach (var action in new[] { TerminalDragAction.Drain, TerminalDragAction.Use })
+        foreach (var action in System.Enum.GetValues<TerminalDragAction>())
         {
             var (x, y, w, h) = layout.DragActionBounds(action);
             var left = layout.Left + x;

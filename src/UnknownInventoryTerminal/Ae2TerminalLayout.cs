@@ -5,7 +5,7 @@ namespace UnknownInventoryTerminal
     // Matches appeng.api.config.TerminalStyle: the storage gets a quarter, half, three quarters or all of the rows
     // that fit on the screen.
     internal enum TerminalHeight { Small = 1, Medium = 2, Tall = 3, Full = 4 }
-    internal enum TerminalDragAction { Drain, Use }
+    internal enum TerminalDragAction { Drain, Use, Pin }
 
     // Positions follow the board drawn in terminal.png. Like AE2's MEStorageScreen, the board is stacked from the
     // header, first, middle and last storage rows and the bottom part, each drawn as cut at an integer scale.
@@ -59,6 +59,7 @@ namespace UnknownInventoryTerminal
         internal int MainRows => MainRowCount;
         internal int EquipmentRows => EquipmentRowCount;
         internal int GridHeight => Rows * Pitch * Scale;
+        internal int StorageRows(bool hasPinnedRow) => Rows - (hasPinnedRow ? 1 : 0);
         // Board-relative top edges, in UI units.
         internal int StatusTop => Header + Rows * Pitch;
         internal int EquipmentTop => StatusTop + EquipmentOffset;
@@ -92,20 +93,21 @@ namespace UnknownInventoryTerminal
 
         internal static int ToolbarY(int index) => ToolbarTop + index * ToolbarPitch;
         internal static int ThumbLeft(int thumbWidth) => GrooveLeft + (GrooveWidth - thumbWidth) / 2;
-        // A separate two-slot group uses the same left rail, below even the expanded toolbar.
-        // Keep both slot origins fixed when a single action is offered or armed.
+        // The fifth toolbar button (return) is hidden during a live drag so even the smallest
+        // board can fit all three action faces, with the same bounds regardless of eligibility.
         internal (int X, int Y, int Width, int Height) DragActionBounds(TerminalDragAction action)
         {
-            var y = Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - ToolbarPitch - ButtonHeight) / 2,
-                ButtonBarY + ButtonBarHeight(ToolbarButtons + 1) + 5);
-            if (action == TerminalDragAction.Use) y += ToolbarPitch;
+            var y = Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - 2 * ToolbarPitch - ButtonHeight) / 2,
+                ButtonBarY + ButtonBarHeight(ToolbarButtons) + 5) + (int)action * ToolbarPitch;
             return (ToolbarX * Scale, y * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
         }
 
-        internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(bool drain, bool use)
+        internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(bool drain, bool use, bool pin = false)
         {
-            var (_, y, _, _) = DragActionBounds(drain ? TerminalDragAction.Drain : TerminalDragAction.Use);
-            var height = ButtonBarHeight(drain && use ? 2 : 1);
+            var first = drain ? TerminalDragAction.Drain : use ? TerminalDragAction.Use : TerminalDragAction.Pin;
+            var last = pin ? TerminalDragAction.Pin : use ? TerminalDragAction.Use : TerminalDragAction.Drain;
+            var (_, y, _, _) = DragActionBounds(first);
+            var height = ButtonBarHeight((int)last - (int)first + 1);
             return (ButtonBarX * Scale, y - ButtonBarInsetY * Scale, ButtonBarWidth * Scale, height * Scale);
         }
 
@@ -119,7 +121,7 @@ namespace UnknownInventoryTerminal
             return screenX >= left && screenX < left + width && screenY >= top && screenY < top + height;
         }
         // Like AE2, the thumb travels between the two end borders of the painted groove.
-        internal int ScrollTrackHeight => Rows * Pitch - 2 * GrooveBorder;
+        internal int ScrollTrackHeight(bool hasPinnedRow = false) => StorageRows(hasPinnedRow) * Pitch - 2 * GrooveBorder;
         // Height of vertical_buttons_bg.png behind the given number of visible buttons.
         internal static int ButtonBarHeight(int buttons) => buttons * ToolbarPitch + 6;
         internal static int ContentRows(int tiles) => (Math.Max(0, tiles) + Columns - 1) / Columns;

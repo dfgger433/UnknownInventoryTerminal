@@ -103,8 +103,8 @@ namespace UnknownInventoryTerminal
                 {
                     HoldInput();
                     _shield?.SetVisible(true);
-                    if (_nativePanel?.Chrome is { } chrome) _window!.DrawInventoryChrome(chrome);
                     UpdateDragActions(_sessionCamera!);
+                    if (_nativePanel?.Chrome is { } chrome) _window!.DrawInventoryChrome(chrome);
                     _nativePanel?.UpdateTooltips(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
                 }
             }
@@ -123,6 +123,8 @@ namespace UnknownInventoryTerminal
         internal static TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, TerminalDragAction? armed = null) =>
             CanInteractWithDragActions(camera) && GameInventoryAdapter.Owns(camera.body, item)
                 ? Instance!._nativePanel?.DragActionAtPointer(camera, item, armed) : null;
+
+        internal static void TogglePin(PlayerCamera camera, Item item) => Instance?._nativePanel?.TogglePin(camera.body, item);
 
         internal static void UpdateDragActions(PlayerCamera camera)
         {
@@ -490,20 +492,33 @@ namespace UnknownInventoryTerminal
             {
                 var dragKey = KeyBinds.GetBind("iteminteract");
                 var release = Input.GetKeyUp(dragKey);
-                var gesture = TerminalDragGesture.Begin(release, Input.GetMouseButtonDown(0), Input.GetMouseButtonDown(1));
-                if (gesture != TerminalDragStart.None)
+                if (action == TerminalDragAction.Pin)
                 {
-                    // Capture before vanilla treats the confirm click as a new pickup or release.
-                    Plugin.CancelDrag(__instance);
-                    if (gesture != TerminalDragStart.Cancel)
+                    // Pins are a display-only drop, not a native item move or a pending Use/Drain.
+                    if (release || Input.GetMouseButtonDown(1))
                     {
-                        var pendingAction = new PendingAction(__instance, source, action);
-                        _pendingAction = pendingAction;
-                        if (gesture == TerminalDragStart.Confirm)
-                            HandlePendingAction(__instance, pendingAction, resumeDrag: !release && Input.GetKey(dragKey));
-                        Plugin.UpdateDragActions(__instance);
+                        if (release && !Input.GetMouseButtonDown(1)) Plugin.TogglePin(__instance, source);
+                        Plugin.CancelDrag(__instance);
+                        return false;
                     }
-                    return false;
+                }
+                else
+                {
+                    var gesture = TerminalDragGesture.Begin(release, Input.GetMouseButtonDown(0), Input.GetMouseButtonDown(1));
+                    if (gesture != TerminalDragStart.None)
+                    {
+                        // Capture before vanilla treats the confirm click as a new pickup or release.
+                        Plugin.CancelDrag(__instance);
+                        if (gesture != TerminalDragStart.Cancel)
+                        {
+                            var pendingAction = new PendingAction(__instance, source, action);
+                            _pendingAction = pendingAction;
+                            if (gesture == TerminalDragStart.Confirm)
+                                HandlePendingAction(__instance, pendingAction, resumeDrag: !release && Input.GetKey(dragKey));
+                            Plugin.UpdateDragActions(__instance);
+                        }
+                        return false;
+                    }
                 }
             }
             if (Plugin.SearchFocused)

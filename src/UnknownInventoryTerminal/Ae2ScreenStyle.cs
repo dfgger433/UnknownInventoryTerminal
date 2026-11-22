@@ -16,7 +16,7 @@ namespace UnknownInventoryTerminal
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
         TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg,
-        DragDrain, DragUse
+        DragDrain, DragUse, DragPin, DragUnpin, PinnedRow, PinnedRowGutter, ScrollGrooveTop
     }
 
     internal static class Ae2SettingsLayout

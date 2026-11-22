@@ -23,6 +23,7 @@
     <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Ae2TerminalLayout.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalButtonInput.cs" Link="TerminalButtonInput.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalDragGesture.cs" Link="TerminalDragGesture.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalPins.cs" Link="TerminalPins.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />

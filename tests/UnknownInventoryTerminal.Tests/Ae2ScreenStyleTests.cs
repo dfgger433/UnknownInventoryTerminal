@@ -179,18 +179,38 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow((int)Ae2Image.DragDrain, 1)]
-    [DataRow((int)Ae2Image.DragUse, 33)]
-    public void DragActionCropsContainVisibleIcons(int image, int x)
+    [DataRow((int)Ae2Image.DragDrain, 1, 97, 14)]
+    [DataRow((int)Ae2Image.DragUse, 33, 97, 14)]
+    [DataRow((int)Ae2Image.DragPin, 48, 16, 16)]
+    [DataRow((int)Ae2Image.DragUnpin, 64, 16, 16)]
+    public void DragActionCropsContainVisibleIcons(int image, int x, int y, int size)
     {
         var style = ReadBundledStyle();
         style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
         region.Texture.Should().Be("guis/states.png");
-        (region.X, region.Y, region.Width, region.Height).Should().Be((x, 97, 14, 14));
+        (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, size, size));
         using var png = PngPixels.Read(TextureFilePath(region.Texture));
         var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
             (px, py) => png.Alpha(region.X + px, region.Y + py));
         visible.Should().NotBeNull();
+    }
+
+    [TestMethod]
+    public void PinnedRowUsesTheDrawnSixSlotStripAtNativeSize()
+    {
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.PinnedRow, out var row).Should().BeTrue();
+        (row.Texture, row.X, row.Y, row.Width, row.Height).Should()
+            .Be(("guis/terminal.png", 0, 204, Ae2TerminalLayout.GridWidth, Ae2TerminalLayout.Pitch));
+        using var png = PngPixels.Read(TextureFilePath(row.Texture));
+        png.Alpha(row.X, row.Y - 1).Should().Be(0);
+        png.Alpha(row.X, row.Y + row.Height).Should().Be(0);
+        for (var i = 0; i < Ae2TerminalLayout.Columns; i++)
+        {
+            var left = row.X + i * Ae2TerminalLayout.Pitch;
+            png.Alpha(left, row.Y).Should().Be(255);
+            png.Pixel(left + 9, row.Y + 7).Should().NotBe(png.Pixel(left + 3, row.Y + 7));
+        }
     }
 
     [TestMethod]
