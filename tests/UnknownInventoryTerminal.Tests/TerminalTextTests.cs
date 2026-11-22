@@ -70,6 +70,15 @@ public sealed class TerminalTextTests
         shipped["settings.ContainerPlacement.Manual"].Should().NotContain("{0}");
     }
 
+    [TestMethod]
+    [DataRow("en", "Keep dragging after use")]
+    [DataRow("zh-CN", "使用后保持拖动")]
+    public void KeepDraggingToggleHasALocalizedLabel(string language, string label)
+    {
+        var shipped = TerminalText.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Lang", language + ".json")));
+        shipped["settings.KeepDraggingAfterUse"].Should().Be(label);
+    }
+
     private static Dictionary<string, string> Dict(params (string Key, string Value)[] entries)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);

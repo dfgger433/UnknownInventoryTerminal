@@ -402,24 +402,27 @@ public partial class MainWindow : Window
         return parts;
     }
 
-    // Mirrors AE2 VerticalButtonBar: fixed 2-row top and 4-row bottom, stretched middle.
+    // Share the in-game button-bar cuts, including where the top edge meets the board.
     private void AddButtonBar(int buttons, int scale)
     {
-        if (_style is null || !_style.TryGet(Ae2Image.VerticalButtonsBg, out var region)) return;
-        const int top = Ae2TerminalLayout.ButtonBarTopBorder, bottom = Ae2TerminalLayout.ButtonBarBottomBorder;
-        if (region.Height <= top + bottom) return;
+        if (_style is null || !_style.TryGet(Ae2Image.VerticalButtonsBg, out var region) ||
+            region.Width != Ae2TerminalLayout.ButtonBarWidth ||
+            region.Height <= Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder) return;
         var height = Ae2TerminalLayout.ButtonBarHeight(buttons);
-        AddRows(region, 0, top, Ae2TerminalLayout.ButtonBarY, top, scale);
-        AddRows(region, top, region.Height - top - bottom, Ae2TerminalLayout.ButtonBarY + top, height - top - bottom, scale);
-        AddRows(region, region.Height - bottom, bottom, Ae2TerminalLayout.ButtonBarY + height - bottom, bottom, scale);
+        for (var i = 0; i < Ae2TerminalLayout.ButtonBarPatchCount; i++)
+        {
+            var (sourceY, width, sourceHeight) = Ae2TerminalLayout.ButtonBarPatch(region.Height, i, flushWithBoardTop: true);
+            var (y, _, rows) = Ae2TerminalLayout.ButtonBarPatch(height, i, flushWithBoardTop: true);
+            var crop = new Ae2ImageRegion(region.Texture, region.X, region.Y + sourceY, width, sourceHeight, 0);
+            AddBarPart(crop, Ae2TerminalLayout.ButtonBarY + y, rows, scale);
+        }
     }
 
-    private void AddRows(Ae2ImageRegion region, int sourceTop, int sourceHeight, int y, int height, int scale)
+    private void AddBarPart(Ae2ImageRegion region, int y, int height, int scale)
     {
         try
         {
-            var rows = new Ae2ImageRegion(region.Texture, region.X, region.Y + sourceTop, region.Width, sourceHeight, 0);
-            var image = new Image { Source = Crop(rows), Width = region.Width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true, Tag = "ButtonBar" };
+            var image = new Image { Source = Crop(region), Width = region.Width * scale, Height = height * scale, Stretch = Stretch.Fill, SnapsToDevicePixels = true, Tag = "ButtonBar" };
             RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
             Canvas.SetLeft(image, Ae2TerminalLayout.ButtonBarX * scale);
             Canvas.SetTop(image, y * scale);

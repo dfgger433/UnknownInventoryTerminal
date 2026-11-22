@@ -31,6 +31,32 @@ public sealed class TerminalDragGestureTests
     }
 
     [TestMethod]
+    [DataRow(false, true, false, (int)TerminalDragAfterUse.End)]
+    [DataRow(false, true, true, (int)TerminalDragAfterUse.End)]
+    [DataRow(true, false, false, (int)TerminalDragAfterUse.End)]
+    [DataRow(true, false, true, (int)TerminalDragAfterUse.End)]
+    [DataRow(true, true, false, (int)TerminalDragAfterUse.KeepArmed)]
+    [DataRow(true, true, true, (int)TerminalDragAfterUse.ResumeDrag)]
+    public void UseOnlyRetainsAnEligibleItemWhenTheSwitchIsOn(bool keep, bool sameTarget, bool held, int expected)
+    {
+        TerminalDragGesture.AfterUse(keep, sameTarget, held).Should().Be((TerminalDragAfterUse)expected);
+    }
+
+    [TestMethod]
+    public void RetainedUseAllowsAnotherClickButNotAutomaticRepeat()
+    {
+        TerminalDragStep AtUse(bool pressed, bool held) =>
+            TerminalDragGesture.Step(TerminalDragAction.Use, true, false, pressed, held, false);
+
+        AtUse(true, true).Should().Be(TerminalDragStep.Use);
+        TerminalDragGesture.AfterUse(keepDragging: true, sameUseTarget: true, dragKeyStillHeld: false)
+            .Should().Be(TerminalDragAfterUse.KeepArmed);
+        AtUse(false, true).Should().Be(TerminalDragStep.Wait, "holding the first click must not use it again");
+        AtUse(false, false).Should().Be(TerminalDragStep.Wait, "releasing is not a second use");
+        AtUse(true, true).Should().Be(TerminalDragStep.Use);
+    }
+
+    [TestMethod]
     public void DrainRequiresAFreshPressAndStopsOnRelease()
     {
         TerminalDragStep AtButton(bool pressed, bool held, bool draining) =>

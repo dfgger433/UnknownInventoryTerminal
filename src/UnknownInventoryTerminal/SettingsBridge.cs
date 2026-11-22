@@ -10,6 +10,7 @@ namespace UnknownInventoryTerminal
     {
         internal const string ConfigSection = "UnknownInventoryTerminal";
         internal const string LanguageSetting = "Language";
+        internal const string KeepDraggingAfterUseSetting = "KeepDraggingAfterUse";
         // Keep general terminal options in the stock Game tab. Keybinds use the stock
         // Controls/Input tab so all actions can be rebound in one place.
         internal const Setting.SettingCategory MenuCategory = Setting.SettingCategory.Game;
@@ -29,6 +30,13 @@ namespace UnknownInventoryTerminal
         {
             get => _terminalHeight is { } entry && System.Enum.IsDefined(typeof(TerminalHeight), entry.Value) ? entry.Value : TerminalHeight.Small;
             set { if (_terminalHeight != null) _terminalHeight.Value = value; }
+        }
+
+        private static ConfigEntry<bool> _keepDraggingAfterUse = null!;
+        internal static bool KeepDraggingAfterUse
+        {
+            get => _keepDraggingAfterUse.Value;
+            set => _keepDraggingAfterUse.Value = value;
         }
 
         internal static string Label(string name) => TerminalText.Get("settings." + name);
@@ -56,6 +64,8 @@ namespace UnknownInventoryTerminal
             _terminalHeight = config.Bind(ConfigSection, "TerminalStyle", TerminalHeight.Small,
                 "Storage height: Small, Medium, Tall or Full share of the rows that fit on the screen (never below 3 rows). " +
                 "The terminal-style button in the left toolbar cycles it.");
+            _keepDraggingAfterUse = config.Bind(ConfigSection, KeepDraggingAfterUseSetting, true,
+                "Keep the same item ready for another click on the Use Item button, or continue the drag while its key is held.");
         }
 
         internal static bool IsTogglePressed()

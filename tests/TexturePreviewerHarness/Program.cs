@@ -110,8 +110,11 @@ internal static class Program
         }
         var bar = canvas.Children.OfType<Image>().Where(image => Equals(image.Tag, "ButtonBar")).ToArray();
         var barHeight = bar.Sum(image => image.Height);
-        if (bar.Length != 3 || barHeight != (4 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
-            throw new InvalidOperationException("Button bar must span four side buttons, not include the close button.");
+        if (bar.Length != 4 || barHeight != (4 * 22 + 6) * 2 || bar.Any(image => image.Width != 21 * 2))
+            throw new InvalidOperationException("Button bar must span four side buttons and meet the top outline at full width.");
+        for (var i = 1; i < bar.Length; i++)
+            if (Canvas.GetTop(bar[i - 1]) + bar[i - 1].Height != Canvas.GetTop(bar[i]))
+                throw new InvalidOperationException("Button bar slices must meet without gaps.");
 
         var slot = canvas.Children.OfType<Border>().Single(border => Equals(border.Tag, "SlotHover"));
         if (Canvas.GetLeft(slot) != 98 || Canvas.GetTop(slot) != (17 + padding) * 2 || slot.Width != 36 || slot.Height != 36 ||

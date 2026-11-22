@@ -23,7 +23,7 @@ namespace UnknownInventoryTerminal
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
         private readonly Dictionary<Ae2Image, (int X, int Y, int Width, int Height)?> _visibleBounds = new();
         private readonly Dictionary<Ae2Image, Sprite> _sprites = new Dictionary<Ae2Image, Sprite>();
-        private readonly Dictionary<(Ae2Image, int, int), Sprite> _slices = new Dictionary<(Ae2Image, int, int), Sprite>();
+        private readonly Dictionary<(Ae2Image, int, int, int), Sprite> _slices = new();
         private Ae2ScreenStyle? _style;
         private bool _loadedStyle;
 
@@ -165,14 +165,15 @@ namespace UnknownInventoryTerminal
             return sprite;
         }
 
-        // Rows [top, top + height) of a region, for images that AE2 draws as a vertical nine-slice.
-        internal Sprite? GetRows(Ae2Image id, int top, int height)
+        // A left-aligned crop inside the sprite, for button-bar borders and the stretchable middle.
+        internal Sprite? GetRows(Ae2Image id, int top, int width, int height)
         {
-            if (Resolve(id) is not { } region || top < 0 || height <= 0 || top + height > region.Height) return null;
-            var key = (id, top, height);
+            if (Resolve(id) is not { } region || top < 0 || width <= 0 || width > region.Width ||
+                height <= 0 || top + height > region.Height) return null;
+            var key = (id, top, width, height);
             if (_slices.TryGetValue(key, out var sprite)) return sprite;
             var texture = _textures[region.Texture]!;
-            sprite = Sprite.Create(texture, new Rect(region.X, texture.height - region.Y - top - height, region.Width, height),
+            sprite = Sprite.Create(texture, new Rect(region.X, texture.height - region.Y - top - height, width, height),
                 new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
             _slices.Add(key, sprite);
             return sprite;
