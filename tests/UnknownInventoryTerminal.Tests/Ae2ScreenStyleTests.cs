@@ -179,20 +179,45 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow((int)Ae2Image.DragDrain, 1, 97, 14)]
-    [DataRow((int)Ae2Image.DragUse, 33, 97, 14)]
-    [DataRow((int)Ae2Image.DragPin, 48, 16, 16)]
-    [DataRow((int)Ae2Image.DragUnpin, 64, 16, 16)]
-    public void DragActionCropsContainVisibleIcons(int image, int x, int y, int size)
+    [DataRow((int)Ae2Image.DragDrain, 1, 97, 14, 14, 2, 2, 10, 11)]
+    [DataRow((int)Ae2Image.DragUse, 33, 97, 14, 14, 2, 2, 10, 11)]
+    [DataRow((int)Ae2Image.DragPin, 53, 21, 6, 8, 0, 0, 6, 8)]
+    [DataRow((int)Ae2Image.DragUnpin, 69, 20, 6, 9, 0, 0, 6, 9)]
+    public void DragActionCropsContainVisibleIcons(int image, int x, int y, int width, int height,
+        int visibleX, int visibleY, int visibleWidth, int visibleHeight)
     {
         var style = ReadBundledStyle();
         style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
         region.Texture.Should().Be("guis/states.png");
-        (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, size, size));
+        (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, width, height));
         using var png = PngPixels.Read(TextureFilePath(region.Texture));
         var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
             (px, py) => png.Alpha(region.X + px, region.Y + py));
-        visible.Should().NotBeNull();
+        visible.Should().Be((visibleX, visibleY, visibleWidth, visibleHeight));
+    }
+
+    [TestMethod]
+    public void LockAndUnlockIconsShareTheToolbarHorizontalCenterAtEveryScale()
+    {
+        var style = ReadBundledStyle();
+        using var png = PngPixels.Read(TextureFilePath("guis/states.png"));
+        var icons = new[] { Ae2Image.DragPin, Ae2Image.DragUnpin };
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        foreach (var faceHeight in new[] { 20, 19 })
+        {
+            var offsets = icons.Select(icon =>
+            {
+                style.TryGet(icon, out var region).Should().BeTrue();
+                var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
+                    (x, y) => png.Alpha(region.X + x, region.Y + y));
+                visible.Should().NotBeNull();
+                return Ae2ToolbarAppearance.CenterIcon(visible!.Value, 18, faceHeight, scale);
+            }).ToArray();
+
+            offsets[0].X.Should().Be(offsets[1].X,
+                $"lock state must not jump horizontally when switching at scale {scale} and face height {faceHeight}");
+            offsets[0].X.Should().Be(6 * scale);
+        }
     }
 
     [TestMethod]
