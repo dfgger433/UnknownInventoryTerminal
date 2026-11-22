@@ -32,6 +32,7 @@
   "terminal.style.Full": "最长",
   "inventory.scroll": "滚动物品",
   "inventory.scroll.description": "拖动滚动条或使用鼠标滚轮。",
+  "inventory.tooltip.group": "共 {0} 件 · 显示其中一件。点击可逐件查看。",
   "inventory.backTooltip": "返回分组",
   "inventory.backTooltip.description": "显示所有匹配的物品分组。",
   "terminal.status": "{0} / {1} 件物品   |   {2} 组",

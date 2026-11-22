@@ -20,13 +20,13 @@ namespace UnknownInventoryTerminal
             internal InvButton Button = null!;
             internal TextMeshProUGUI Count = null!;
             internal TilePointer Pointer = null!;
-            internal UITooltip GroupTooltip = null!;
         }
 
         private sealed class TilePointer : MonoBehaviour, IPointerClickHandler
         {
             internal NativeFlatInventoryPanel Owner = null!;
             internal (string Type, string Parent)? Group;
+            internal int Count;
             internal InvButton? ItemButton;
             public void OnPointerClick(PointerEventData e)
             {
@@ -61,6 +61,10 @@ namespace UnknownInventoryTerminal
         private InvButton? _automaticTarget;
         private TextMeshProUGUI? _empty;
         private UITooltip? _scrollTooltip;
+        private TerminalItemTooltip? _itemTooltip;
+        private readonly List<RaycastResult> _hoverHits = new List<RaycastResult>();
+        private PointerEventData? _hoverPointer;
+        private EventSystem? _hoverEvents;
         internal bool CanReturnToGroups => _visible && _selectionKey.HasValue;
         internal void ReturnToGroups() => ChangeSelection(null);
         private Image? _storageHighlight;
@@ -80,7 +84,7 @@ namespace UnknownInventoryTerminal
         internal NativeFlatInventoryPanel(ManualLogSource log, Ae2TerminalSkin skin)
         {
             _log = log; _skin = skin; _loadout = new NativeLoadoutPanel(log, skin);
-            SettingsBridge.LanguageChanged += RefreshTooltips;
+            SettingsBridge.LanguageChanged += RefreshScrollTooltip;
         }
 
         // The transparent chrome is a blocker, not an inventory control. In particular,
@@ -99,6 +103,51 @@ namespace UnknownInventoryTerminal
 
         internal bool ContainsScreenPoint(Vector2 screenPoint) => _panel != null && _root != null && _root.activeInHierarchy &&
             RectTransformUtility.RectangleContainsScreenPoint(_panel, screenPoint, null);
+
+        // Filter only the game's tooltip lookup, never the shared click/drag raycasts.
+        internal bool IsNativeItemTooltip(GameObject target) => Contains(target) && !ContainsExtension(target) &&
+            (target.GetComponent<InvButton>() || target.GetComponent<TilePointer>() || target.GetComponent<LoadoutCell>());
+
+        internal void UpdateItemTooltip(PlayerCamera camera, bool blocked)
+        {
+            if (_itemTooltip == null) return;
+            var pointer = (Vector2)Input.mousePosition;
+            var events = EventSystem.current;
+            if (blocked || InteractionInProgress() || !events || !ContainsScreenPoint(pointer))
+            {
+                _itemTooltip.Hide();
+                return;
+            }
+            if (_hoverEvents != events)
+            {
+                _hoverEvents = events;
+                _hoverPointer = new PointerEventData(events);
+            }
+            _hoverHits.Clear();
+            _hoverPointer!.position = pointer;
+            events.RaycastAll(_hoverPointer, _hoverHits);
+            // Only the top visual hit wins. Empty cells, the scrollbar and extensions must occlude items.
+            var target = _hoverHits.Count > 0 ? _hoverHits[0].gameObject : null;
+            _hoverHits.Clear();
+            if (target != null && Contains(target) && !ContainsExtension(target))
+            {
+                var tile = target.GetComponent<TilePointer>();
+                var loadout = target.GetComponent<LoadoutCell>();
+                var button = tile ? tile.ItemButton : loadout && loadout.IsCurrent(camera) ? loadout.Button : null;
+                if (button && button!.gameObject.activeInHierarchy && (!button.isBody ||
+                    (button.slot < camera.body.slots.Length && camera.body.slots[button.slot])))
+                {
+                    // Body slots use the terminal's validated local body, never Together's redirected button body.
+                    var item = button.isBody ? camera.body.GetItem(button.slot) : button.refItem;
+                    if (item && GameInventoryAdapter.Owns(camera.body, item))
+                    {
+                        _itemTooltip.Show(item, tile ? tile.Count : 1, pointer, _layout.Scale);
+                        return;
+                    }
+                }
+            }
+            _itemTooltip.Hide();
+        }
 
         internal int EquipmentCount()
         {
@@ -129,18 +178,12 @@ namespace UnknownInventoryTerminal
             return _automaticTarget;
         }
 
-        private void RefreshTooltips()
+        private void RefreshScrollTooltip()
         {
             if (_scrollTooltip)
             {
                 _scrollTooltip!.tipName = TerminalText.Get("inventory.scroll");
                 _scrollTooltip.tipDesc = TerminalText.Get("inventory.scroll.description");
-            }
-            foreach (var tile in _tiles.Values)
-            {
-                if (!tile.Button) continue;
-                tile.Button.UpdateGraphic();
-                RefreshTileTooltip(tile);
             }
         }
 
@@ -148,6 +191,7 @@ namespace UnknownInventoryTerminal
         {
             if (_query != SearchApi.Query)
             {
+                _itemTooltip?.Hide();
                 _query = SearchApi.Query;
                 _scrollRow = 0;
                 _selectionKey = null;
@@ -194,6 +238,7 @@ namespace UnknownInventoryTerminal
             if (visible && settingsOpen)
             {
                 // Suspend the canvas without clearing the current search, group or scroll position.
+                _itemTooltip?.Hide();
                 if (_root && _root!.activeSelf) _root.SetActive(false);
                 return;
             }
@@ -204,6 +249,7 @@ namespace UnknownInventoryTerminal
                 _scrollRow = 0;
                 _dirty = true;
                 _loadout.Reset();
+                _itemTooltip?.Hide();
                 if (_automaticTarget) _automaticTarget!.refItem = null!;
             }
             var ready = visible && PlayerCamera.main && PlayerCamera.main.body;
@@ -212,7 +258,6 @@ namespace UnknownInventoryTerminal
                 EnsureRoot();
                 EnsureExtensionRoot();
                 _root!.SetActive(true);
-                RefreshTooltips();
                 Synchronize();
                 _loadout.Refresh(PlayerCamera.main.body);
                 UpdateStorageHighlight();
@@ -307,6 +352,7 @@ namespace UnknownInventoryTerminal
             _empty = CreateText(panel.transform, "Empty storage", 17, TextAlignmentOptions.Center);
             _lower = Add(panel.transform, "Container storage base").GetComponent<RectTransform>();
             _loadout.Attach(_lower);
+            _itemTooltip = new TerminalItemTooltip(_root.transform, _log);
             Position(_panel, _bounds);
             ApplyLayout();
             _dirty = true;
@@ -495,14 +541,9 @@ namespace UnknownInventoryTerminal
                 tile.Button.refItem = (Item)entry.NativeItem;
                 tile.Button.UpdateGraphic();
                 tile.Pointer.Group = group;
-                // Keep all storage cells on a fixed, non-animated hit surface. Group clicks are handled on the cell;
-                // singletons are mapped back to their native InvButton by the raycast filter.
+                tile.Pointer.Count = count;
+                // Group clicks stay on the fixed cell; singletons relay actions to the native InvButton.
                 tile.Count.text = count > 1 ? count.ToString(CultureInfo.InvariantCulture) : "";
-                // A group must stay a selection control, not become a native item action target.
-                // Copy the representative item's tooltip onto the fixed hit surface after every
-                // graphic refresh. InvButton.UpdateGraphic is the authoritative source and can
-                // change when condition, language, or multiplayer state changes.
-                RefreshTileTooltip(tile);
                 tile.Root.transform.SetSiblingIndex(index++);
                 liveKeys.Add(key);
             }
@@ -517,7 +558,6 @@ namespace UnknownInventoryTerminal
             TerminalHitSurface.Enable(hitSurface);
             var pointer = root.GetComponent<TilePointer>();
             pointer.Owner = this;
-            var tooltip = CreateTooltip(root, "", "");
             try
             {
                 var native = UnityEngine.Object.Instantiate(prefab, root.transform);
@@ -538,7 +578,7 @@ namespace UnknownInventoryTerminal
                 count.color = Color.white;
                 count.fontStyle = FontStyles.Bold;
                 Stretch(count.rectTransform, new Vector2(1, 1), new Vector2(-3, -1));
-                var tile = new Tile { Root = root, Button = button, Count = count, Pointer = pointer, GroupTooltip = tooltip };
+                var tile = new Tile { Root = root, Button = button, Count = count, Pointer = pointer };
                 SizeTile(tile);
                 return tile;
             }
@@ -577,17 +617,6 @@ namespace UnknownInventoryTerminal
             var row = Mathf.Clamp(Mathf.FloorToInt(-local.y / pitch), 0, _layout.Rows - 1);
             Position(highlight.rectTransform, new Rect(column * pitch, row * pitch, pitch, pitch));
             highlight.gameObject.SetActive(true);
-        }
-
-        private static void RefreshTileTooltip(Tile tile)
-        {
-            var source = tile.Button.GetComponent<UITooltip>();
-            if (!source) return;
-            // Group cells own the raycast. Single-item cells still keep the same copy so
-            // tooltip lookup remains valid when the native child is visually moved.
-            tile.GroupTooltip.skipLocale = true;
-            tile.GroupTooltip.tipName = source.tipName;
-            tile.GroupTooltip.tipDesc = source.tipDesc;
         }
 
         private static UITooltip CreateTooltip(GameObject target, string name, string description)
@@ -645,9 +674,12 @@ namespace UnknownInventoryTerminal
 
         public void Dispose()
         {
-            SettingsBridge.LanguageChanged -= RefreshTooltips;
+            SettingsBridge.LanguageChanged -= RefreshScrollTooltip;
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
+            _itemTooltip = null;
+            _hoverEvents = null;
+            _hoverPointer = null;
             _tiles.Clear();
         }
     }

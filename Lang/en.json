@@ -32,6 +32,7 @@
   "terminal.style.Full": "Full height",
   "inventory.scroll": "Scroll storage",
   "inventory.scroll.description": "Drag the scrollbar or use the mouse wheel.",
+  "inventory.tooltip.group": "{0} items · Showing one instance. Click to inspect each one.",
   "inventory.backTooltip": "Return to groups",
   "inventory.backTooltip.description": "Show all matching item groups.",
   "terminal.status": "{0} / {1} items   |   {2} groups",

@@ -99,7 +99,12 @@ namespace UnknownInventoryTerminal
             if (IsVisible)
             {
                 if (!SessionValid()) Close();
-                else { HoldInput(); _shield?.SetVisible(true); }
+                else
+                {
+                    HoldInput();
+                    _shield?.SetVisible(true);
+                    _nativePanel?.UpdateItemTooltip(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
+                }
             }
         }
         private void OnGUI()
@@ -110,6 +115,8 @@ namespace UnknownInventoryTerminal
         }
         internal static bool SearchFocused => Instance?._textInputFocused == true;
         internal static bool IsInventorySurface(GameObject target) => Instance?._nativePanel?.Contains(target) == true;
+        internal static bool IsNativeItemTooltip(GameObject target) => IsVisible && !Instance!._closing &&
+            Instance._nativePanel?.IsNativeItemTooltip(target) == true;
         internal RectTransform? ExtensionRoot => IsVisible && !_closing && SessionValid() ? _nativePanel?.ExtensionRoot : null;
 
         internal bool TryGetTerminalBounds(out Rect screenBounds)
@@ -346,6 +353,8 @@ namespace UnknownInventoryTerminal
         internal static bool Apply(Harmony harmony, ManualLogSource log)
         {
             var ready = true;
+            // Install this independently of the input gate: it only replaces terminal item hover text.
+            Patch(harmony, typeof(UIUtil), nameof(UIUtil.GetUITooltip), nameof(NativeItemTooltipPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleInput", nameof(PlayerCameraPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleDragging", nameof(DraggingPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleWhileDragging", nameof(WhileDraggingPrefix), log);
@@ -389,6 +398,21 @@ namespace UnknownInventoryTerminal
         {
             if (Plugin.IsVisible) __result = Plugin.FilterHits(__result);
         }
+        private static bool NativeItemTooltipPrefix(List<RaycastResult> __0, ref (string, string) __result)
+        {
+            if (!Plugin.IsVisible) return true;
+            foreach (var hit in __0)
+            {
+                if (!hit.gameObject || !hit.gameObject.GetComponent<UITooltip>()) continue;
+                // Only replace a tooltip that vanilla would have picked from a terminal item cell.
+                // A native button still needs its UITooltip component for UpdateGraphic().
+                if (!Plugin.IsNativeItemTooltip(hit.gameObject)) return true;
+                __result = ("", "");
+                return false;
+            }
+            return true;
+        }
+
         private static bool MouseOverPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts,
             ref UsableObject usableObject, out bool __state)
         {

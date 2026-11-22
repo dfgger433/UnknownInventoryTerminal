@@ -82,22 +82,41 @@ public sealed class TerminalItemTooltipContentTests
     {
         var item = new Item { id = "tooltip-test:liquid-and-battery", condition = .001f };
         const string liquidId = "tooltip-test:liquid";
+        const string otherLiquidId = "tooltip-test:liquid-item";
         Liquids.Registry[liquidId] = new Liquids.Definition { localeName = "localized-liquid" };
+        Liquids.Registry[otherLiquidId] = new Liquids.Definition { localeFromItem = true };
         var liquid = new WaterContainerItem { CurrentTotal = 40f, Capacity = 60f };
-        liquid.stack.Add(new LiquidStack { liquidId = liquidId, amount = 40f });
+        liquid.stack.Add(new LiquidStack { liquidId = liquidId, amount = 37f });
+        liquid.stack.Add(new LiquidStack { liquidId = otherLiquidId, amount = 3f });
         var battery = new BatteryItem { Info = "Battery ready" };
         item.Attach(liquid);
         item.Attach(battery);
 
         var before = TerminalItemTooltipContent.Read(item, expanded: false);
-        liquid.CurrentTotal = liquid.stack[0].amount = 12f;
+        liquid.stack[0].amount = 9f;
+        liquid.CurrentTotal = 12f;
         battery.Info = "Battery empty";
         var after = TerminalItemTooltipContent.Read(item, expanded: false);
 
         before.Title.Should().Contain("<1%");
-        before.Body.Should().Contain("Battery ready").And.Contain("40/60mL").And.Contain("localized-liquid (40mL)");
-        after.Body.Should().Contain("Battery empty").And.Contain("12/60mL").And.Contain("localized-liquid (12mL)")
-            .And.NotContain("40mL").And.NotContain("Battery ready");
+        before.Body.Should().Contain("Battery ready").And.Contain("40/60mL").And.Contain("localized-liquid (37mL)")
+            .And.Contain("item:tooltip-test:liquid-item (3mL)");
+        after.Body.Should().Contain("Battery empty").And.Contain("12/60mL").And.Contain("localized-liquid (9mL)")
+            .And.NotContain("37mL").And.NotContain("Battery ready");
+    }
+
+    /// <summary>A missing liquid definition leaves readable contents but cannot produce a trade value.</summary>
+    [TestMethod]
+    public void UnknownLiquidKeepsDetailsWithoutQuotingAValue()
+    {
+        var item = new Item { id = "tooltip-test:unknown-liquid", Stats = new ItemInfo { Value = 3 } };
+        var contents = new WaterContainerItem { CurrentTotal = 5, Capacity = 20 };
+        contents.stack.Add(new LiquidStack { liquidId = "tooltip-test:missing", amount = 5 });
+        item.Attach(contents);
+
+        var expanded = TerminalItemTooltipContent.Read(item, expanded: true);
+
+        expanded.Body.Should().Contain("5/20mL").And.Contain("tooltip-test:missing 5mL").And.NotContain("itemvalue");
     }
 
     /// <summary>Expanded mode adds statistics without dropping the basic live content.</summary>
@@ -130,5 +149,40 @@ public sealed class TerminalItemTooltipContentTests
         expanded.Body.Should().Contain("A test pack.").And.Contain("6u").And.Contain("5/11u")
             .And.Contain("favouriteditem").And.NotContain("shifttoexpand").And.Contain("Test quality")
             .And.Contain("itemonlyinhands").And.Contain("containermaxweightperitem");
+    }
+
+    /// <summary>Expanded stats combine the item's current state with CCL's equipment and decay definitions.</summary>
+    [TestMethod]
+    public void ExpandedStatsShowWearDecayMagazineAndTradeState()
+    {
+        var item = new Item
+        {
+            id = "tooltip-test:expanded-stats",
+            Stats = new ItemInfo
+            {
+                rotSpeed = 1f,
+                decayInfo = (byte)(ItemInfo.DecayType.NoDecayWhenNotWorn | ItemInfo.DecayType.NoDecayWhenStill),
+                wearable = true,
+                wearSlotId = "belt",
+                wearableArmor = .5f,
+                wearableIsolation = .25f,
+                usable = true,
+                usableWithLMB = true,
+                UsableOnLimb = true,
+                Value = 32
+            },
+            DecayRemaining = System.TimeSpan.FromMinutes(3)
+        };
+        item.Attach(new AmmoScript { rounds = 5, maxRounds = 9 });
+
+        var eligible = TerminalItemTooltipContent.Read(item, expanded: true);
+        item.Attach(new BoughtItem { time = 84f });
+        var blocked = TerminalItemTooltipContent.Read(item, expanded: true);
+
+        eligible.Body.Should().Contain("decaysin 00:03:00").And.Contain("decayonlyworn, decayonlymoving")
+            .And.Contain("itemwearable \"belt\"").And.Contain("itemwearableprotection 50%")
+            .And.Contain("itemwearableisolation 25%").And.Contain("itemusablehand").And.Contain("itemusablewound")
+            .And.Contain("5/9 magazinerounds").And.Contain("itemvalue32");
+        blocked.Body.Should().Contain("tradingblocked (1:24)").And.NotContain("itemvalue32");
     }
 }
