@@ -52,23 +52,56 @@ namespace UnknownInventoryTerminal
             finally { label.fontSize = fontSize; }
         }
 
-        // The caption shares the sprite's hover displacement; keep one control ID for the entire row.
+        // Keep one hit target across the row, with a separate pixel switch at its trailing edge.
         internal bool Toggle(Rect bounds, int scale, bool value, string text, GUIStyle label)
         {
             var clicked = GUI.Button(bounds, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
             {
                 var hover = bounds.Contains(Event.current.mousePosition);
-                var face = value ? (hover ? Ae2Image.SettingsToggleOnHover : Ae2Image.SettingsToggleOn) :
-                    (hover ? Ae2Image.SettingsToggleOffHover : Ae2Image.SettingsToggleOff);
-                var size = _skin.SourceSize(face) ?? new Vector2Int(12, 12);
-                var y = bounds.y + (hover ? scale : 0);
-                _skin.Draw(new Rect(bounds.x, y + (int)(bounds.height - size.y * scale) / 2, size.x * scale, size.y * scale),
-                    face, value ? Ae2TerminalSkin.Focus : Ae2TerminalSkin.Slot);
-                var caption = new Rect(bounds.x + 14 * scale, y, bounds.width - 14 * scale, bounds.height);
-                label.Draw(caption, new GUIContent(text), false, false, false, false);
+                var offset = hover ? scale : 0;
+                var (switchX, switchY, switchWidth, switchHeight) = Ae2SettingsLayout.ToggleControlBounds(
+                    (int)bounds.width / scale, (int)bounds.height / scale, scale);
+                var track = new Rect(bounds.x + switchX, bounds.y + switchY + offset, switchWidth, switchHeight);
+                Fill(track, new Color32(48, 50, 58, 255));
+                Fill(new Rect(track.x + scale, track.y + scale, track.width - 2 * scale, track.height - 2 * scale),
+                    ColorFromArgb(Ae2ToggleAppearance.TrackColor(value, hover)));
+
+                var knob = new Rect(track.x + Ae2ToggleAppearance.KnobX(value) * scale, track.y + 2 * scale,
+                    Ae2SettingsLayout.ToggleKnobWidth * scale, 10 * scale);
+                Fill(knob, new Color32(180, 187, 199, 255));
+                Fill(new Rect(knob.x + scale, knob.y + scale, knob.width - 2 * scale, knob.height - 2 * scale),
+                    new Color32(242, 244, 248, 255));
+
+                var (captionX, captionY, captionWidth, captionHeight) = Ae2SettingsLayout.ToggleCaptionBounds(
+                    (int)bounds.width / scale, (int)bounds.height / scale, scale);
+                var caption = new Rect(bounds.x + captionX, bounds.y + captionY + offset, captionWidth, captionHeight);
+                DrawFittedText(caption, text, label, scale);
             }
             return clicked ? !value : value;
         }
+
+        private static void DrawFittedText(Rect caption, string text, GUIStyle label, int scale)
+        {
+            var content = new GUIContent(text);
+            var fontSize = label.fontSize;
+            try
+            {
+                while (label.fontSize > 6 * scale && label.CalcSize(content).x > caption.width) label.fontSize--;
+                label.Draw(caption, content, false, false, false, false);
+            }
+            finally { label.fontSize = fontSize; }
+        }
+
+        private static void Fill(Rect bounds, Color color)
+        {
+            var previous = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(bounds, Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        private static Color32 ColorFromArgb(uint color) => new Color32(
+            (byte)(color >> 16), (byte)(color >> 8), (byte)color, (byte)(color >> 24));
     }
 }

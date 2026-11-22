@@ -98,6 +98,35 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    [DataRow(1)]
+    [DataRow(2)]
+    [DataRow(4)]
+    public void KeepDraggingSliderAndCaptionStayInsideTheirRow(int scale)
+    {
+        var control = Ae2SettingsLayout.ToggleControlBounds(Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.KeepDraggingHeight, scale);
+        var caption = Ae2SettingsLayout.ToggleCaptionBounds(Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.KeepDraggingHeight, scale);
+
+        control.Should().Be(((Ae2SettingsLayout.FieldWidth - Ae2SettingsLayout.ToggleWidth - 2) * scale, 0,
+            Ae2SettingsLayout.ToggleWidth * scale, Ae2SettingsLayout.ToggleHeight * scale));
+        caption.X.Should().Be(4 * scale);
+        (caption.X + caption.Width).Should().BeLessThan(control.X, "the label must not collide with the switch");
+        (control.X + control.Width).Should().BeLessThanOrEqualTo(Ae2SettingsLayout.FieldWidth * scale);
+        caption.Height.Should().Be(Ae2SettingsLayout.KeepDraggingHeight * scale);
+    }
+
+    [TestMethod]
+    public void KeepDraggingSliderKnobMovesBetweenBothEnds()
+    {
+        Ae2ToggleAppearance.KnobX(value: false).Should().Be(Ae2SettingsLayout.ToggleKnobInset);
+        Ae2ToggleAppearance.KnobX(value: true).Should().Be(
+            Ae2SettingsLayout.ToggleWidth - Ae2SettingsLayout.ToggleKnobInset - Ae2SettingsLayout.ToggleKnobWidth);
+        Ae2ToggleAppearance.TrackColor(value: false, hovered: false).Should().NotBe(
+            Ae2ToggleAppearance.TrackColor(value: true, hovered: false));
+        Ae2ToggleAppearance.TrackColor(value: false, hovered: true).Should().NotBe(
+            Ae2ToggleAppearance.TrackColor(value: false, hovered: false));
+    }
+
+    [TestMethod]
     [DataRow(0)]
     [DataRow(1)]
     [DataRow(2)]
