@@ -67,6 +67,23 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    [DataRow(1)]
+    [DataRow(4)]
+    public void DropdownCaptionsStayInsideEveryFaceAndClearTheArrow(int scale)
+    {
+        var style = ReadBundledStyle();
+        foreach (var image in Enum.GetValues<Ae2Image>().Where(image => image.ToString().StartsWith("SettingsDropDown")))
+        {
+            style.TryGet(image, out var region).Should().BeTrue();
+            var (x, y, width, height) = Ae2SettingsLayout.CaptionBounds(region.Width * scale, region.Height * scale, scale, field: true);
+            (x + width).Should().Be((region.Width - 16) * scale);
+            (y + height).Should().Be((region.Height - 3) * scale);
+        }
+        var option = Ae2SettingsLayout.CaptionBounds(112 * scale, 19 * scale, scale, field: false);
+        option.Should().Be((4 * scale, scale, 104 * scale, 15 * scale));
+    }
+
+    [TestMethod]
     public void SettingsStatesGiveDisabledAndHoverDistinctSprites()
     {
         Ae2DropdownAppearance.Field(false, false, true, true).Should().Be(Ae2Image.SettingsDropDownClosedDisabled);
@@ -80,6 +97,7 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    [DataRow(0)]
     [DataRow(1)]
     [DataRow(2)]
     [DataRow(4)]
@@ -89,8 +107,10 @@ public sealed class Ae2ScreenStyleTests
         list.Should().Be(Ae2SettingsLayout.LanguageY + Ae2SettingsLayout.FieldHeight);
         var placement = Ae2SettingsLayout.FieldY(placement: true, rows);
         (placement - Ae2SettingsLayout.LabelHeight).Should().BeGreaterThanOrEqualTo(list + rows * Ae2SettingsLayout.OptionHeight);
-        (placement + Ae2SettingsLayout.FieldHeight).Should().BeLessThan(Ae2SettingsLayout.PageHeight(rows));
-        (Ae2SettingsLayout.ListY(placement: true) + rows * Ae2SettingsLayout.OptionHeight).Should().BeLessThan(Ae2SettingsLayout.PageHeight(rows));
+        var toggle = Ae2SettingsLayout.KeepDraggingY(rows);
+        (placement + Ae2SettingsLayout.FieldHeight).Should().BeLessThan(toggle);
+        (Ae2SettingsLayout.ListY(placement: true) + rows * Ae2SettingsLayout.OptionHeight).Should().BeLessThan(toggle);
+        (toggle + Ae2SettingsLayout.KeepDraggingHeight).Should().BeLessThan(Ae2SettingsLayout.PageHeight(rows));
     }
 
     [TestMethod]
@@ -126,6 +146,21 @@ public sealed class Ae2ScreenStyleTests
         region.Texture.Should().Be(texture);
         (region.X, region.Y, region.Width, region.Height).Should().Be((0, 0, 12, 15));
         ReadPngDimensions(TextureFilePath(region.Texture)).Should().Be((region.Width, region.Height));
+    }
+
+    [TestMethod]
+    [DataRow((int)Ae2Image.DragDrain, 1)]
+    [DataRow((int)Ae2Image.DragUse, 33)]
+    public void DragActionCropsContainVisibleIcons(int image, int x)
+    {
+        var style = ReadBundledStyle();
+        style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
+        region.Texture.Should().Be("guis/states.png");
+        (region.X, region.Y, region.Width, region.Height).Should().Be((x, 97, 14, 14));
+        using var png = PngPixels.Read(TextureFilePath(region.Texture));
+        var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
+            (px, py) => png.Alpha(region.X + px, region.Y + py));
+        visible.Should().NotBeNull();
     }
 
     [TestMethod]
@@ -204,6 +239,42 @@ public sealed class Ae2ScreenStyleTests
         for (var y = Ae2TerminalLayout.ButtonBarTopBorder + 1; y < bitmap.Height - Ae2TerminalLayout.ButtonBarBottomBorder; y++)
             for (var x = 0; x < bitmap.Width; x++)
                 bitmap.Pixel(x, y).Should().Be(bitmap.Pixel(x, Ae2TerminalLayout.ButtonBarTopBorder), $"middle row {y} must repeat");
+    }
+
+    [TestMethod]
+    [DataRow(4, false, false)]
+    [DataRow(5, false, false)]
+    [DataRow(0, true, false)]
+    [DataRow(0, false, true)]
+    [DataRow(0, true, true)]
+    public void ButtonBarSlicesMeetTheBoardWithoutBreakingItsBevel(int toolbarButtons, bool drain, bool use)
+    {
+        using var bar = PngPixels.Read(TextureFilePath("gui/sprites/vertical_buttons_bg.png"));
+        using var board = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        var flushWithBoardTop = toolbarButtons > 0;
+        var layout = new Ae2TerminalLayout(320, 240);
+        var boardY = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarY : layout.DragActionBackgroundBounds(drain, use).Y;
+        var height = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarHeight(toolbarButtons) : layout.DragActionBackgroundBounds(drain, use).Height;
+        var end = 0;
+        for (var i = 0; i < Ae2TerminalLayout.ButtonBarPatchCount; i++)
+        {
+            var (sourceY, sourceWidth, sourceRows) = Ae2TerminalLayout.ButtonBarPatch(bar.Height, i, flushWithBoardTop);
+            var (y, width, rows) = Ae2TerminalLayout.ButtonBarPatch(height, i, flushWithBoardTop);
+            y.Should().Be(end, "each slice meets the preceding slice exactly");
+            sourceWidth.Should().Be(width);
+            (sourceY + sourceRows).Should().BeLessThanOrEqualTo(bar.Height);
+            if (i != 2) rows.Should().Be(sourceRows, "only the uniform middle can stretch");
+            end += rows;
+        }
+        end.Should().Be(height);
+
+        var (_, topWidth, _) = Ae2TerminalLayout.ButtonBarPatch(height, 0, flushWithBoardTop);
+        var firstBoardColumn = Ae2TerminalLayout.Rail - Ae2TerminalLayout.ButtonBarX;
+        var bevel = firstBoardColumn + 1;
+        uint ComposedPixel(int x) => x < topWidth ? bar.Pixel(x, 0) : board.Pixel(x - firstBoardColumn, boardY);
+        ComposedPixel(firstBoardColumn).Should().Be(bar.Pixel(0, 0), "the outer outline connects to the board");
+        if (flushWithBoardTop) ComposedPixel(bevel).Should().Be(board.Pixel(1, 0), "the toolbar extends the board's top outline");
+        else ComposedPixel(bevel).Should().Be(board.Pixel(1, boardY), "the lower action bar leaves the board's light bevel visible");
     }
 
     [TestMethod]

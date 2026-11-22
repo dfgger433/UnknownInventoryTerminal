@@ -36,7 +36,7 @@ namespace UnknownInventoryTerminal
         private InputShield? _shield;
         private Harmony? _harmony;
         private IDisposable? _pinyin;
-        private bool _inputReady, _sessionActive, _closing, _textInputFocused, _clearGuiFocus;
+        private bool _inputReady, _sessionActive, _closing;
         private PlayerCamera? _sessionCamera;
         private Body? _sessionBody;
         private CursorLockMode _cursorLock;
@@ -88,7 +88,7 @@ namespace UnknownInventoryTerminal
             {
                 HoldInput();
                 _shield?.SetVisible(true);
-                if (_window.SettingsOpen && _sessionCamera is { } settingsCamera && settingsCamera.dragItem) CancelDrag(settingsCamera);
+                if (_window.SettingsOpen && _sessionCamera is { } settingsCamera) CancelDrag(settingsCamera);
                 _nativePanel?.SetVisible(true, _window.SettingsOpen);
                 _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput);
             }
@@ -103,18 +103,48 @@ namespace UnknownInventoryTerminal
                 {
                     HoldInput();
                     _shield?.SetVisible(true);
+                    if (_nativePanel?.Chrome is { } chrome) _window!.DrawInventoryChrome(chrome);
+                    UpdateDragActions(_sessionCamera!);
                     _nativePanel?.UpdateItemTooltip(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
                 }
             }
         }
-        private void OnGUI()
-        {
-            if (_clearGuiFocus) { GUI.FocusControl(null); _clearGuiFocus = false; }
-            _window?.Draw();
-            _textInputFocused = IsVisible && GUI.GetNameOfFocusedControl() == "UIT.Search";
-        }
-        internal static bool SearchFocused => Instance?._textInputFocused == true;
+        private void OnGUI() => _window?.DrawSettings();
+        internal static bool SearchFocused => IsVisible && Instance?._nativePanel?.Chrome?.SearchFocused == true;
         internal static bool IsInventorySurface(GameObject target) => Instance?._nativePanel?.Contains(target) == true;
+        internal static bool TryGetDragAction(GameObject target, out TerminalDragAction action)
+        {
+            action = default;
+            return Instance?._nativePanel?.TryGetDragAction(target, out action) == true;
+        }
+        internal static bool CanInteractWithDragActions(PlayerCamera camera) => CanInteract(camera) &&
+            !Instance!._closing && !SearchFocused && Instance._window is { BlocksInventoryInput: false, CloseRequested: false };
+
+        internal static TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, TerminalDragAction? armed = null) =>
+            CanInteractWithDragActions(camera) && GameInventoryAdapter.Owns(camera.body, item)
+                ? Instance!._nativePanel?.DragActionAtPointer(camera, item, armed) : null;
+
+        internal static void UpdateDragActions(PlayerCamera camera)
+        {
+            var plugin = Instance;
+            if (plugin == null || camera != plugin._sessionCamera) return;
+            // Equipment highlights follow the live native drag only. A pending action has already
+            // left the original drag path and must not make wearable slots look actionable.
+            var dragItem = CanInteract(camera) && !plugin._closing && plugin._window is { BlocksInventoryInput: false, CloseRequested: false }
+                ? camera.dragItem : null;
+            if (!GameInventoryAdapter.Owns(camera.body, dragItem)) dragItem = null;
+            plugin._nativePanel?.UpdateLoadoutDragHighlight(camera, dragItem);
+            if (CanInteractWithDragActions(camera))
+            {
+                var item = GamePatches.PendingDragItem(camera, out var armed) ?? camera.dragItem;
+                if (GameInventoryAdapter.Owns(camera.body, item))
+                {
+                    plugin._nativePanel?.UpdateDragActions(camera, item, armed);
+                    return;
+                }
+            }
+            plugin._nativePanel?.HideDragActions();
+        }
         internal static bool IsNativeItemTooltip(GameObject target) => IsVisible && !Instance!._closing &&
             Instance._nativePanel?.IsNativeItemTooltip(target) == true;
         internal RectTransform? ExtensionRoot => IsVisible && !_closing && SessionValid() ? _nativePanel?.ExtensionRoot : null;
@@ -159,12 +189,7 @@ namespace UnknownInventoryTerminal
             var panel = Instance?._nativePanel;
             return panel?.ContainsScreenPoint(Input.mousePosition) == true ? panel.ResolveDrop(camera) : null;
         }
-        internal static void ReleaseSearchFocus()
-        {
-            if (Instance == null) return;
-            Instance._textInputFocused = false;
-            Instance._clearGuiFocus = true;
-        }
+        internal static void ReleaseSearchFocus() => Instance?._nativePanel?.Chrome?.ReleaseSearchFocus();
         private static bool CanToggle()
         {
             if (Instance != null && Instance._closedFrame == Time.frameCount) return false;
@@ -243,8 +268,15 @@ namespace UnknownInventoryTerminal
             _closing = true;
             try
             {
-                try { _nativePanel?.SetVisible(false); }
-                finally { _shield?.SetVisible(false); }
+                try
+                {
+                    if (!ReferenceEquals(_sessionCamera, null)) GamePatches.CancelPendingAction(_sessionCamera!);
+                }
+                finally
+                {
+                    try { _nativePanel?.SetVisible(false); }
+                    finally { _shield?.SetVisible(false); }
+                }
             }
             finally
             {
@@ -266,7 +298,6 @@ namespace UnknownInventoryTerminal
             var handOff = preserveDrag && SessionValid() && HasHeldLocalDrag(_sessionCamera!);
             _sessionActive = false;
             _closedFrame = Time.frameCount;
-            _textInputFocused = false; _clearGuiFocus = true;
             if (_sessionCamera)
             {
                 if (!handOff) CancelDrag(_sessionCamera!);
@@ -285,8 +316,10 @@ namespace UnknownInventoryTerminal
         }
         internal static void CancelDrag(PlayerCamera camera)
         {
+            GamePatches.CancelPendingAction(camera);
             camera.dragItem = null;
             if (camera.dragImage) camera.dragImage.enabled = false;
+            UpdateDragActions(camera);
         }
         internal static bool CanInteract(PlayerCamera camera) => IsVisible && Instance!.SessionValid() && camera == Instance._sessionCamera;
         internal static List<RaycastResult> FilterHits(List<RaycastResult> hits)
@@ -301,6 +334,10 @@ namespace UnknownInventoryTerminal
             {
                 var hit = rawHit;
                 if (!hit.gameObject) continue;
+                // Keep the marker through repeated filtering. Only a confirmed drain call uses
+                // the native drain object; a drag-action hit must not fall through to item slots.
+                if (plugin._window?.BlocksInventoryInput != true && TryGetDragAction(hit.gameObject, out _))
+                    return new List<RaycastResult> { hit };
                 if (plugin._shield?.IsBlocker(hit.gameObject) == true)
                 {
                     if (!hasBlocker) { blocker = hit; hasBlocker = true; }
@@ -443,9 +480,42 @@ namespace UnknownInventoryTerminal
             if (!Plugin.IsVisible) return false;
             if (!Plugin.CanInteract(__instance)) { Plugin.CancelDrag(__instance); return false; }
             uiCasts = Plugin.FilterHits(uiCasts);
+            if (_pendingAction is { } pending && pending.Camera == __instance)
+            {
+                // A new native drag supersedes a pending action, never clears the new item.
+                if (__instance.dragItem) CancelPendingAction(__instance);
+                else if (HandlePendingAction(__instance, pending)) return false;
+            }
+            if (__instance.dragItem is { } source && Plugin.DragActionAtPointer(__instance, source) is { } action)
+            {
+                var dragKey = KeyBinds.GetBind("iteminteract");
+                var release = Input.GetKeyUp(dragKey);
+                var gesture = TerminalDragGesture.Begin(release, Input.GetMouseButtonDown(0), Input.GetMouseButtonDown(1));
+                if (gesture != TerminalDragStart.None)
+                {
+                    // Capture before vanilla treats the confirm click as a new pickup or release.
+                    Plugin.CancelDrag(__instance);
+                    if (gesture != TerminalDragStart.Cancel)
+                    {
+                        var pendingAction = new PendingAction(__instance, source, action);
+                        _pendingAction = pendingAction;
+                        if (gesture == TerminalDragStart.Confirm)
+                            HandlePendingAction(__instance, pendingAction, resumeDrag: !release && Input.GetKey(dragKey));
+                        Plugin.UpdateDragActions(__instance);
+                    }
+                    return false;
+                }
+            }
             if (Plugin.SearchFocused)
             {
-                // IMGUI focus survives UGUI clicks unless explicitly released.
+                // Key-up still ends an existing drag while search owns the pointer. Don't hand
+                // it to vanilla: the pointer may now be over a container or a drag action.
+                if (Input.GetKeyUp(KeyBinds.GetBind("iteminteract")))
+                {
+                    if (__instance.dragItem) Plugin.CancelDrag(__instance);
+                    return false;
+                }
+                // A fixed inventory cell is not necessarily selectable; release search on its native click path too.
                 var pointerDown = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2);
                 if (!pointerDown || !uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject))) return false;
                 Plugin.ReleaseSearchFocus();
@@ -455,10 +525,143 @@ namespace UnknownInventoryTerminal
             __instance.radialOpen = true;
             return true;
         }
-        private static bool WhileDraggingPrefix(PlayerCamera __instance)
+        private sealed class PendingAction(PlayerCamera camera, Item item, TerminalDragAction action)
         {
-            if (!Plugin.BlocksGameplay) return true;
-            return Plugin.CanInteract(__instance) && !Plugin.SearchFocused;
+            internal PlayerCamera Camera { get; } = camera;
+            internal Body Body { get; } = camera.body;
+            internal Item Item { get; } = item;
+            internal TerminalDragAction Action { get; } = action;
+            internal bool Draining { get; set; }
+            internal bool ResumeDragAfterAction { get; set; }
+        }
+
+        private static readonly MethodInfo WhileDragging = AccessTools.Method(typeof(PlayerCamera), "HandleWhileDragging");
+        private static PendingAction? _pendingAction;
+        private static PlayerCamera? _nativeDrainCall;
+
+        internal static Item? PendingDragItem(PlayerCamera camera, out TerminalDragAction? action)
+        {
+            if (_pendingAction is { } pending && pending.Camera == camera)
+            {
+                action = pending.Action;
+                return pending.Item;
+            }
+            action = null;
+            return null;
+        }
+
+        private static bool IsOverPendingAction(PlayerCamera camera, PendingAction pending) => camera && camera.body == pending.Body &&
+            Plugin.DragActionAtPointer(camera, pending.Item, pending.Action) == pending.Action;
+
+        private static bool DragKeyHeld(PlayerCamera camera)
+        {
+            var key = KeyBinds.GetBind("iteminteract");
+            return key != KeyCode.None && key != KeyCode.Mouse0 && key != KeyCode.Mouse1 && key != KeyCode.Mouse2 &&
+                key != KeyCode.Mouse3 && key != KeyCode.Mouse4 && key != KeyCode.Mouse5 && key != KeyCode.Mouse6 && Input.GetKey(key);
+        }
+
+        private static bool HandlePendingAction(PlayerCamera camera, PendingAction pending, bool resumeDrag = false)
+        {
+            var overTarget = IsOverPendingAction(camera, pending);
+            var step = TerminalDragGesture.Step(pending.Action, overTarget, Input.GetMouseButtonDown(1),
+                Input.GetMouseButtonDown(0), Input.GetMouseButton(0), pending.Draining);
+            switch (step)
+            {
+                case TerminalDragStep.Cancel:
+                    CancelPendingAction(camera);
+                    // Moving off the action and starting a new drag in the same frame should work.
+                    return overTarget;
+                case TerminalDragStep.Wait:
+                    return false;
+                case TerminalDragStep.StopDrain:
+                    var stopped = pending.Draining && RunNativeDrain(pending, new List<RaycastResult>());
+                    pending.Draining = false;
+                    var keepAfterDrain = stopped && SettingsBridge.KeepDraggingAfterUse && IsOverPendingAction(camera, pending);
+                    if (keepAfterDrain)
+                    {
+                        _pendingAction = null;
+                        CompleteAction(camera, pending, pending.ResumeDragAfterAction && DragKeyHeld(camera));
+                    }
+                    else CancelPendingAction(camera);
+                    return false;
+                case TerminalDragStep.Use:
+                    // Clear first: use may consume the item, open a modal or run another mod's hooks.
+                    CancelPendingAction(camera);
+                    if (!pending.Body.DoPickupCheck(pending.Item)) return false;
+                    pending.Body.UseItem(pending.Item); // Includes Together's native use hook.
+                    CompleteAction(camera, pending, resumeDrag);
+                    return false;
+                case TerminalDragStep.Drain:
+                    pending.ResumeDragAfterAction = resumeDrag || DragKeyHeld(camera);
+                    pending.Draining = true;
+                    var drainHit = new RaycastResult { gameObject = camera.liquidDrainObject, screenPosition = Input.mousePosition };
+                    if (!RunNativeDrain(pending, new List<RaycastResult> { drainHit }) ||
+                        Plugin.DragActionAtPointer(camera, pending.Item, pending.Action) != pending.Action)
+                        CancelPendingAction(camera);
+                    return false;
+            }
+            return false;
+        }
+
+        private static void CompleteAction(PlayerCamera camera, PendingAction pending, bool resumeDrag)
+        {
+            var keepDragging = SettingsBridge.KeepDraggingAfterUse;
+            var sameTarget = keepDragging && !camera.dragItem && _pendingAction == null && IsOverPendingAction(camera, pending);
+            switch (TerminalDragGesture.AfterAction(keepDragging, sameTarget, resumeDrag))
+            {
+                case TerminalDragAfterAction.KeepArmed:
+                    _pendingAction = pending;
+                    break;
+                case TerminalDragAfterAction.ResumeDrag:
+                    camera.dragItem = pending.Item;
+                    if (camera.dragImage)
+                    {
+                        camera.dragImage.rectTransform.position = Input.mousePosition;
+                        camera.dragImage.enabled = true;
+                    }
+                    break;
+            }
+            Plugin.UpdateDragActions(camera);
+        }
+
+        internal static void CancelPendingAction(PlayerCamera camera)
+        {
+            if (_pendingAction is not { } pending || !ReferenceEquals(pending.Camera, camera)) return;
+            _pendingAction = null;
+            // Together sends the resulting amount when the native drain hover ends. End it
+            // before discarding the pending item.
+            if (pending.Draining && camera && camera.body == pending.Body &&
+                GameInventoryAdapter.Owns(camera.body, pending.Item) && GameInventoryAdapter.IsTogetherClient)
+                RunNativeDrain(pending, new List<RaycastResult>());
+            Plugin.UpdateDragActions(camera);
+        }
+
+        private static bool RunNativeDrain(PendingAction pending, List<RaycastResult> hits)
+        {
+            var camera = pending.Camera;
+            var previous = camera.dragItem;
+            var radialOpen = camera.radialOpen;
+            camera.dragItem = pending.Item;
+            camera.radialOpen = true; // Do not enter Together's world-hover branch on confirmation.
+            _nativeDrainCall = camera;
+            try { WhileDragging.Invoke(camera, new object[] { hits }); return true; }
+            catch (TargetInvocationException ex) { Plugin.Log.LogWarning("Liquid drain failed: " + ex.InnerException); return false; }
+            finally
+            {
+                _nativeDrainCall = null;
+                camera.radialOpen = radialOpen;
+                if (ReferenceEquals(camera.dragItem, pending.Item)) camera.dragItem = previous;
+                if (!previous && camera.dragImage) camera.dragImage.enabled = false;
+            }
+        }
+
+        private static bool WhileDraggingPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
+        {
+            // The scoped call already has the native target. Re-filtering it would discard that hit.
+            if (ReferenceEquals(_nativeDrainCall, __instance) || !Plugin.BlocksGameplay) return true;
+            if (!Plugin.CanInteract(__instance) || Plugin.SearchFocused) return false;
+            uiCasts = Plugin.FilterHits(uiCasts);
+            return true;
         }
         private static bool PickupPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
@@ -476,8 +679,13 @@ namespace UnknownInventoryTerminal
             if (!Plugin.BlocksGameplay) return true;
             if (!Plugin.IsVisible) return false;
             uiCasts = Plugin.FilterHits(uiCasts);
-            // Revalidate before taking either the equipment or original inventory path.
-            if (!Plugin.CanInteract(__instance) || !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem))
+            // Revalidate before passing any target to the game's release path.
+            var source = __instance.dragItem;
+            if (!Plugin.CanInteract(__instance) || !GameInventoryAdapter.Owns(__instance.body, source))
+            { Plugin.CancelDrag(__instance); return false; }
+            // DraggingPrefix owns action clicks/releases. A stale visual raycast must not fall
+            // through to the inventory drop path if the item is no longer eligible.
+            if (uiCasts.Count == 1 && Plugin.TryGetDragAction(uiCasts[0].gameObject, out _))
             { Plugin.CancelDrag(__instance); return false; }
             if (Plugin.IsTerminalPoint(Input.mousePosition))
             {
@@ -486,7 +694,6 @@ namespace UnknownInventoryTerminal
                 {
                     var slot = slotHit.gameObject.GetComponentInParent<LoadoutCell>();
                     var target = slot.Button;
-                    var source = __instance.dragItem;
                     var moved = Vector2.Distance(Input.mousePosition, __instance.clickPos) >= 10f;
                     var equip = moved && slot.CanEquip(__instance, source);
                     if (slot.IsCurrent(__instance) && (equip ||
@@ -546,8 +753,8 @@ namespace UnknownInventoryTerminal
         private static bool LoadoutActionPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts, ref bool __result)
         {
             if (!Plugin.CanInteract(__instance) || uiCasts.Count == 0 || !uiCasts[0].gameObject) return true;
-            var slot = uiCasts[0].gameObject.GetComponentInParent<LoadoutCell>();
             var source = __instance.dragItem;
+            var slot = uiCasts[0].gameObject.GetComponentInParent<LoadoutCell>();
             if (!slot || Vector2.Distance(Input.mousePosition, __instance.clickPos) < 10f ||
                 !slot.CanEquip(__instance, source)) return true;
             // Call the native wear method inside HandleReleaseDragging so CCL's conflict
@@ -566,6 +773,15 @@ namespace UnknownInventoryTerminal
     {
         private static readonly Type? NetType = AccessTools.TypeByName("Together.Net");
         private static readonly PropertyInfo? NetworkRunning = NetType == null ? null : AccessTools.Property(NetType, "IsRunning");
+        private static readonly PropertyInfo? NetworkClient = NetType == null ? null : AccessTools.Property(NetType, "IsClient");
+        internal static bool IsTogetherClient
+        {
+            get
+            {
+                try { return NetworkRunning?.GetValue(null) is true && NetworkClient?.GetValue(null) is true; }
+                catch { return false; }
+            }
+        }
         private static readonly Type? PlayerType = AccessTools.TypeByName("Together.ScavPlayer");
         private static readonly FieldInfo? LocalPlayer = PlayerType == null ? null : AccessTools.Field(PlayerType, "LocalPlayer");
         private static readonly FieldInfo? PlayerBody = PlayerType == null ? null : AccessTools.Field(PlayerType, "body");

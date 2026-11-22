@@ -6,10 +6,9 @@ using UnknownInventoryTerminal.Core;
 
 namespace UnknownInventoryTerminal
 {
-    // IMGUI owns the chrome; the storage area is reserved for the native UGUI canvas.
+    // Inventory chrome uses the native canvas; only the separate settings page uses IMGUI.
     internal sealed class TerminalWindow
     {
-        private const string SearchControl = "UIT.Search";
         private readonly Ae2TerminalSkin _skin;
         private readonly Func<IReadOnlyList<InventoryEntry>> _capture;
         private readonly Func<int> _equipmentCount;
@@ -24,8 +23,8 @@ namespace UnknownInventoryTerminal
         private Rect _rect;
         private string _lastQuery = "", _status = "";
         private float _nextRefresh;
-        private bool _closeRequested, _focusSearch, _sortByAmount, _descending;
-        private GUIStyle? _titleStyle, _statusStyle, _searchStyle, _tooltipStyle, _iconStyle, _settingsStyle;
+        private bool _closeRequested, _sortByAmount, _descending;
+        private GUIStyle? _titleStyle, _iconStyle, _settingsStyle;
         private int _settingsClosedFrame = -1;
         internal bool SettingsOpen => _buttons.SettingsOpen;
         internal bool BlocksInventoryInput => SettingsOpen || _settingsClosedFrame == Time.frameCount;
@@ -62,7 +61,6 @@ namespace UnknownInventoryTerminal
         internal void Close()
         {
             Visible = false;
-            _focusSearch = false;
             _settingsClosedFrame = -1;
             ToggleDropdown(SettingsDropdown.None);
             _buttons.Reset();
@@ -110,7 +108,6 @@ namespace UnknownInventoryTerminal
                     case TerminalButton.Settings:
                     case TerminalButton.SettingsBack:
                         if (!SettingsOpen) _settingsClosedFrame = Time.frameCount;
-                        _focusSearch = false;
                         ToggleDropdown(SettingsDropdown.None);
                         Plugin.ReleaseSearchFocus();
                         break;
@@ -163,82 +160,31 @@ namespace UnknownInventoryTerminal
                 Ae2TerminalLayout.BoardWidth * _layout.Scale, _layout.PanelHeight),
             _layout, _sortByAmount, _descending);
 
-        internal void Draw()
+        internal void DrawSettings()
         {
-            if (!Visible) return;
+            if (!Visible || !SettingsOpen) return;
             EnsureStyles();
-            _tooltip = null;
-            if (SettingsOpen)
-            {
-                DrawSettingsPage();
-                return;
-            }
-            // A layout group clips the drawing but does not create a full-window IMGUI input target.
-            GUI.BeginGroup(_rect);
-            try { DrawContents(); }
-            finally { GUI.EndGroup(); }
-            if (_tooltip != null)
-            {
-                var tip = _tooltipBounds;
-                tip.position += _rect.position;
-                _skin.Draw(tip, Ae2Image.Tooltip, Ae2TerminalSkin.Ink);
-                GUI.Label(tip, _tooltip, _tooltipStyle);
-            }
+            DrawSettingsPage();
         }
 
-        private void DrawContents()
+        internal void DrawInventoryChrome(NativeTerminalChrome chrome)
         {
-            // The board parts and the toolbar background are drawn by the native canvas below this window.
-            const int left = Ae2TerminalLayout.Rail;
-            GUI.Label(Units(left + 7, 2, 46, 15), TerminalText.Get("terminal.title"), _titleStyle);
-            GUI.Label(Units(left + Ae2TerminalLayout.Inset, _layout.StatusTop, 62, Ae2TerminalLayout.StatusHeight),
-                _status, _statusStyle);
+            if (!Visible || SettingsOpen || CloseRequested) return;
+            chrome.DrawHeader(_layout, _status, BlocksInventoryInput);
+            Draw(TerminalButton.Close, Ae2Image.Close, "terminal.close", "X", hintBelow: true);
+            Draw(TerminalButton.Sort, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
+                _sortByAmount ? "terminal.sortName" : "terminal.sortQuantity", "#");
+            Draw(TerminalButton.Direction, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
+                _descending ? "terminal.sortAscending" : "terminal.sortDescending", _descending ? "v" : "^");
+            var style = TerminalText.Format("terminal.style.current", TerminalText.Get("terminal.style." + _layout.Style));
+            chrome.DrawButton(TerminalButton.Style, _buttons.Focused, StyleIcon(_layout.Style), style, style);
+            Draw(TerminalButton.Return, Ae2Image.Back, "terminal.button.return", "<", visible: _canReturn());
+            var settings = TerminalText.Get("terminal.button.toggle");
+            chrome.DrawButton(TerminalButton.Settings, _buttons.Focused, Ae2Image.Settings, settings, settings);
+            chrome.FinishDraw();
 
-            // Reserve the right end of the header for the close button.
-            var searchSize = _skin.SourceSize(Ae2Image.Search) ?? new Vector2Int(Ae2TerminalLayout.SearchWidth, 12);
-            var searchRect = Units(Ae2TerminalLayout.SearchX, Ae2TerminalLayout.SearchY,
-                Mathf.Min(searchSize.x, Ae2TerminalLayout.SearchWidth), Mathf.Min(searchSize.y, Ae2TerminalLayout.SearchHeight));
-            var ev = Event.current;
-            if (!BlocksInventoryInput && ev.type == EventType.MouseDown && ev.button == 1 && searchRect.Contains(ev.mousePosition))
-            {
-                SearchApi.Query = "";
-                _focusSearch = true;
-                ev.Use();
-            }
-            if (ev.type == EventType.KeyDown && GUI.GetNameOfFocusedControl() == SearchControl &&
-                (ev.keyCode == KeyCode.Return || ev.keyCode == KeyCode.KeypadEnter))
-            {
-                GUI.FocusControl(null);
-                ev.Use();
-            }
-            _skin.Draw(searchRect, GUI.GetNameOfFocusedControl() == SearchControl ? Ae2Image.SearchFocused : Ae2Image.Search,
-                new Color32(91, 95, 117, 255));
-            GUI.SetNextControlName(SearchControl);
-            var guiEnabled = GUI.enabled;
-            GUI.enabled = guiEnabled && !BlocksInventoryInput;
-            try { SearchApi.Query = GUI.TextField(searchRect, SearchApi.Query, 256, _searchStyle); }
-            finally { GUI.enabled = guiEnabled; }
-            if (_focusSearch && Event.current.type == EventType.Repaint)
-            {
-                GUI.FocusControl(SearchControl);
-                _focusSearch = false;
-            }
-            if (string.IsNullOrEmpty(SearchApi.Query) && GUI.GetNameOfFocusedControl() != SearchControl)
-                GUI.Label(searchRect, TerminalText.Get("terminal.search"), _searchStyle);
-            if (!SettingsOpen) SetTooltip(searchRect, TerminalText.Get("terminal.searchHint"), below: true);
-
-            DrawButton(TerminalButton.Close, Ae2Image.Close, TerminalText.Get("terminal.close"), "X", tooltipBelow: true);
-            DrawButton(TerminalButton.Sort, _sortByAmount ? Ae2Image.SortAmount : Ae2Image.SortName,
-                _sortByAmount ? TerminalText.Get("terminal.sortName") : TerminalText.Get("terminal.sortQuantity"), "#");
-            DrawButton(TerminalButton.Direction, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
-                _descending ? TerminalText.Get("terminal.sortAscending") : TerminalText.Get("terminal.sortDescending"), _descending ? "v" : "^");
-            var height = _layout.Style;
-            DrawButton(TerminalButton.Style, StyleIcon(height),
-                TerminalText.Format("terminal.style.current", TerminalText.Get("terminal.style." + height)),
-                TerminalText.Format("terminal.style.current", TerminalText.Get("terminal.style." + height)));
-            if (_canReturn()) DrawButton(TerminalButton.Return, Ae2Image.Back, TerminalText.Get("terminal.button.return"), "<");
-            DrawButton(TerminalButton.Settings, Ae2Image.Settings, TerminalText.Get("terminal.button.toggle"), TerminalText.Get("terminal.button.toggle"));
-            if (HasSnapshot && _lastQuery != SearchApi.Query) Rebuild();
+            void Draw(TerminalButton button, Ae2Image icon, string key, string fallback, bool visible = true, bool hintBelow = false) =>
+                chrome.DrawButton(button, _buttons.Focused, icon, TerminalText.Get(key), fallback, visible, hintBelow);
         }
 
         private Rect SettingsBounds
@@ -294,6 +240,12 @@ namespace UnknownInventoryTerminal
                 var placementY = Ae2SettingsLayout.FieldY(placement: true, expanded == SettingsDropdown.Language ? rows : 0);
                 Field(SettingsDropdown.Placement, placementY, SettingsBridge.Label("ContainerPlacement"),
                     ContainerPlacement.Label(), PlacementOptions.Length);
+                var keepDragging = SettingsBridge.KeepDraggingAfterUse;
+                var toggle = Area(Ae2SettingsLayout.FieldX, Ae2SettingsLayout.KeepDraggingY(rows),
+                    Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.KeepDraggingHeight);
+                var next = _settingsControls.Toggle(toggle, scale, keepDragging,
+                    SettingsBridge.Label(SettingsBridge.KeepDraggingAfterUseSetting), _settingsStyle!);
+                if (next != keepDragging) SettingsBridge.KeepDraggingAfterUse = next;
 
                 if (rows > 0 && _expanded == expanded)
                 {
@@ -350,14 +302,6 @@ namespace UnknownInventoryTerminal
             _ => Ae2Image.TerminalStyleSmall
         };
 
-        private void DrawButton(TerminalButton button, Ae2Image icon, string tooltip, string fallback, bool tooltipBelow = false)
-        {
-            var (x, y) = TerminalButtonInput.Origin(button);
-            var hit = Units(x, y, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
-            PaintButton(hit, button, icon, fallback);
-            SetTooltip(hit, tooltip, below: tooltipBelow);
-        }
-
         private void PaintButton(Rect hit, TerminalButton button, Ae2Image icon, string fallback)
         {
             var ev = Event.current;
@@ -376,24 +320,6 @@ namespace UnknownInventoryTerminal
             else GUI.Label(faceRect, fallback, _iconStyle);
         }
 
-        private void SetTooltip(Rect control, string text, bool below)
-        {
-            if (Event.current.type != EventType.Repaint || !control.Contains(Event.current.mousePosition)) return;
-            var label = new GUIContent(text);
-            var gap = 2 * _layout.Scale;
-            var width = Mathf.Min(_tooltipStyle!.CalcSize(label).x + 12 * _layout.Scale, _rect.width - 2 * gap);
-            var x = Mathf.Clamp(below ? control.x : control.xMax + gap, gap, _rect.width - width - gap);
-            var y = below ? control.yMax + gap : control.y + gap;
-            // Draw outside the IMGUI window so it can overlap the storage canvas.
-            _tooltip = label;
-            _tooltipBounds = new Rect(x, y, width, (_skin.SourceSize(Ae2Image.Tooltip)?.y ?? 15) * _layout.Scale);
-        }
-
-        private GUIContent? _tooltip;
-        private Rect _tooltipBounds;
-        private Rect Units(float x, float y, float w, float h) => new Rect(x * _layout.Scale,
-            (y + Ae2TerminalLayout.ChromeTopPadding) * _layout.Scale, w * _layout.Scale, h * _layout.Scale);
-
         private void EnsureStyles()
         {
             if (_styleScale == _layout.Scale) return;
@@ -401,20 +327,10 @@ namespace UnknownInventoryTerminal
             _titleStyle = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,
                 fontSize = 8 * _styleScale, padding = new RectOffset() };
             _titleStyle.normal.textColor = Ae2TerminalSkin.Ink;
-            _statusStyle = new GUIStyle(_titleStyle) { fontStyle = FontStyle.Normal, fontSize = 6 * _styleScale };
             _iconStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter };
-            _tooltipStyle = new GUIStyle(_titleStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
-            _tooltipStyle.normal.textColor = Color.white;
             _settingsStyle = new GUIStyle(_titleStyle) { fontStyle = FontStyle.Normal,
-                fontSize = 7 * _styleScale, wordWrap = true };
-            _searchStyle = new GUIStyle(GUI.skin.textField) { fontSize = 8 * _styleScale, alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(3 * _styleScale, 3 * _styleScale, 0, 0) };
-            foreach (var state in new[] { _searchStyle.normal, _searchStyle.hover, _searchStyle.focused, _searchStyle.active,
-                _searchStyle.onNormal, _searchStyle.onHover, _searchStyle.onFocused, _searchStyle.onActive })
-            {
-                state.background = null;
-                state.textColor = Color.white;
-            }
+                fontSize = 8 * _styleScale, wordWrap = false, clipping = TextClipping.Clip, richText = false };
+            _settingsStyle.normal.textColor = new Color32(23, 25, 32, 255);
         }
     }
 }

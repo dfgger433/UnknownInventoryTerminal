@@ -62,12 +62,16 @@ namespace UnknownInventoryTerminal
         private TextMeshProUGUI? _empty;
         private UITooltip? _scrollTooltip;
         private TerminalItemTooltip? _itemTooltip;
+        internal NativeTerminalChrome? Chrome { get; private set; }
         private readonly List<RaycastResult> _hoverHits = new List<RaycastResult>();
         private PointerEventData? _hoverPointer;
         private EventSystem? _hoverEvents;
         internal bool CanReturnToGroups => _visible && _selectionKey.HasValue;
         internal void ReturnToGroups() => ChangeSelection(null);
         private Image? _storageHighlight;
+        private TerminalDragActionTarget? _drainAction, _useAction;
+        private RectTransform? _actionBar;
+        private Image[] _actionBarParts = null!;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
         private Rect _bounds, _windowBounds;
@@ -75,7 +79,7 @@ namespace UnknownInventoryTerminal
         private Rect BoardBounds => new Rect(_windowBounds.x + _layout.BoardLeft, _windowBounds.y,
             Ae2TerminalLayout.BoardWidth * _layout.Scale, _layout.Height);
         private readonly List<Image> _boardParts = new List<Image>();
-        private Image? _barTop, _barMiddle, _barBottom;
+        private Image[] _toolbarParts = null!;
         private RectTransform? _buttonBar;
         private bool _visible, _dirty = true, _prefabWarning, _byAmount, _descending, _thumbEnabled;
         private int _scrollRow, _buttonBarButtonCount, _buttonBarScale;
@@ -154,6 +158,9 @@ namespace UnknownInventoryTerminal
             _loadout.Discover();
             return _loadout.EquipmentCount;
         }
+
+        internal void UpdateLoadoutDragHighlight(PlayerCamera camera, Item? source) =>
+            _loadout.UpdateDragHighlight(camera, source);
 
         internal InvButton? ResolveDrop(PlayerCamera camera)
         {
@@ -238,7 +245,10 @@ namespace UnknownInventoryTerminal
             if (visible && settingsOpen)
             {
                 // Suspend the canvas without clearing the current search, group or scroll position.
+                Chrome?.ReleaseSearchFocus();
                 _itemTooltip?.Hide();
+                HideDragActions();
+                _loadout.ClearDragHighlight();
                 if (_root && _root!.activeSelf) _root.SetActive(false);
                 return;
             }
@@ -249,7 +259,10 @@ namespace UnknownInventoryTerminal
                 _scrollRow = 0;
                 _dirty = true;
                 _loadout.Reset();
+                Chrome?.ReleaseSearchFocus();
                 _itemTooltip?.Hide();
+                HideDragActions();
+                _loadout.ClearDragHighlight();
                 if (_automaticTarget) _automaticTarget!.refItem = null!;
             }
             var ready = visible && PlayerCamera.main && PlayerCamera.main.body;
@@ -283,8 +296,7 @@ namespace UnknownInventoryTerminal
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = short.MaxValue - 1;
 
-            // IMGUI controls do not own an EventSystem raycast. Cover only their window,
-            // below the real tiles, so a native slot underneath a toolbar button cannot fire.
+            // The toolbar is polled, not raycast. Shield the window without covering live item slots or search.
             var surface = Add(_root.transform, "Terminal window hit surface", typeof(Image));
             var surfaceImage = surface.GetComponent<Image>();
             surfaceImage.color = Color.clear;
@@ -300,10 +312,7 @@ namespace UnknownInventoryTerminal
             Position(_buttonBar, new Rect(_windowBounds.position, Vector2.zero));
             // AE2's sprite metadata slices it vertically: 2 top rows and 4 bottom rows stay fixed, the middle stretches.
             var barSize = _skin.SourceSize(Ae2Image.VerticalButtonsBg);
-            _barTop = BarPart("top", 0, Ae2TerminalLayout.ButtonBarTopBorder);
-            _barMiddle = BarPart("middle", Ae2TerminalLayout.ButtonBarTopBorder, (barSize?.y ?? 0) -
-                Ae2TerminalLayout.ButtonBarTopBorder - Ae2TerminalLayout.ButtonBarBottomBorder);
-            _barBottom = BarPart("bottom", (barSize?.y ?? 0) - Ae2TerminalLayout.ButtonBarBottomBorder, Ae2TerminalLayout.ButtonBarBottomBorder);
+            _toolbarParts = CreateBarParts(_buttonBar, barSize?.y ?? 0, flushWithBoardTop: true);
 
             var panel = Add(_root.transform, "AE2 storage", typeof(Image), typeof(GridWheel));
             _panel = panel.GetComponent<RectTransform>();
@@ -330,8 +339,11 @@ namespace UnknownInventoryTerminal
             _slider.direction = Slider.Direction.TopToBottom;
             _slider.wholeNumbers = true;
             _slider.navigation = new Navigation { mode = Navigation.Mode.None };
-            // Let Unity's Selectable drive hover/press/disabled transitions on the stock thumb.
+            // Preserve the native hover/press transitions. The disabled sprite already has its own tint.
             _slider.transition = Selectable.Transition.ColorTint;
+            var thumbColors = _slider.colors;
+            thumbColors.disabledColor = Color.white;
+            _slider.colors = thumbColors;
             var handleLane = Add(scroll.transform, "Thumb travel").GetComponent<RectTransform>();
             Stretch(handleLane, Vector2.zero, Vector2.zero);
             _thumb = Add(handleLane, "AE2 thumb", typeof(Image)).GetComponent<Image>();
@@ -352,6 +364,12 @@ namespace UnknownInventoryTerminal
             _empty = CreateText(panel.transform, "Empty storage", 17, TextAlignmentOptions.Center);
             _lower = Add(panel.transform, "Container storage base").GetComponent<RectTransform>();
             _loadout.Attach(_lower);
+            _actionBar = Add(_root.transform, "AE2 drag action bar").GetComponent<RectTransform>();
+            _actionBarParts = CreateBarParts(_actionBar, barSize?.y ?? 0, flushWithBoardTop: false);
+            _drainAction = CreateDragAction(TerminalDragAction.Drain, Ae2Image.DragDrain);
+            _useAction = CreateDragAction(TerminalDragAction.Use, Ae2Image.DragUse);
+            HideDragActions();
+            Chrome = new NativeTerminalChrome(_root.transform, _skin);
             _itemTooltip = new TerminalItemTooltip(_root.transform, _log);
             Position(_panel, _bounds);
             ApplyLayout();
@@ -425,24 +443,114 @@ namespace UnknownInventoryTerminal
             if (_buttonBarButtonCount == buttons && _buttonBarScale == scale) return;
             _buttonBarButtonCount = buttons;
             _buttonBarScale = scale;
-            var height = Ae2TerminalLayout.ButtonBarHeight(buttons);
-            const int top = Ae2TerminalLayout.ButtonBarTopBorder, bottom = Ae2TerminalLayout.ButtonBarBottomBorder;
-            void Place(Image image, int y, int h) => Position(image.rectTransform, new Rect(Ae2TerminalLayout.ButtonBarX * scale,
-                (Ae2TerminalLayout.ButtonBarY + y) * scale, Ae2TerminalLayout.ButtonBarWidth * scale, h * scale));
-            Place(_barTop!, 0, top);
-            Place(_barMiddle!, top, height - top - bottom);
-            Place(_barBottom!, height - bottom, bottom);
+            LayoutBarParts(_toolbarParts, Ae2TerminalLayout.ButtonBarX * scale, Ae2TerminalLayout.ButtonBarY * scale,
+                Ae2TerminalLayout.ButtonBarHeight(buttons), scale, flushWithBoardTop: true);
         }
 
-        private Image BarPart(string name, int top, int height)
+        private TerminalDragActionTarget CreateDragAction(TerminalDragAction action, Ae2Image sprite)
         {
-            var image = Add(_buttonBar!, "Button bar " + name, typeof(Image)).GetComponent<Image>();
-            image.raycastTarget = false;
-            image.sprite = _skin.GetRows(Ae2Image.VerticalButtonsBg, top, height);
-            image.type = Image.Type.Simple;
-            // Without the PNG the toolbar keeps its buttons and simply has no bar behind them.
-            image.color = image.sprite ? Color.white : Color.clear;
-            return image;
+            var node = Add(_actionBar!, action + " action", typeof(Image), typeof(TerminalDragActionTarget));
+            var hit = node.GetComponent<Image>();
+            hit.color = Color.clear;
+            TerminalHitSurface.Enable(hit);
+            var target = node.GetComponent<TerminalDragActionTarget>();
+            target.Action = action;
+            target.Face = Add(node.transform, "Face", typeof(Image)).GetComponent<Image>();
+            target.Face.raycastTarget = false;
+            target.Icon = Add(target.Face.transform, "Icon", typeof(Image)).GetComponent<Image>();
+            target.Icon.raycastTarget = false;
+            target.IconArt = sprite;
+            _skin.Apply(target.Icon, sprite, Color.clear);
+            var key = action == TerminalDragAction.Drain ? "inventory.drag.drain" : "inventory.drag.use";
+            CreateTooltip(node, TerminalText.Get(key), TerminalText.Get(key + ".description"));
+            return target;
+        }
+
+        internal void HideDragActions()
+        {
+            if (_actionBar && _actionBar!.gameObject.activeSelf) _actionBar.gameObject.SetActive(false);
+        }
+
+        internal void UpdateDragActions(PlayerCamera camera, Item? item, TerminalDragAction? armed)
+        {
+            if (!_actionBar || !item || !_visible || !_root!.activeInHierarchy) { HideDragActions(); return; }
+            var drain = (armed is null or TerminalDragAction.Drain) && CanDrain(camera, item!);
+            var use = (armed is null or TerminalDragAction.Use) && CanUse(camera, item!);
+            if (!drain && !use) { HideDragActions(); return; }
+
+            var scale = _layout.Scale;
+            var (x, y, width, height) = _layout.DragActionBackgroundBounds(drain, use);
+            Position(_actionBar!, new Rect(_windowBounds.x + x, _windowBounds.y + y, width, height));
+            LayoutBarParts(_actionBarParts, 0, 0, height / scale, scale, flushWithBoardTop: false);
+            SetAction(_drainAction!, drain);
+            SetAction(_useAction!, use);
+            if (!_actionBar!.gameObject.activeSelf) _actionBar.gameObject.SetActive(true);
+
+            void SetAction(TerminalDragActionTarget target, bool active)
+            {
+                if (target.gameObject.activeSelf != active) target.gameObject.SetActive(active);
+                if (!active) return;
+                var (left, topEdge, faceWidth, faceHeight) = _layout.DragActionBounds(target.Action);
+                Position((RectTransform)target.transform, new Rect(left - x, topEdge - y, faceWidth, faceHeight));
+                target.Draw(_skin, scale, HitsDragAction(target.Action, Input.mousePosition), armed == target.Action);
+            }
+        }
+
+        internal static bool CanDrain(PlayerCamera camera, Item item) => camera.liquidDrainObject &&
+            camera.tradeMenu && !camera.tradeMenu.activeSelf &&
+            item.TryGetComponent<WaterContainerItem>(out var liquid) && liquid.CurrentTotal > 0f;
+
+        internal static bool CanUse(PlayerCamera camera, Item item) => !camera.blockItemUsage && item.Stats.usable;
+
+        internal bool TryGetDragAction(GameObject target, out TerminalDragAction action)
+        {
+            if (target && target.activeInHierarchy && target.TryGetComponent<TerminalDragActionTarget>(out var marker) &&
+                (marker == _drainAction || marker == _useAction))
+            {
+                action = marker.Action;
+                return true;
+            }
+            action = default;
+            return false;
+        }
+
+        private bool HitsDragAction(TerminalDragAction action, Vector2 pointer) =>
+            _layout.HitsDragAction(action, pointer.x, Screen.height - pointer.y);
+
+        internal TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, TerminalDragAction? armed = null)
+        {
+            if (!_actionBar || !_visible || !_root!.activeInHierarchy) return null;
+            var pointer = (Vector2)Input.mousePosition;
+            if ((armed is null or TerminalDragAction.Drain) && HitsDragAction(TerminalDragAction.Drain, pointer) && CanDrain(camera, item))
+                return TerminalDragAction.Drain;
+            if ((armed is null or TerminalDragAction.Use) && HitsDragAction(TerminalDragAction.Use, pointer) && CanUse(camera, item))
+                return TerminalDragAction.Use;
+            return null;
+        }
+
+        private static void LayoutBarParts(Image[] parts, int left, int top, int height, int scale, bool flushWithBoardTop)
+        {
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var (y, width, rows) = Ae2TerminalLayout.ButtonBarPatch(height, i, flushWithBoardTop);
+                Position(parts[i].rectTransform, new Rect(left, top + y * scale, width * scale, rows * scale));
+            }
+        }
+
+        private Image[] CreateBarParts(RectTransform parent, int height, bool flushWithBoardTop)
+        {
+            var parts = new Image[Ae2TerminalLayout.ButtonBarPatchCount];
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var (y, width, rows) = Ae2TerminalLayout.ButtonBarPatch(height, i, flushWithBoardTop);
+                var image = Add(parent, "Button bar part " + i, typeof(Image)).GetComponent<Image>();
+                image.raycastTarget = false;
+                image.sprite = _skin.GetRows(Ae2Image.VerticalButtonsBg, y, width, rows);
+                image.type = Image.Type.Simple;
+                image.color = image.sprite ? Color.white : Color.clear;
+                parts[i] = image;
+            }
+            return parts;
         }
 
         private void MoveToRow(int row)
@@ -677,6 +785,7 @@ namespace UnknownInventoryTerminal
             SettingsBridge.LanguageChanged -= RefreshScrollTooltip;
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
+            Chrome = null;
             _itemTooltip = null;
             _hoverEvents = null;
             _hoverPointer = null;

@@ -44,6 +44,8 @@
     "terminalStyleMedium": { "texture": "guis/states.png", "srcRect": [16, 112, 16, 16] },
     "terminalStyleTall": { "texture": "guis/states.png", "srcRect": [32, 112, 16, 16] },
     "terminalStyleFull": { "texture": "guis/states.png", "srcRect": [48, 112, 16, 16] },
-    "verticalButtonsBg": { "texture": "gui/sprites/vertical_buttons_bg.png", "srcRect": [0, 0, 21, 26] }
+    "verticalButtonsBg": { "texture": "gui/sprites/vertical_buttons_bg.png", "srcRect": [0, 0, 21, 26] },
+    "dragDrain": { "texture": "guis/states.png", "srcRect": [1, 97, 14, 14] },
+    "dragUse": { "texture": "guis/states.png", "srcRect": [33, 97, 14, 14] }
   }
 }

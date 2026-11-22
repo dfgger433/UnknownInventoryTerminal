@@ -5,6 +5,7 @@ namespace UnknownInventoryTerminal
     // Matches appeng.api.config.TerminalStyle: the storage gets a quarter, half, three quarters or all of the rows
     // that fit on the screen.
     internal enum TerminalHeight { Small = 1, Medium = 2, Tall = 3, Full = 4 }
+    internal enum TerminalDragAction { Drain, Use }
 
     // Positions follow the board drawn in terminal.png. Like AE2's MEStorageScreen, the board is stacked from the
     // header, first, middle and last storage rows and the bottom part, each drawn as cut at an integer scale.
@@ -35,9 +36,22 @@ namespace UnknownInventoryTerminal
         internal const int SearchX = Rail + 55, SearchY = 3, SearchHeight = 13;
         internal const int SearchWidth = CloseX - SearchX - 2;
         internal const int ToolbarButtons = 4;
-        // vertical_buttons_bg.png: AE2 draws it 2 px left of and 1 px above the buttons' bounds, 1 px wider and 4 px taller.
-        internal const int ButtonBarX = ToolbarX - 3, ButtonBarY = ToolbarTop - 3, ButtonBarWidth = 21;
+        // The background covers the board's dark outline and light bevel at the join.
+        internal const int ButtonBarInsetX = 3, ButtonBarInsetY = 3;
+        internal const int ButtonBarX = ToolbarX - ButtonBarInsetX, ButtonBarY = ToolbarTop - ButtonBarInsetY, ButtonBarWidth = 21;
         internal const int ButtonBarTopBorder = 2, ButtonBarBottomBorder = 4;
+        internal const int ButtonBarJoinWidth = ButtonBarX + ButtonBarWidth - Rail;
+        internal const int ButtonBarPatchCount = 4;
+
+        // The first row can meet the board's own top outline as-is. Further down, stop that dark
+        // row at the bevel so it turns the corner instead of striking through the white border.
+        internal static (int Y, int Width, int Height) ButtonBarPatch(int height, int patch, bool flushWithBoardTop) => patch switch
+        {
+            0 => (0, ButtonBarWidth - (flushWithBoardTop ? 0 : ButtonBarJoinWidth - 1), 1),
+            1 => (1, ButtonBarWidth, ButtonBarTopBorder - 1),
+            2 => (ButtonBarTopBorder, ButtonBarWidth, height - ButtonBarTopBorder - ButtonBarBottomBorder),
+            _ => (height - ButtonBarBottomBorder, ButtonBarWidth, ButtonBarBottomBorder)
+        };
         internal int BoardLeft => Rail * Scale;
         internal int Scale { get; }
         internal TerminalHeight Style { get; }
@@ -78,6 +92,32 @@ namespace UnknownInventoryTerminal
 
         internal static int ToolbarY(int index) => ToolbarTop + index * ToolbarPitch;
         internal static int ThumbLeft(int thumbWidth) => GrooveLeft + (GrooveWidth - thumbWidth) / 2;
+        // A separate two-slot group uses the same left rail, below even the expanded toolbar.
+        // Keep both slot origins fixed when a single action is offered or armed.
+        internal (int X, int Y, int Width, int Height) DragActionBounds(TerminalDragAction action)
+        {
+            var y = Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - ToolbarPitch - ButtonHeight) / 2,
+                ButtonBarY + ButtonBarHeight(ToolbarButtons + 1) + 5);
+            if (action == TerminalDragAction.Use) y += ToolbarPitch;
+            return (ToolbarX * Scale, y * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
+        }
+
+        internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(bool drain, bool use)
+        {
+            var (_, y, _, _) = DragActionBounds(drain ? TerminalDragAction.Drain : TerminalDragAction.Use);
+            var height = ButtonBarHeight(drain && use ? 2 : 1);
+            return (ButtonBarX * Scale, y - ButtonBarInsetY * Scale, ButtonBarWidth * Scale, height * Scale);
+        }
+
+        // Like the toolbar, poll the fixed face rectangle. Hover art moves by one pixel;
+        // neither that offset nor the transparent background changes the hit area.
+        internal bool HitsDragAction(TerminalDragAction action, float screenX, float screenY)
+        {
+            var (x, y, width, height) = DragActionBounds(action);
+            var left = Left + x;
+            var top = Top + y;
+            return screenX >= left && screenX < left + width && screenY >= top && screenY < top + height;
+        }
         // Like AE2, the thumb travels between the two end borders of the painted groove.
         internal int ScrollTrackHeight => Rows * Pitch - 2 * GrooveBorder;
         // Height of vertical_buttons_bg.png behind the given number of visible buttons.

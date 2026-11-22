@@ -65,7 +65,7 @@ namespace UnknownInventoryTerminal
                 "Storage height: Small, Medium, Tall or Full share of the rows that fit on the screen (never below 3 rows). " +
                 "The terminal-style button in the left toolbar cycles it.");
             _keepDraggingAfterUse = config.Bind(ConfigSection, KeepDraggingAfterUseSetting, true,
-                "Keep the same item ready for another click on the Use Item button, or continue the drag while its key is held.");
+                "Keep the same item ready after one Use or Drain click, or continue dragging while the non-mouse drag key is held.");
         }
 
         internal static bool IsTogglePressed()

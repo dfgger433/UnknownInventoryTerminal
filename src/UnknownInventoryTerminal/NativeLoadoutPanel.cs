@@ -20,10 +20,15 @@ namespace UnknownInventoryTerminal
         internal TextMeshProUGUI Caption = null!;
         internal InvButton? Button;
         internal NativeLoadoutPanel Owner = null!;
+        internal bool DragEligible;
 
         public void OnPointerEnter(PointerEventData e) => Owner.Hover(this);
         public void OnPointerExit(PointerEventData e) => Owner.Leave(this);
-        private void OnDisable() => Owner?.Leave(this);
+        private void OnDisable()
+        {
+            DragEligible = false;
+            Owner?.Leave(this);
+        }
 
         internal bool IsCurrent(PlayerCamera camera) => isActiveAndEnabled && Body && Body == camera.body;
 
@@ -120,7 +125,26 @@ namespace UnknownInventoryTerminal
         {
             _body = null;
             if (_hover) Leave(_hover!);
+            ClearDragHighlight();
             _mainRow = _equipmentRow = 0;
+        }
+
+        internal void UpdateDragHighlight(PlayerCamera camera, Item? source)
+        {
+            foreach (var cell in _equipmentCells)
+            {
+                cell.DragEligible = source is Item item && item && cell.CanEquip(camera, item);
+                UpdateHighlight(cell);
+            }
+        }
+
+        internal void ClearDragHighlight()
+        {
+            foreach (var cell in _equipmentCells)
+            {
+                cell.DragEligible = false;
+                UpdateHighlight(cell);
+            }
         }
 
         internal bool Scroll(bool equipment, float delta)
@@ -137,17 +161,21 @@ namespace UnknownInventoryTerminal
 
         internal void Hover(LoadoutCell cell)
         {
-            if (_hover && _hover != cell) Leave(_hover!);
+            if (_hover && _hover != cell) UpdateHighlight(_hover!);
             _hover = cell;
-            cell.Highlight.gameObject.SetActive(cell.MainIndex >= 0 || cell.EquipmentId != null);
+            UpdateHighlight(cell);
         }
 
         internal void Leave(LoadoutCell cell)
         {
             if (_hover != cell) return;
-            cell.Highlight.gameObject.SetActive(false);
             _hover = null;
+            UpdateHighlight(cell);
         }
+
+        private static void UpdateHighlight(LoadoutCell cell) =>
+            cell.Highlight.gameObject.SetActive(cell.DragEligible || cell == cell.Owner._hover &&
+                (cell.MainIndex >= 0 || cell.EquipmentId != null));
 
         internal void Refresh(Body body)
         {
@@ -222,7 +250,8 @@ namespace UnknownInventoryTerminal
             cell.Body = body;
             cell.MainIndex = index;
             cell.EquipmentId = id;
-            if (_hover == cell) cell.Highlight.gameObject.SetActive(index >= 0 || id != null);
+            cell.DragEligible = false;
+            UpdateHighlight(cell);
             var scale = _layout.Scale;
             // The slot art underneath comes from terminal.png; only the active hand gets a translucent highlight.
             var focus = Ae2TerminalSkin.Focus;

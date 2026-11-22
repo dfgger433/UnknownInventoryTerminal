@@ -15,20 +15,28 @@ namespace UnknownInventoryTerminal
         SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected,
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
-        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg
+        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg,
+        DragDrain, DragUse
     }
 
     internal static class Ae2SettingsLayout
     {
-        internal const int PanelWidth = 124, PanelHeight = 82;
+        internal const int PanelWidth = 124, PanelHeight = 102;
         internal const int FieldX = 6, FieldWidth = 112, FieldHeight = 20;
         internal const int LanguageY = 27, PlacementY = 58, LabelHeight = 11, OptionHeight = 19, MaxVisibleOptions = 4;
+        internal const int KeepDraggingHeight = 14;
+
+        internal static int KeepDraggingY(int visibleOptions) => PlacementY + FieldHeight + 5 + visibleOptions * OptionHeight;
 
         internal static int FieldY(bool placement, int languageRows) =>
             placement ? PlacementY + languageRows * OptionHeight : LanguageY;
 
         internal static int ListY(bool placement) => FieldY(placement, 0) + FieldHeight;
         internal static int PageHeight(int rows) => PanelHeight + rows * OptionHeight;
+
+        // Leave the bevel/shadow and (on the field) the arrow column outside the caption.
+        internal static (int X, int Y, int Width, int Height) CaptionBounds(int width, int height, int scale, bool field) =>
+            (4 * scale, scale, width - (field ? 20 : 8) * scale, height - 4 * scale);
     }
 
     internal static class Ae2DropdownAppearance
