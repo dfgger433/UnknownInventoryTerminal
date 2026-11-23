@@ -22,6 +22,9 @@ internal static class Program
             ("Control hints render above item and native visuals without consuming input", TooltipLayers),
             ("Transparent hit surfaces do not depend on sprite alpha or transparent mesh culling", TransparentHitSurface),
             ("Fixed cell hits relay only to live native buttons without changing pointer coordinates", RelayNativeItemHit),
+            ("Transfer controls retain a separate raycast path after the amount loses selection", ModalPointerSurvivesBlur),
+            ("Cancel and Escape release owned selection without leaking the dismissal click", ModalDismissReleasesInput),
+            ("Modal teardown and immediate reopen preserve the original inventory raycaster state", ModalResetAndReopen),
         };
         var failures = 0;
         foreach (var (name, run) in tests)
@@ -40,6 +43,7 @@ internal static class Program
             {
                 PlayerCamera.main = null;
                 GlobalDark.main = null;
+                EventSystem.current = null;
                 foreach (var root in GameObject.Created) Object.Destroy(root);
                 Object.EndFrame();
                 GameObject.Created.Clear();
@@ -261,6 +265,83 @@ internal static class Program
         cell.SetActive(true);
         TerminalHitSurface.Relay(ref hit, button);
         Check(hit.gameObject == native && hit.screenPosition == pointer, "relay should only replace the target");
+    }
+
+    private static (TerminalModalInput Input, GraphicRaycaster Inventory, GameObject Overlay, GameObject Amount) Modal()
+    {
+        var inventory = new GameObject("Inventory", typeof(Canvas), typeof(GraphicRaycaster));
+        inventory.GetComponent<Canvas>().sortingOrder = TerminalCanvasOrder.Inventory;
+        var overlay = TerminalCanvasOrder.CreateModalLayer(5);
+        var amount = new GameObject("Amount", typeof(Image));
+        amount.transform.SetParent(overlay.transform, false);
+        EventSystem.current = new EventSystem();
+        var raycaster = inventory.GetComponent<GraphicRaycaster>();
+        return (new TerminalModalInput(overlay, raycaster), raycaster, overlay, amount);
+    }
+
+    private static void ModalPointerSurvivesBlur()
+    {
+        var (input, inventory, overlay, amount) = Modal();
+        var canvas = overlay.GetComponent<Canvas>();
+        var raycaster = overlay.GetComponent<GraphicRaycaster>();
+        Check(!overlay.activeSelf && overlay.transform.Parent == null && canvas.renderMode == RenderMode.ScreenSpaceOverlay &&
+            canvas.sortingLayerID == 0 && canvas.sortingOrder > TerminalCanvasOrder.ControlHint && overlay.layer == 5,
+            "the modal needs an independent top-level overlay above the inventory and hints");
+        input.Open();
+        EventSystem.current!.SetSelectedGameObject(amount);
+        EventSystem.current.SetSelectedGameObject(null); // Click the backdrop; leave the modal open.
+        input.Update(10);
+        Check(input.IsOpen && input.BlocksInput(10) && raycaster.isActiveAndEnabled && !inventory.enabled &&
+            EventSystem.current.currentSelectedGameObject == null,
+            "blur must neither refocus the field nor let a passive inventory hit cover the modal");
+        EventSystem.current.SetSelectedGameObject(amount);
+        input.Update(11);
+        Check(EventSystem.current.currentSelectedGameObject == amount && !inventory.enabled, "the amount can be selected again");
+    }
+
+    private static void ModalDismissReleasesInput()
+    {
+        var (input, inventory, overlay, amount) = Modal();
+        var events = EventSystem.current!;
+        input.Open();
+        events.SetSelectedGameObject(amount);
+        input.Dismiss(10);
+        input.Update(10);
+        Check(!input.IsOpen && input.BlocksInput(10) && !overlay.GetComponent<GraphicRaycaster>().isActiveAndEnabled &&
+            !inventory.enabled && events.currentSelectedGameObject == null,
+            "dismissing must deactivate modal hits and clear the typing target without clicking through");
+        input.EndInputFrame(10);
+        Check(input.BlocksInput(10) && !input.BlocksInput(11) && inventory.isActiveAndEnabled,
+            "the raycaster is ready for next frame even if EventSystem updates before the plugin");
+        var other = new GameObject("Another selected control");
+        events.SetSelectedGameObject(other);
+        input.Update(11);
+        Check(!input.BlocksInput(11) && inventory.isActiveAndEnabled && events.currentSelectedGameObject == other,
+            "the next frame must restore inventory clicks and keep any unrelated selection");
+    }
+
+    private static void ModalResetAndReopen()
+    {
+        var (input, inventory, _, amount) = Modal();
+        var events = EventSystem.current!;
+        input.Open();
+        events.SetSelectedGameObject(amount);
+        events.alreadySelecting = true;
+        input.Dismiss(10);
+        Check(events.currentSelectedGameObject == amount, "do not interrupt an in-progress EventSystem selection");
+        events.alreadySelecting = false;
+        input.Update(10);
+        Check(events.currentSelectedGameObject == null && !inventory.enabled, "retry selection cleanup without releasing clicks early");
+        input.Open();
+        input.EndInputFrame(10);
+        input.Update(11);
+        Check(input.IsOpen && !inventory.enabled, "the old dismissal must not release a reopened modal");
+        input.Reset(12);
+        Check(!input.BlocksInput(12) && inventory.enabled, "panel teardown releases the original raycaster immediately");
+        inventory.enabled = false;
+        input.Open();
+        input.Reset(13);
+        Check(!input.BlocksInput(13) && !inventory.enabled, "do not enable a raycaster disabled by someone else before open");
     }
 
     private static bool IsHidden(GameObject menu)

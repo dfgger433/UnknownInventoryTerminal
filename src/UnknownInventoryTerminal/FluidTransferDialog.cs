@@ -12,6 +12,7 @@ namespace UnknownInventoryTerminal
     {
         private const int Width = 124, Inset = 10, SliderTop = 39;
         private readonly Ae2TerminalSkin _skin;
+        private readonly TerminalModalInput _input;
         private readonly RectTransform _root, _amountViewport, _lane;
         private readonly Image _frame, _amountFace, _railLeft, _railMiddle, _railRight, _thumb;
         private readonly TextMeshProUGUI _title, _amountText, _limit;
@@ -21,23 +22,17 @@ namespace UnknownInventoryTerminal
         private readonly Selectable[] _tabOrder;
         private readonly Vector2Int _thumbSize, _railSize;
         private readonly bool _hasSliderArt;
-        private int _maximumMl, _scale = 1, _closedFrame = -1;
-        private bool _focusPending, _submitPending, _amountFocused;
+        private int _maximumMl, _scale = 1;
+        private bool _submitPending, _amountFocused;
         private Vector2Int _screenSize;
         private Action<int>? _confirm;
 
-        internal FluidTransferDialog(Ae2TerminalSkin skin, Transform parent)
+        internal FluidTransferDialog(Ae2TerminalSkin skin, GraphicRaycaster inventoryRaycaster)
         {
             _skin = skin;
-            var root = NativeFlatInventoryPanel.Add(parent, "UIT.FluidTransferDialog", typeof(Canvas), typeof(GraphicRaycaster));
-            root.SetActive(false);
+            var root = TerminalCanvasOrder.CreateModalLayer(inventoryRaycaster.gameObject.layer);
             _root = root.GetComponent<RectTransform>();
-            NativeFlatInventoryPanel.Stretch(_root, Vector2.zero, Vector2.zero);
-            var canvas = root.GetComponent<Canvas>();
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = TerminalCanvasOrder.ControlHint;
-            canvas.overridePixelPerfect = true;
-            canvas.pixelPerfect = true;
+            _input = new TerminalModalInput(root, inventoryRaycaster);
 
             var backdrop = Picture(_root, "Modal backdrop");
             backdrop.color = new Color32(48, 50, 58, 135);
@@ -47,14 +42,17 @@ namespace UnknownInventoryTerminal
             _title = Label(_frame.transform, "Transfer title", TextAlignmentOptions.Left);
             _title.fontStyle = FontStyles.Bold;
 
-            _amountFace = Picture(_frame.transform, "Millilitre input");
-            MakeHitSurface(_amountFace);
-            _amountViewport = NativeFlatInventoryPanel.Add(_amountFace.transform, "Input viewport", typeof(RectMask2D))
+            var amountHit = Picture(_frame.transform, "Millilitre input");
+            amountHit.color = Color.clear;
+            MakeHitSurface(amountHit);
+            _amountFace = Picture(amountHit.transform, "Input face");
+            NativeFlatInventoryPanel.Stretch(_amountFace.rectTransform, Vector2.zero, Vector2.zero);
+            _amountViewport = NativeFlatInventoryPanel.Add(amountHit.transform, "Input viewport", typeof(RectMask2D))
                 .GetComponent<RectTransform>();
             _amountText = Label(_amountViewport, "Amount", TextAlignmentOptions.Right);
             NativeFlatInventoryPanel.Stretch(_amountText.rectTransform, Vector2.zero, Vector2.zero);
             _amountText.overflowMode = TextOverflowModes.Overflow;
-            _amount = _amountFace.gameObject.AddComponent<TMP_InputField>();
+            _amount = amountHit.gameObject.AddComponent<TMP_InputField>();
             _amount.textViewport = _amountViewport;
             _amount.textComponent = _amountText;
             _amount.lineType = TMP_InputField.LineType.SingleLine;
@@ -64,7 +62,10 @@ namespace UnknownInventoryTerminal
             _amount.onFocusSelectAll = true;
             _amount.selectionColor = new Color32(170, 216, 255, 200);
             _amount.transition = Selectable.Transition.None;
-            _amount.targetGraphic = _amountFace;
+            _amount.targetGraphic = amountHit;
+            // Keep every graphic that TMP creates under the viewport out of pointer hits,
+            // and never swap the sprite/mesh of the fixed hit target when focus changes.
+            _amountViewport.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
             // Validate the whole input instead of deleting punctuation from a paste ("1.5" must not become "15").
             _amount.onValueChanged.AddListener(_ => SyncAmount());
             _amount.onSubmit.AddListener(_ => _submitPending = IsOpen);
@@ -110,9 +111,8 @@ namespace UnknownInventoryTerminal
             foreach (var control in _tabOrder) control.navigation = new Navigation { mode = Navigation.Mode.Explicit };
         }
 
-        internal bool IsOpen => _root && _root.gameObject.activeInHierarchy;
-        // A release/keystroke that dismisses the modal still belongs to it for the rest of that frame.
-        internal bool BlocksInput => IsOpen || _closedFrame == Time.frameCount;
+        internal bool IsOpen => _input.IsOpen;
+        internal bool BlocksInput => _input.BlocksInput(Time.frameCount);
 
         internal bool Contains(GameObject target) => IsOpen && target && target.transform.IsChildOf(_root);
 
@@ -127,9 +127,7 @@ namespace UnknownInventoryTerminal
             _cancelButton.Caption.text = TerminalText.Get("fluidTransfer.cancel");
             _slider.gameObject.SetActive(_hasSliderArt && _maximumMl > 1);
             _amount.SetTextWithoutNotify(_maximumMl > 0 ? _maximumMl.ToString(CultureInfo.InvariantCulture) : "");
-            _focusPending = true;
-            _root.SetAsLastSibling();
-            _root.gameObject.SetActive(true);
+            _input.Open();
             _scale = Math.Max(1, scale);
             Layout();
             SyncAmount();
@@ -140,14 +138,24 @@ namespace UnknownInventoryTerminal
         internal void Hide()
         {
             _confirm = null;
-            _focusPending = _submitPending = false;
-            if (!_root || !_root.gameObject.activeSelf) return;
-            _closedFrame = Time.frameCount;
-            var events = EventSystem.current;
-            if (events && !events.alreadySelecting && events.currentSelectedGameObject is { } target && Contains(target))
-                events.SetSelectedGameObject(null);
-            _root.gameObject.SetActive(false);
+            _submitPending = false;
+            _input.Dismiss(Time.frameCount);
         }
+
+        internal void Reset()
+        {
+            Hide();
+            _input.Reset(Time.frameCount);
+        }
+
+        internal void Dispose()
+        {
+            Reset();
+            if (_root) UnityEngine.Object.Destroy(_root.gameObject);
+        }
+
+        internal void AdvanceInputFrame() => _input.Update(Time.frameCount);
+        internal void EndInputFrame() => _input.EndInputFrame(Time.frameCount);
 
         internal void SetScale(int scale)
         {
@@ -169,7 +177,6 @@ namespace UnknownInventoryTerminal
                 if (!IsOpen) return;
             }
             SetScale(_scale);
-            if (_focusPending) FocusAmount();
             if (Input.GetKeyDown(KeyCode.Tab)) MoveFocus(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
             if (_amountFocused != _amount.isFocused) PaintAmount();
         }
@@ -178,11 +185,8 @@ namespace UnknownInventoryTerminal
         {
             var events = EventSystem.current;
             if (!events || events.alreadySelecting) return;
-            _focusPending = false;
-            events.SetSelectedGameObject(_amount.gameObject);
-            _amount.ActivateInputField();
-            var caret = _amountViewport.GetComponentInChildren<TMP_SelectionCaret>();
-            if (caret) caret.raycastTarget = false;
+            if (events.currentSelectedGameObject == _amount.gameObject) _amount.ActivateInputField();
+            else events.SetSelectedGameObject(_amount.gameObject); // TMP's OnSelect requests activation.
         }
 
         private void MoveFocus(bool backwards)
@@ -249,7 +253,7 @@ namespace UnknownInventoryTerminal
             }
             Place(_title.rectTransform, Inset, 5, Width - 2 * Inset, 13);
             _title.fontSize = 9 * _scale;
-            Place(_amountFace.rectTransform, Inset, 23, 53, 12);
+            Place((RectTransform)_amount.transform, Inset, 23, 53, 12);
             NativeFlatInventoryPanel.Stretch(_amountViewport, new Vector2(3 * _scale, 0), new Vector2(-3 * _scale, 0));
             _amountText.fontSize = 8 * _scale;
             Place(_limit.rectTransform, 67, 23, Width - Inset - 67, 12);

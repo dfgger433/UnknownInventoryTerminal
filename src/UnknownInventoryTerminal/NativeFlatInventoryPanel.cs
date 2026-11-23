@@ -88,7 +88,7 @@ namespace UnknownInventoryTerminal
         internal void ShowFluidTransfer(int maximumMl, Action<int> confirm)
         {
             if (!_root || !_root!.activeInHierarchy) return;
-            FluidDialog ??= new FluidTransferDialog(_skin, _root.transform);
+            FluidDialog ??= new FluidTransferDialog(_skin, _root.GetComponent<GraphicRaycaster>());
             Chrome?.ReleaseSearchFocus();
             _itemTooltip?.Hide();
             _controlHint?.Hide();
@@ -294,7 +294,7 @@ namespace UnknownInventoryTerminal
 
         internal void SetVisible(bool visible, bool settingsOpen = false)
         {
-            if (!visible || settingsOpen) FluidDialog?.Hide();
+            if (!visible || settingsOpen) FluidDialog?.Reset();
             if (visible && settingsOpen)
             {
                 // Suspend the canvas without clearing the current search, group or scroll position.
@@ -343,6 +343,8 @@ namespace UnknownInventoryTerminal
         private void EnsureRoot()
         {
             if (_root) return;
+            FluidDialog?.Dispose();
+            FluidDialog = null;
             _root = new GameObject("UIT.NativeFlatInventory", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
             var uiLayer = LayerMask.NameToLayer("UI");
             if (uiLayer >= 0) _root.layer = uiLayer;
@@ -995,6 +997,8 @@ namespace UnknownInventoryTerminal
 
         public void Dispose()
         {
+            FluidDialog?.Dispose();
+            FluidDialog = null;
             if (_root) { _root!.SetActive(false); UnityEngine.Object.Destroy(_root); }
             _root = null;
             Chrome = null;

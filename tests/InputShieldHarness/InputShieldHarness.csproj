@@ -9,5 +9,6 @@
     <Compile Include="../../src/UnknownInventoryTerminal/InputShield.cs" Link="InputShield.cs" />
     <Compile Include="../../src/UnknownInventoryTerminal/TerminalHitSurface.cs" Link="TerminalHitSurface.cs" />
     <Compile Include="../../src/UnknownInventoryTerminal/TerminalCanvasOrder.cs" Link="TerminalCanvasOrder.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/TerminalModalInput.cs" Link="TerminalModalInput.cs" />
   </ItemGroup>
 </Project>

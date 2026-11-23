@@ -153,7 +153,7 @@ namespace UnityEngine
         internal void SetParent(Transform parent, bool worldPositionStays) => Parent = parent;
         internal bool IsChildOf(Transform parent)
         {
-            for (var node = Parent; node; node = node!.Parent)
+            for (Transform? node = this; node; node = node!.Parent)
                 if (node == parent) return true;
             return false;
         }
@@ -170,6 +170,7 @@ namespace UnityEngine
         internal int sortingOrder { get; set; }
         internal int sortingLayerID { get; set; }
         internal RenderMode renderMode { get; set; }
+        internal bool pixelPerfect { get; set; }
     }
 
     internal enum RenderMode { ScreenSpaceOverlay }
@@ -200,6 +201,19 @@ namespace UnityEngine.UI
 
 namespace UnityEngine.EventSystems
 {
+    internal sealed class EventSystem : UnityEngine.Object
+    {
+        internal static EventSystem? current;
+        internal bool alreadySelecting { get; set; }
+        internal UnityEngine.GameObject? currentSelectedGameObject { get; private set; }
+
+        internal void SetSelectedGameObject(UnityEngine.GameObject? target)
+        {
+            if (alreadySelecting) throw new InvalidOperationException("Cannot re-enter selection.");
+            currentSelectedGameObject = target;
+        }
+    }
+
     internal struct RaycastResult
     {
         internal UnityEngine.GameObject gameObject;

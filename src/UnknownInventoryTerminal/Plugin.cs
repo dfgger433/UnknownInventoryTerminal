@@ -67,6 +67,7 @@ namespace UnknownInventoryTerminal
         {
             if (_window == null) return;
             var fluidDialog = _nativePanel?.FluidDialog;
+            fluidDialog?.AdvanceInputFrame();
             if (IsVisible)
             {
                 if (!SessionValid()) Close();
@@ -97,12 +98,13 @@ namespace UnknownInventoryTerminal
                 _shield?.SetVisible(true);
                 if (_window.SettingsOpen && _sessionCamera is { } settingsCamera) CancelDrag(settingsCamera);
                 _nativePanel?.SetVisible(true, _window.SettingsOpen);
-                _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput || fluidDialog?.BlocksInput == true);
+                _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput);
             }
         }
 
         private void LateUpdate()
         {
+            _nativePanel?.FluidDialog?.EndInputFrame();
             if (IsVisible)
             {
                 if (!SessionValid()) Close();
