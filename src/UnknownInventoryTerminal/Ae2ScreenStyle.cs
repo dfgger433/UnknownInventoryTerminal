@@ -11,7 +11,7 @@ namespace UnknownInventoryTerminal
         Header, FirstRow, Row, LastRow, Bottom,
         Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
         Close, SortName, SortAmount, SortAscending, SortDescending, Back, Settings, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
-        SettingsBackground, SettingsToggleOff, SettingsToggleOn,
+        SettingsBackground, SettingsToggleOff, SettingsToggleOn, SettingsToggleOffHover, SettingsToggleOnHover,
         SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected,
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
@@ -66,8 +66,10 @@ namespace UnknownInventoryTerminal
 
     internal static class Ae2ToggleAppearance
     {
-        // Only the saved value selects a frame; hover never shifts the knob.
-        internal static Ae2Image Face(bool value) => value ? Ae2Image.SettingsToggleOn : Ae2Image.SettingsToggleOff;
+        // The atlas keeps separate on/off hover frames so hovering animates the knob without changing the value.
+        internal static Ae2Image Face(bool value, bool hovered) => value
+            ? hovered ? Ae2Image.SettingsToggleOnHover : Ae2Image.SettingsToggleOn
+            : hovered ? Ae2Image.SettingsToggleOffHover : Ae2Image.SettingsToggleOff;
     }
 
     internal static class Ae2ToolbarAppearance

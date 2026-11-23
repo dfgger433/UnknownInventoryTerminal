@@ -58,7 +58,7 @@ namespace UnknownInventoryTerminal
             var clicked = GUI.Button(bounds, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
             {
-                var face = Ae2ToggleAppearance.Face(value);
+                var face = Ae2ToggleAppearance.Face(value, bounds.Contains(Event.current.mousePosition));
                 var width = (int)bounds.width / scale;
                 var height = (int)bounds.height / scale;
                 var size = _skin.SourceSize(face) ?? new Vector2Int(Ae2SettingsLayout.ToggleWidth, Ae2SettingsLayout.ToggleHeight);

@@ -98,12 +98,13 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow(false, (int)Ae2Image.SettingsToggleOff, 28, 0)]
-    [DataRow(true, (int)Ae2Image.SettingsToggleOn, 40, 10)]
-    public void KeepDraggingSliderUsesStaticAtlasFramesOnTheLeft(bool value, int image, int y, int knobX)
+    [DataRow(false, false, (int)Ae2Image.SettingsToggleOff, 0, 28, 0)]
+    [DataRow(true, false, (int)Ae2Image.SettingsToggleOn, 0, 40, 10)]
+    [DataRow(false, true, (int)Ae2Image.SettingsToggleOffHover, 22, 28, 2)]
+    [DataRow(true, true, (int)Ae2Image.SettingsToggleOnHover, 22, 40, 8)]
+    public void KeepDraggingSliderUsesTheMatchingAtlasFrameAtNativeSize(bool value, bool hovered, int image, int x, int y, int knobX)
     {
-        const int x = 0;
-        var face = Ae2ToggleAppearance.Face(value);
+        var face = Ae2ToggleAppearance.Face(value, hovered);
         face.Should().Be((Ae2Image)image);
         ReadBundledStyle().TryGet(face, out var region).Should().BeTrue();
         (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be(("guis/checkbox.png", x, y, 22, 12));
