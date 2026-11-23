@@ -58,24 +58,17 @@ namespace UnknownInventoryTerminal
             var clicked = GUI.Button(bounds, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
             {
-                var hover = bounds.Contains(Event.current.mousePosition);
-                var offset = hover ? scale : 0;
+                var face = Ae2ToggleAppearance.Face(value, bounds.Contains(Event.current.mousePosition));
+                var width = (int)bounds.width / scale;
+                var height = (int)bounds.height / scale;
+                var size = _skin.SourceSize(face) ?? new Vector2Int(Ae2SettingsLayout.ToggleWidth, Ae2SettingsLayout.ToggleHeight);
                 var (switchX, switchY, switchWidth, switchHeight) = Ae2SettingsLayout.ToggleControlBounds(
-                    (int)bounds.width / scale, (int)bounds.height / scale, scale);
-                var track = new Rect(bounds.x + switchX, bounds.y + switchY + offset, switchWidth, switchHeight);
-                Fill(track, new Color32(48, 50, 58, 255));
-                Fill(new Rect(track.x + scale, track.y + scale, track.width - 2 * scale, track.height - 2 * scale),
-                    ColorFromArgb(Ae2ToggleAppearance.TrackColor(value, hover)));
-
-                var knob = new Rect(track.x + Ae2ToggleAppearance.KnobX(value) * scale, track.y + 2 * scale,
-                    Ae2SettingsLayout.ToggleKnobWidth * scale, 10 * scale);
-                Fill(knob, new Color32(180, 187, 199, 255));
-                Fill(new Rect(knob.x + scale, knob.y + scale, knob.width - 2 * scale, knob.height - 2 * scale),
-                    new Color32(242, 244, 248, 255));
+                    width, height, size.x, size.y, scale);
+                _skin.Draw(new Rect(bounds.x + switchX, bounds.y + switchY, switchWidth, switchHeight), face, Color.clear);
 
                 var (captionX, captionY, captionWidth, captionHeight) = Ae2SettingsLayout.ToggleCaptionBounds(
-                    (int)bounds.width / scale, (int)bounds.height / scale, scale);
-                var caption = new Rect(bounds.x + captionX, bounds.y + captionY + offset, captionWidth, captionHeight);
+                    width, height, size.x, scale);
+                var caption = new Rect(bounds.x + captionX, bounds.y + captionY, captionWidth, captionHeight);
                 DrawFittedText(caption, text, label, scale);
             }
             return clicked ? !value : value;
@@ -92,16 +85,5 @@ namespace UnknownInventoryTerminal
             }
             finally { label.fontSize = fontSize; }
         }
-
-        private static void Fill(Rect bounds, Color color)
-        {
-            var previous = GUI.color;
-            GUI.color = color;
-            GUI.DrawTexture(bounds, Texture2D.whiteTexture);
-            GUI.color = previous;
-        }
-
-        private static Color32 ColorFromArgb(uint color) => new Color32(
-            (byte)(color >> 16), (byte)(color >> 8), (byte)color, (byte)(color >> 24));
     }
 }

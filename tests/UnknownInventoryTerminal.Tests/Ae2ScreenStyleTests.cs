@@ -98,32 +98,36 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow(1)]
-    [DataRow(2)]
-    [DataRow(4)]
-    public void KeepDraggingSliderAndCaptionStayInsideTheirRow(int scale)
+    [DataRow(false, false, (int)Ae2Image.SettingsToggleOff, 0, 28, 0)]
+    [DataRow(true, false, (int)Ae2Image.SettingsToggleOn, 0, 40, 10)]
+    [DataRow(false, true, (int)Ae2Image.SettingsToggleOffHover, 22, 28, 2)]
+    [DataRow(true, true, (int)Ae2Image.SettingsToggleOnHover, 22, 40, 8)]
+    public void KeepDraggingSliderUsesTheMatchingAtlasFrameAtNativeSize(bool value, bool hovered, int image, int x, int y, int knobX)
     {
-        var control = Ae2SettingsLayout.ToggleControlBounds(Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.KeepDraggingHeight, scale);
-        var caption = Ae2SettingsLayout.ToggleCaptionBounds(Ae2SettingsLayout.FieldWidth, Ae2SettingsLayout.KeepDraggingHeight, scale);
+        var face = Ae2ToggleAppearance.Face(value, hovered);
+        face.Should().Be((Ae2Image)image);
+        ReadBundledStyle().TryGet(face, out var region).Should().BeTrue();
+        (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be(("guis/checkbox.png", x, y, 22, 12));
 
-        control.Should().Be(((Ae2SettingsLayout.FieldWidth - Ae2SettingsLayout.ToggleWidth - 2) * scale, 0,
-            Ae2SettingsLayout.ToggleWidth * scale, Ae2SettingsLayout.ToggleHeight * scale));
-        caption.X.Should().Be(4 * scale);
-        (caption.X + caption.Width).Should().BeLessThan(control.X, "the label must not collide with the switch");
-        (control.X + control.Width).Should().BeLessThanOrEqualTo(Ae2SettingsLayout.FieldWidth * scale);
-        caption.Height.Should().Be(Ae2SettingsLayout.KeepDraggingHeight * scale);
-    }
+        using var png = PngPixels.Read(TextureFilePath(region.Texture));
+        for (var px = 0; px < region.Width; px++)
+        {
+            png.Alpha(x + px, y).Should().Be(px >= knobX && px < knobX + 12 ? (byte)255 : (byte)0,
+                "only the knob protrudes above the track");
+            png.Alpha(x + px, y + region.Height - 1).Should().Be(255, "the full track reaches the last scanline");
+        }
 
-    [TestMethod]
-    public void KeepDraggingSliderKnobMovesBetweenBothEnds()
-    {
-        Ae2ToggleAppearance.KnobX(value: false).Should().Be(Ae2SettingsLayout.ToggleKnobInset);
-        Ae2ToggleAppearance.KnobX(value: true).Should().Be(
-            Ae2SettingsLayout.ToggleWidth - Ae2SettingsLayout.ToggleKnobInset - Ae2SettingsLayout.ToggleKnobWidth);
-        Ae2ToggleAppearance.TrackColor(value: false, hovered: false).Should().NotBe(
-            Ae2ToggleAppearance.TrackColor(value: true, hovered: false));
-        Ae2ToggleAppearance.TrackColor(value: false, hovered: true).Should().NotBe(
-            Ae2ToggleAppearance.TrackColor(value: false, hovered: false));
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        {
+            const int width = Ae2SettingsLayout.FieldWidth, height = Ae2SettingsLayout.KeepDraggingHeight;
+            var control = Ae2SettingsLayout.ToggleControlBounds(width, height, region.Width, region.Height, scale);
+            var caption = Ae2SettingsLayout.ToggleCaptionBounds(width, height, region.Width, scale);
+            control.Should().Be(((width - 24) * scale, scale, 22 * scale, 12 * scale));
+            caption.X.Should().Be(4 * scale);
+            (caption.X + caption.Width).Should().BeLessThan(control.X, "the label must not collide with the switch");
+            (control.Y + control.Height).Should().BeLessThan(height * scale);
+            caption.Height.Should().Be(height * scale);
+        }
     }
 
     [TestMethod]

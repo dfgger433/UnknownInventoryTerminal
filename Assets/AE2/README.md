@@ -11,7 +11,7 @@
 | [vertical_buttons_bg_3.png](textures/gui/sprites/vertical_buttons_bg_3.png) | 手绘接缝变体（21×26），当拖拽动作栏贴齐三行面板的底边时使用。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
-| [checkbox.png](textures/guis/checkbox.png) | 保留给独立开关控件的状态图。 |
+| [checkbox.png](textures/guis/checkbox.png) | 设置页「使用后保持拖动」的滑动开关图集。 |
 | [drop_down_list.png](textures/gui/sprites/drop_down_list.png) | 语言和容器摆放共用的手绘下拉图集，包含字段与选项的各状态，两列裁切均保留完整 112 px。 |
 | [big_scroller.png](textures/gui/sprites/big_scroller.png) / [big_scroller_disabled.png](textures/gui/sprites/big_scroller_disabled.png) | 原版 AE2 仓储终端的独立滑块（各 12×15），分别绑定 `thumb` 和 `thumbDisabled`。没有可滚动行时显示禁用贴图。 |
 | [transparent.png](textures/gui/sprites/transparent.png) | 隐藏原版 `InvButton` 的外框；物品图标、悬停和拖放仍由游戏控件处理。请保持全透明。 |
@@ -25,7 +25,7 @@
 | 下拉字段及列表项 | [drop_down_list.png](textures/gui/sprites/drop_down_list.png)，字段按左右列和状态行裁切，选项裁切见[界面描述](screens/terminals/terminal.json) | 同宽 112 px；字段 20 px 命中区，列表行 19 px，超出四行可滚轮翻动 |
 | 右上返回按钮 | [states.png](textures/guis/states.png)，底图源尺寸 18×20；悬停为 18×19 | 原尺寸绘制，悬停下移 1 px |
 | 左侧设置图标 | [states.png](textures/guis/states.png)，`[32, 48, 16, 16]` | 16×16 裁切，按可见像素居中 |
-| 独立开关 | [checkbox.png](textures/guis/checkbox.png)，未选 `[29,1,12,12]`、已选 `[29,16,12,11]`，悬停两态分别为 `[43,2,12,11]`、`[43,16,12,11]` | 按源像素尺寸绘制，文字在右侧 |
+| 使用后保持拖动 | [checkbox.png](textures/guis/checkbox.png) 下半部：关闭 `[0,28,22,12]`、开启 `[0,40,22,12]`，对应的悬停态分别为 `[22,28,22,12]`、`[22,40,22,12]` | 原尺寸 22×12，靠右居中，文字在左，整行可点击 |
 
 制作背景时，把角和边框画在最外侧 4 px 内。九宫格保留四角，沿边长方向缩放边条，并缩放中间填充。显示尺寸随终端倍率整体放大。
 

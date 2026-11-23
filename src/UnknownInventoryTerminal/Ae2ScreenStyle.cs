@@ -33,17 +33,15 @@ namespace UnknownInventoryTerminal
         internal const int FieldX = 6, FieldWidth = 112, FieldHeight = 20;
         internal const int LanguageY = 27, PlacementY = 58, LabelHeight = 11, OptionHeight = 19, MaxVisibleOptions = 4;
         internal const int KeepDraggingHeight = 14;
-        internal const int ToggleWidth = 28, ToggleHeight = 14, ToggleKnobWidth = 8, ToggleKnobInset = 2;
+        internal const int ToggleWidth = 22, ToggleHeight = 12;
 
         internal static int KeepDraggingY(int visibleOptions) => PlacementY + FieldHeight + 5 + visibleOptions * OptionHeight;
 
-        internal static (int X, int Y, int Width, int Height) ToggleControlBounds(int width, int height, int scale) =>
-            ((width - ToggleWidth - 2) * scale, ((height - ToggleHeight) / 2) * scale,
-                ToggleWidth * scale, ToggleHeight * scale);
+        internal static (int X, int Y, int Width, int Height) ToggleControlBounds(int width, int height, int spriteWidth, int spriteHeight, int scale) =>
+            ((width - spriteWidth - 2) * scale, (height - spriteHeight) * scale / 2, spriteWidth * scale, spriteHeight * scale);
 
-        internal static (int X, int Y, int Width, int Height) ToggleCaptionBounds(int width, int height, int scale) =>
-            (4 * scale, ((height - Math.Min(height, ToggleHeight)) / 2) * scale,
-                (width - ToggleWidth - 10) * scale, Math.Min(height, ToggleHeight) * scale);
+        internal static (int X, int Y, int Width, int Height) ToggleCaptionBounds(int width, int height, int spriteWidth, int scale) =>
+            (4 * scale, 0, (width - spriteWidth - 10) * scale, height * scale);
 
         internal static int FieldY(bool placement, int languageRows) =>
             placement ? PlacementY + languageRows * OptionHeight : LanguageY;
@@ -68,13 +66,9 @@ namespace UnknownInventoryTerminal
 
     internal static class Ae2ToggleAppearance
     {
-        internal static uint TrackColor(bool value, bool hovered) => value
-            ? hovered ? 0xFF48A889 : 0xFF358A70
-            : hovered ? 0xFF737D8A : 0xFF606975;
-
-        internal static int KnobX(bool value) => value
-            ? Ae2SettingsLayout.ToggleWidth - Ae2SettingsLayout.ToggleKnobInset - Ae2SettingsLayout.ToggleKnobWidth
-            : Ae2SettingsLayout.ToggleKnobInset;
+        internal static Ae2Image Face(bool value, bool hovered) => value
+            ? hovered ? Ae2Image.SettingsToggleOnHover : Ae2Image.SettingsToggleOn
+            : hovered ? Ae2Image.SettingsToggleOffHover : Ae2Image.SettingsToggleOff;
     }
 
     internal static class Ae2ToolbarAppearance
