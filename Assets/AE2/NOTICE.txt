@@ -12,7 +12,8 @@ Original files: guis/text_field.png, guis/cpu_selector.png,
 gui/sprites/button.png, gui/sprites/button_highlighted.png,
 gui/sprites/big_scroller.png,
 gui/sprites/big_scroller_disabled.png, gui/sprites/vertical_buttons_bg.png.
-guis/terminal.png and guis/states.png contain local edits to AE2 artwork.
+guis/terminal.png, guis/states.png and gui/sprites/vertical_buttons_bg_3.png
+contain local edits to AE2 artwork.
 gui/sprites/drop_down_list.png was supplied by the terminal project operator.
 The local transparent.png is not an AE2 asset. The mod slices, scales and
 rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to

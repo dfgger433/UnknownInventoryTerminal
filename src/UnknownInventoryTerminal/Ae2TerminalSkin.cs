@@ -83,7 +83,7 @@ namespace UnknownInventoryTerminal
                     region.Height != Ae2ScreenStyle.BoardPartHeight(id) || region.Border != 0))
                     _log.LogWarning("AE2 terminal " + id + " must be " + Ae2TerminalLayout.BoardWidth + "x" +
                         Ae2ScreenStyle.BoardPartHeight(id) + " without a slice border; it is drawn as-is.");
-                else if (id == Ae2Image.VerticalButtonsBg && (region.Width != Ae2TerminalLayout.ButtonBarWidth ||
+                else if (Ae2ButtonBarAppearance.IsBackground(id) && (region.Width != Ae2TerminalLayout.ButtonBarWidth ||
                     region.Height <= Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder))
                     _log.LogWarning("AE2 vertical button background must be " + Ae2TerminalLayout.ButtonBarWidth +
                         " px wide and taller than its borders.");

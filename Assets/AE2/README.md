@@ -7,7 +7,8 @@
 | [terminal.json](screens/terminals/terminal.json) | `terminalStyle` 按 AE2 `base_terminal.json` 的方式把底板分为 `header`、`firstRow`、`row`、`lastRow`、`bottom` 五段；`images` 指定搜索、按钮状态、图标、滑块和左侧按钮栏背景。 |
 | [terminal.png](textures/guis/terminal.png) | 终端底板（3 行时为 141×170）：窗框、仓储格、滚动槽、3 行装备格和 1 行主物品栏。 |
 | [states.png](textures/guis/states.png) | 手绘图集：按钮底图（普通、聚焦、悬停）及关闭、排序、设置（x=32/48，y=48）、返回、终端风格（短/中等/长/最长，y=112）等图标。 |
-| [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），垫在左侧工具栏按钮下方。 |
+| [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），用于工具栏和未贴齐面板底边的拖拽动作栏。 |
+| [vertical_buttons_bg_3.png](textures/gui/sprites/vertical_buttons_bg_3.png) | 手绘接缝变体（21×26），当拖拽动作栏贴齐三行面板的底边时使用。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
 | [checkbox.png](textures/guis/checkbox.png) | 保留给独立开关控件的状态图。 |

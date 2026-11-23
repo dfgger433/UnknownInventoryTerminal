@@ -323,9 +323,12 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    public void VerticalButtonBackgroundMatchesAe2NineSliceBorders()
+    [DataRow((int)Ae2Image.VerticalButtonsBg)]
+    [DataRow((int)Ae2Image.VerticalButtonsBgBottom)]
+    public void VerticalButtonBackgroundMatchesAe2NineSliceBorders(int image)
     {
-        using var bitmap = PngPixels.Read(TextureFilePath("gui/sprites/vertical_buttons_bg.png"));
+        ReadBundledStyle().TryGet((Ae2Image)image, out var region).Should().BeTrue();
+        using var bitmap = PngPixels.Read(TextureFilePath(region.Texture));
         bitmap.Width.Should().Be(Ae2TerminalLayout.ButtonBarWidth);
         bitmap.Height.Should().BeGreaterThan(Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder);
         // Between AE2's 2-row top and 4-row bottom border, every row is the same, so stretching it keeps the art.
@@ -368,6 +371,34 @@ public sealed class Ae2ScreenStyleTests
         ComposedPixel(firstBoardColumn).Should().Be(bar.Pixel(0, 0), "the outer outline connects to the board");
         if (flushWithBoardTop) ComposedPixel(bevel).Should().Be(board.Pixel(1, 0), "the toolbar extends the board's top outline");
         else ComposedPixel(bevel).Should().Be(board.Pixel(1, boardY), "the lower action bar leaves the board's light bevel visible");
+    }
+
+    [TestMethod]
+    [DataRow((int)TerminalHeight.Small, true, true, true, (int)Ae2Image.VerticalButtonsBgBottom)]
+    [DataRow((int)TerminalHeight.Small, false, false, true, (int)Ae2Image.VerticalButtonsBgBottom)]
+    [DataRow((int)TerminalHeight.Small, true, true, false, (int)Ae2Image.VerticalButtonsBg)]
+    [DataRow((int)TerminalHeight.Medium, true, true, true, (int)Ae2Image.VerticalButtonsBg)]
+    public void DragButtonBarUsesTheHandDrawnEndCapOnlyWhenFlushWithTheBoard(int style, bool drain, bool use, bool pin, int expectedArt)
+    {
+        var layout = new Ae2TerminalLayout(1920, 1080, (TerminalHeight)style);
+        var (_, top, _, height) = layout.DragActionBackgroundBounds(drain, use, pin);
+        var art = Ae2ButtonBarAppearance.DragBackground(layout, top, height);
+        art.Should().Be((Ae2Image)expectedArt);
+        if (art != Ae2Image.VerticalButtonsBgBottom) return;
+
+        ReadBundledStyle().TryGet(art, out var region).Should().BeTrue();
+        using var bar = PngPixels.Read(TextureFilePath(region.Texture));
+        using var board = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        // These patches are never stretched. Compare the final column of the rail to the adjacent board pixels.
+        var (_, topWidth, _) = Ae2TerminalLayout.ButtonBarPatch(region.Height, 0, flushWithBoardTop: false);
+        bar.Pixel(region.X + topWidth - 1, region.Y).Should().Be(board.Pixel(0, top / layout.Scale));
+        var patch = Ae2TerminalLayout.ButtonBarPatchCount - 1;
+        var (sourceY, width, rows) = Ae2TerminalLayout.ButtonBarPatch(region.Height, patch, flushWithBoardTop: false);
+        var (destY, _, _) = Ae2TerminalLayout.ButtonBarPatch(height / layout.Scale, patch, flushWithBoardTop: false);
+        for (var row = 0; row < rows; row++)
+            bar.Pixel(region.X + width - 1, region.Y + sourceY + row)
+                .Should().Be(board.Pixel(Ae2TerminalLayout.ButtonBarJoinWidth, top / layout.Scale + destY + row),
+                    $"the bottom bevel and outline must be continuous at row {row}");
     }
 
     [TestMethod]
@@ -503,7 +534,7 @@ public sealed class Ae2ScreenStyleTests
         return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
     }
 
-    // Minimal non-interlaced 8-bit PNG reader (palette or RGBA) for checking the shipped board art.
+    // Minimal non-interlaced PNG reader (4/8-bit palette or 8-bit RGBA) for checking the shipped board art.
     private sealed class PngPixels : IDisposable
     {
         private readonly int _width;
@@ -514,7 +545,7 @@ public sealed class Ae2ScreenStyleTests
         internal static PngPixels Read(string path)
         {
             var bytes = File.ReadAllBytes(path);
-            int width = 0, height = 0, colorType = 0;
+            int width = 0, height = 0, colorType = 0, bitDepth = 0;
             byte[] palette = Array.Empty<byte>(), alpha = Array.Empty<byte>();
             using var idat = new MemoryStream();
             for (var offset = 8; offset < bytes.Length;)
@@ -526,7 +557,7 @@ public sealed class Ae2ScreenStyleTests
                 {
                     width = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
                     height = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
-                    data[8].Should().Be(8, "the test reader supports 8-bit channels");
+                    bitDepth = data[8];
                     colorType = data[9];
                     data[12].Should().Be(0, "the test reader does not support interlacing");
                 }
@@ -535,14 +566,14 @@ public sealed class Ae2ScreenStyleTests
                 else if (type == "IDAT") idat.Write(data);
                 offset += 12 + length;
             }
-            colorType.Should().BeOneOf(new[] { 3, 6 }, "terminal.png is a palette or RGBA image");
-            var channels = colorType == 3 ? 1 : 4;
+            (colorType, bitDepth).Should().BeOneOf(new[] { (3, 4), (3, 8), (6, 8) });
+            var filterBytesPerPixel = colorType == 3 ? 1 : 4;
             idat.Position = 0;
             using var inflater = new System.IO.Compression.ZLibStream(idat, System.IO.Compression.CompressionMode.Decompress);
             using var raw = new MemoryStream();
             inflater.CopyTo(raw);
             var source = raw.ToArray();
-            var stride = width * channels;
+            var stride = (width * filterBytesPerPixel * bitDepth + 7) / 8;
             var previous = new byte[stride];
             var rows = new byte[height][];
             for (var y = 0; y < height; y++)
@@ -551,7 +582,8 @@ public sealed class Ae2ScreenStyleTests
                 var line = source.AsSpan(y * (stride + 1) + 1, stride).ToArray();
                 for (var i = 0; i < stride; i++)
                 {
-                    int left = i >= channels ? line[i - channels] : 0, up = previous[i], corner = i >= channels ? previous[i - channels] : 0;
+                    int left = i >= filterBytesPerPixel ? line[i - filterBytesPerPixel] : 0, up = previous[i];
+                    var corner = i >= filterBytesPerPixel ? previous[i - filterBytesPerPixel] : 0;
                     line[i] = (byte)(line[i] + filter switch
                     {
                         1 => left,
@@ -565,10 +597,10 @@ public sealed class Ae2ScreenStyleTests
                 var rgba = new byte[width * 4];
                 for (var x = 0; x < width; x++)
                 {
-                    if (channels == 4) Array.Copy(line, x * 4, rgba, x * 4, 4);
+                    if (colorType == 6) Array.Copy(line, x * 4, rgba, x * 4, 4);
                     else
                     {
-                        var index = line[x];
+                        var index = bitDepth == 4 ? (line[x / 2] >> (x % 2 == 0 ? 4 : 0)) & 0xF : line[x];
                         Array.Copy(palette, index * 3, rgba, x * 4, 3);
                         rgba[x * 4 + 3] = index < alpha.Length ? alpha[index] : (byte)255;
                     }

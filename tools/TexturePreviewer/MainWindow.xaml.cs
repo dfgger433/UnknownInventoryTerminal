@@ -124,8 +124,9 @@ public partial class MainWindow : Window
                     if (!region.Fits(bitmap.PixelWidth, bitmap.PixelHeight)) warnings.Add($"{name}: 裁切 [{region.X}, {region.Y}, {region.Width}, {region.Height}] 超出 {bitmap.PixelWidth}×{bitmap.PixelHeight}");
                     if (Ae2ScreenStyle.IsBoardPart(id) && (region.Width != Ae2TerminalLayout.BoardWidth || region.Height != Ae2ScreenStyle.BoardPartHeight(id)))
                         warnings.Add($"{name}: 底板分段须为 {Ae2TerminalLayout.BoardWidth}×{Ae2ScreenStyle.BoardPartHeight(id)}，游戏内不会拉伸它");
-                    if (id == Ae2Image.VerticalButtonsBg && region.Width != Ae2TerminalLayout.ButtonBarWidth)
-                        warnings.Add($"{name}: 按钮栏背景须为 {Ae2TerminalLayout.ButtonBarWidth} 像素宽");
+                    if (Ae2ButtonBarAppearance.IsBackground(id) && (region.Width != Ae2TerminalLayout.ButtonBarWidth ||
+                        region.Height <= Ae2TerminalLayout.ButtonBarTopBorder + Ae2TerminalLayout.ButtonBarBottomBorder))
+                        warnings.Add($"{name}: 按钮栏背景须为 {Ae2TerminalLayout.ButtonBarWidth} 像素宽，且高度须超过上下边框总高");
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or FileFormatException or ArgumentException)
                 {

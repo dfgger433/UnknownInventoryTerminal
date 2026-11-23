@@ -97,9 +97,12 @@ namespace UnknownInventoryTerminal
         // board can fit all three action faces, with the same bounds regardless of eligibility.
         internal (int X, int Y, int Width, int Height) DragActionBounds(TerminalDragAction action)
         {
-            var y = Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - 2 * ToolbarPitch - ButtonHeight) / 2,
-                ButtonBarY + ButtonBarHeight(ToolbarButtons) + 5) + (int)action * ToolbarPitch;
-            return (ToolbarX * Scale, y * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
+            var firstY = Rows == MinRows
+                // Align the full action rail's bottom border with the bottom of the three-row board.
+                ? BoardHeight - ButtonBarHeight((int)TerminalDragAction.Pin + 1) + ButtonBarInsetY
+                : Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - 2 * ToolbarPitch - ButtonHeight) / 2,
+                    ButtonBarY + ButtonBarHeight(ToolbarButtons) + 5);
+            return (ToolbarX * Scale, (firstY + (int)action * ToolbarPitch) * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
         }
 
         internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(bool drain, bool use, bool pin = false)

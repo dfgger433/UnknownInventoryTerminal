@@ -92,6 +92,7 @@ namespace UnknownInventoryTerminal
         private TerminalDragActionTarget? _drainAction, _useAction, _pinAction;
         private RectTransform? _actionBar, _actionBarBackground;
         private Image[] _actionBarParts = null!;
+        private Ae2Image _actionBarArt = Ae2Image.VerticalButtonsBg;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
         private Rect _bounds, _windowBounds, _scrollTrackBounds;
@@ -351,8 +352,8 @@ namespace UnknownInventoryTerminal
             _buttonBar = Add(_root.transform, "AE2 vertical button bar").GetComponent<RectTransform>();
             Position(_buttonBar, new Rect(_windowBounds.position, Vector2.zero));
             // AE2's sprite metadata slices it vertically: 2 top rows and 4 bottom rows stay fixed, the middle stretches.
-            var barSize = _skin.SourceSize(Ae2Image.VerticalButtonsBg);
-            _toolbarParts = CreateBarParts(_buttonBar, barSize?.y ?? 0, flushWithBoardTop: true);
+            _toolbarParts = CreateBarParts(_buttonBar);
+            ApplyBarArt(_toolbarParts, Ae2Image.VerticalButtonsBg, flushWithBoardTop: true);
 
             var panel = Add(_root.transform, "AE2 storage", typeof(Image), typeof(GridWheel));
             _panel = panel.GetComponent<RectTransform>();
@@ -427,7 +428,8 @@ namespace UnknownInventoryTerminal
             _actionBar = Add(_root.transform, "AE2 drag action controls").GetComponent<RectTransform>();
             // Both rails composite over the board and below the inventory cells.
             _actionBarBackground = Add(_buttonBar, "AE2 drag action rail").GetComponent<RectTransform>();
-            _actionBarParts = CreateBarParts(_actionBarBackground, barSize?.y ?? 0, flushWithBoardTop: false);
+            _actionBarParts = CreateBarParts(_actionBarBackground);
+            ApplyBarArt(_actionBarParts, _actionBarArt = Ae2Image.VerticalButtonsBg, flushWithBoardTop: false);
             _drainAction = CreateDragAction(TerminalDragAction.Drain, Ae2Image.DragDrain);
             _useAction = CreateDragAction(TerminalDragAction.Use, Ae2Image.DragUse);
             _pinAction = CreateDragAction(TerminalDragAction.Pin, Ae2Image.DragPin);
@@ -575,6 +577,12 @@ namespace UnknownInventoryTerminal
             var (x, y, width, height) = _layout.DragActionBackgroundBounds(drain, use, pin);
             Position(_actionBar!, new Rect(_windowBounds.x + x, _windowBounds.y + y, width, height));
             Position(_actionBarBackground!, new Rect(x, y, width, height));
+            var art = Ae2ButtonBarAppearance.DragBackground(_layout, y, height);
+            if (art != _actionBarArt)
+            {
+                _actionBarArt = art;
+                ApplyBarArt(_actionBarParts, art, flushWithBoardTop: false);
+            }
             LayoutBarParts(_actionBarParts, 0, 0, height / scale, scale, flushWithBoardTop: false);
             _actionBarBackground!.gameObject.SetActive(true);
             _pinAction!.IconArt = _pins.Contains(item!) ? Ae2Image.DragUnpin : Ae2Image.DragPin;
@@ -671,20 +679,35 @@ namespace UnknownInventoryTerminal
             }
         }
 
-        private Image[] CreateBarParts(RectTransform parent, int height, bool flushWithBoardTop)
+        private static Image[] CreateBarParts(RectTransform parent)
         {
             var parts = new Image[Ae2TerminalLayout.ButtonBarPatchCount];
             for (var i = 0; i < parts.Length; i++)
             {
-                var (y, width, rows) = Ae2TerminalLayout.ButtonBarPatch(height, i, flushWithBoardTop);
                 var image = Add(parent, "Button bar part " + i, typeof(Image)).GetComponent<Image>();
                 image.raycastTarget = false;
-                image.sprite = _skin.GetRows(Ae2Image.VerticalButtonsBg, y, width, rows);
                 image.type = Image.Type.Simple;
-                image.color = image.sprite ? Color.white : Color.clear;
                 parts[i] = image;
             }
             return parts;
+        }
+
+        private void ApplyBarArt(Image[] parts, Ae2Image art, bool flushWithBoardTop)
+        {
+            // An older or customized skin may not ship the bottom-joining sprite.
+            var size = _skin.SourceSize(art);
+            if (size == null && art == Ae2Image.VerticalButtonsBgBottom)
+            {
+                art = Ae2Image.VerticalButtonsBg;
+                size = _skin.SourceSize(art);
+            }
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var (y, width, rows) = Ae2TerminalLayout.ButtonBarPatch(size?.y ?? 0, i, flushWithBoardTop);
+                var part = parts[i];
+                part.sprite = size.HasValue ? _skin.GetRows(art, y, width, rows) : null;
+                part.color = part.sprite ? Color.white : Color.clear;
+            }
         }
 
         private void MoveToRow(int row)

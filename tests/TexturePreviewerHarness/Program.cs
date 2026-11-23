@@ -33,6 +33,7 @@ internal static class Program
             viewport.Height = 96;
             CheckSelection(window, regions, viewport, "Thumb", Expected(style, UnknownInventoryTerminal.Ae2Image.Thumb), 12, 15);
             CheckSelection(window, regions, viewport, "ThumbDisabled", Expected(style, UnknownInventoryTerminal.Ae2Image.ThumbDisabled), 12, 15);
+            CheckSelection(window, regions, viewport, "VerticalButtonsBgBottom", Expected(style, UnknownInventoryTerminal.Ae2Image.VerticalButtonsBgBottom), 21, 26);
             viewport.ClearValue(FrameworkElement.HeightProperty);
             viewport.Width = 100;
             CheckSelection(window, regions, viewport, "Bottom", Expected(style, UnknownInventoryTerminal.Ae2Image.Bottom));

@@ -139,6 +139,32 @@ public sealed class Ae2TerminalLayoutTests
     }
 
     [TestMethod]
+    [DataRow(320, 240, (int)TerminalHeight.Small, 1, 3, 101)]
+    [DataRow(640, 480, (int)TerminalHeight.Small, 2, 3, 101)]
+    [DataRow(768, 534, (int)TerminalHeight.Full, 3, 3, 101)]
+    [DataRow(1280, 720, (int)TerminalHeight.Full, 4, 3, 101)]
+    [DataRow(1920, 1080, (int)TerminalHeight.Medium, 4, 4, 99)]
+    [DataRow(1920, 1080, (int)TerminalHeight.Full, 4, 8, 170)]
+    public void PinActionRailJoinsTheBoardBottomOnlyAtMinimumHeight(int width, int height, int style, int scale, int rows, int drainY)
+    {
+        var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
+        layout.Scale.Should().Be(scale);
+        layout.Rows.Should().Be(rows);
+        layout.DragActionBounds(TerminalDragAction.Drain).Y.Should().Be(drainY * scale);
+        var pin = layout.DragActionBounds(TerminalDragAction.Pin);
+        // The hit targets do not jump when only some of the actions are eligible.
+        foreach (var (drain, use) in new[] { (true, true), (false, true), (true, false), (false, false) })
+        {
+            var bar = layout.DragActionBackgroundBounds(drain, use, pin: true);
+            (bar.Y + bar.Height - pin.Y - pin.Height).Should().Be(5 * scale);
+            if (rows == Ae2TerminalLayout.MinRows) (bar.Y + bar.Height).Should().Be(layout.Height);
+            else (bar.Y + bar.Height).Should().BeLessThan(layout.Height);
+        }
+        var withoutPin = layout.DragActionBackgroundBounds(drain: true, use: true);
+        (withoutPin.Y + withoutPin.Height).Should().BeLessThan(layout.Height);
+    }
+
+    [TestMethod]
     [DataRow(320, 240, (int)TerminalHeight.Small)]
     [DataRow(1281, 721, (int)TerminalHeight.Full)]
     public void DragActionHitsUseTheExactAbsoluteFaceRatherThanTheBackground(int width, int height, int style)
