@@ -70,12 +70,13 @@ namespace UnknownInventoryTerminal
             HasSnapshot = false;
         }
 
-        internal void Update()
+        internal void Update(bool modalOwnsInput)
         {
             if (!Visible) return;
             if (_closeRequested) return;
             FitToScreen();
-            UpdateButtons();
+            if (modalOwnsInput) _buttons.Reset();
+            else UpdateButtons();
             if (_closeRequested || SettingsOpen) return;
             ConfigureNativePanel();
             if (Time.unscaledTime >= _nextRefresh) Refresh();

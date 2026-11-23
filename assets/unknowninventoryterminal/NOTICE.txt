@@ -21,3 +21,17 @@ The local transparent.png is not an AE2 asset. The mod slices, scales and
 rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to
 the same CC BY-NC-SA 3.0 terms. Do not use them commercially without permission.
 No Minecraft or Applied Energistics 2 runtime or source code is bundled.
+
+Modernity-GTNH-UI fluid slider textures
+
+Credit: Modernity-GTNH-UI contributors (CreativeCore GUI textures added by WanQueen).
+Texture history: https://github.com/ModernityGTNH/Modernity-GTNH-UI/commit/12f56bb47098643843f2b62560892957745dbf33
+Source: https://github.com/ModernityGTNH/Modernity-GTNH-UI/tree/2ab52b96da3d81419fbd7b99ed941e301fda9298/assets/creativecore/textures/gui
+Original files: SliderRail.png and Slider.png, copied byte-for-byte as
+textures/creativecore/textures/gui/sliderrail.png and slider.png.
+
+The upstream README states CC BY-NC-SA 3.0, while the upstream LICENSE.txt
+contains the CC BY-NC-SA 4.0 International text. This discrepancy is retained
+and not resolved here; these assets retain the upstream noncommercial and
+share-alike terms. See licenses/modernity/LICENSE.txt for the unmodified
+upstream license text. This notice makes no statement about the license of the project as a whole.

@@ -53,6 +53,10 @@
     "dragUnpin": { "texture": "unknowninventoryterminal:textures/guis/states.png", "srcRect": [69, 20, 6, 9] },
     "pinnedRow": { "texture": "unknowninventoryterminal:textures/guis/terminal.png", "srcRect": [0, 204, 108, 18] },
     "pinnedRowGutter": { "texture": "unknowninventoryterminal:textures/guis/terminal.png", "srcRect": [115, 17, 1, 1] },
-    "scrollGrooveTop": { "texture": "unknowninventoryterminal:textures/guis/terminal.png", "srcRect": [124, 17, 6, 1] }
+    "scrollGrooveTop": { "texture": "unknowninventoryterminal:textures/guis/terminal.png", "srcRect": [124, 17, 6, 1] },
+    "fluidRailLeft": { "texture": "unknowninventoryterminal:textures/creativecore/textures/gui/sliderrail.png", "srcRect": [1, 7, 1, 4] },
+    "fluidRailMiddle": { "texture": "unknowninventoryterminal:textures/creativecore/textures/gui/sliderrail.png", "srcRect": [2, 7, 1, 4] },
+    "fluidRailRight": { "texture": "unknowninventoryterminal:textures/creativecore/textures/gui/sliderrail.png", "srcRect": [80, 7, 1, 4] },
+    "fluidThumb": { "texture": "unknowninventoryterminal:textures/creativecore/textures/gui/slider.png", "srcRect": [0, 0, 5, 18] }
   }
 }

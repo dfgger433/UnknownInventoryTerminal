@@ -14,6 +14,7 @@ $files = @(
     (Join-Path $langSubdir 'en.json'),
     (Join-Path $langSubdir 'zh-CN.json'),
     (Join-Path $assetSubdir 'NOTICE.txt'),
+    (Join-Path $assetSubdir 'licenses\modernity\LICENSE.txt'),
     (Join-Path $assetSubdir 'screens\terminals\terminal.json'),
     (Join-Path $assetSubdir 'textures\guis\terminal.png'),
     (Join-Path $assetSubdir 'textures\guis\states.png'),
@@ -29,7 +30,9 @@ $files = @(
     (Join-Path $assetSubdir 'textures\gui\sprites\transparent.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg_2.png'),
-    (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg_3.png')
+    (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg_3.png'),
+    (Join-Path $assetSubdir 'textures\creativecore\textures\gui\sliderrail.png'),
+    (Join-Path $assetSubdir 'textures\creativecore\textures\gui\slider.png')
 )
 foreach ($file in $files) {
     if (!(Test-Path (Join-Path $sourceDir $file) -PathType Leaf)) { throw "Missing build artifact: $file. Run Build.ps1 first." }

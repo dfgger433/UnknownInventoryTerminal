@@ -83,6 +83,17 @@ namespace UnknownInventoryTerminal
         private TerminalItemTooltip? _itemTooltip;
         private TerminalControlHint? _controlHint;
         internal NativeTerminalChrome? Chrome { get; private set; }
+        internal FluidTransferDialog? FluidDialog { get; private set; }
+
+        internal void ShowFluidTransfer(int maximumMl, Action<int> confirm)
+        {
+            if (!_root || !_root!.activeInHierarchy) return;
+            FluidDialog ??= new FluidTransferDialog(_skin, _root.transform);
+            Chrome?.ReleaseSearchFocus();
+            _itemTooltip?.Hide();
+            _controlHint?.Hide();
+            FluidDialog.Show(maximumMl, confirm, _layout.Scale);
+        }
         private readonly List<RaycastResult> _hoverHits = new List<RaycastResult>();
         private PointerEventData? _hoverPointer;
         private EventSystem? _hoverEvents;
@@ -254,6 +265,7 @@ namespace UnknownInventoryTerminal
             var geometryChanged = _layout.Scale != layout.Scale || _layout.Rows != layout.Rows;
             var orderChanged = _byAmount != byAmount || _descending != descending;
             _layout = layout;
+            FluidDialog?.SetScale(layout.Scale);
             _byAmount = byAmount;
             _descending = descending;
             if (orderChanged) { _scrollRow = 0; _dirty = true; }
@@ -282,6 +294,7 @@ namespace UnknownInventoryTerminal
 
         internal void SetVisible(bool visible, bool settingsOpen = false)
         {
+            if (!visible || settingsOpen) FluidDialog?.Hide();
             if (visible && settingsOpen)
             {
                 // Suspend the canvas without clearing the current search, group or scroll position.

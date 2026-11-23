@@ -186,6 +186,68 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
+    public void ModernityFluidSliderAssetsMatchPinnedSourceAndCropContract()
+    {
+        var style = ReadBundledStyle();
+        var railPath = TextureFilePath("creativecore/textures/gui/sliderrail.png");
+        var thumbPath = TextureFilePath("creativecore/textures/gui/slider.png");
+        ReadPngDimensions(railPath).Should().Be((82, 18));
+        ReadPngDimensions(thumbPath).Should().Be((5, 18));
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(railPath)))
+            .Should().Be("E106B3436DCA078D64DD2EEE22D4C5D132D6002EB193141A852B216ABDE4F154");
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(thumbPath)))
+            .Should().Be("F80AC493277EF8793754724B1BE00C6096995A5DDFDB950CE68B3B9ADA9D66C4");
+
+        foreach (var (image, texture, x, y, width, height) in new[]
+        {
+            (Ae2Image.FluidRailLeft, "creativecore/textures/gui/sliderrail.png", 1, 7, 1, 4),
+            (Ae2Image.FluidRailMiddle, "creativecore/textures/gui/sliderrail.png", 2, 7, 1, 4),
+            (Ae2Image.FluidRailRight, "creativecore/textures/gui/sliderrail.png", 80, 7, 1, 4),
+            (Ae2Image.FluidThumb, "creativecore/textures/gui/slider.png", 0, 0, 5, 18)
+        })
+        {
+            style.TryGet(image, out var region).Should().BeTrue();
+            (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be((texture, x, y, width, height));
+            region.Fits(ReadPngDimensions(TextureFilePath(region.Texture)).Width,
+                ReadPngDimensions(TextureFilePath(region.Texture)).Height).Should().BeTrue();
+        }
+    }
+
+    [TestMethod]
+    public void ModernityLicenseIsPreservedVerbatimAndDiscrepancyIsDocumented()
+    {
+        var repository = FindRepositoryRoot(AppContext.BaseDirectory);
+        var licensePath = Path.Combine(repository, "assets", "unknowninventoryterminal", "licenses", "modernity", "LICENSE.txt");
+        File.Exists(licensePath).Should().BeTrue();
+        var licenseBytes = File.ReadAllBytes(licensePath);
+        licenseBytes.Length.Should().Be(20849);
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(licenseBytes))
+            .Should().Be("1349A4B6148492B44F629E64EED676612E234FE9A839E4F3B277C1482C8849F1");
+        Encoding.UTF8.GetString(licenseBytes).Should().StartWith("Attribution-NonCommercial-ShareAlike 4.0 International");
+
+        var notice = File.ReadAllText(Path.Combine(repository, "assets", "unknowninventoryterminal", "NOTICE.txt"));
+        notice.Should().Contain("CC BY-NC-SA 3.0").And.Contain("CC BY-NC-SA 4.0");
+        var normalizedNotice = System.Text.RegularExpressions.Regex.Replace(notice, @"\s+", " ");
+        normalizedNotice.Should().Contain("This notice makes no statement about the license of the project as a whole.");
+
+        var project = File.ReadAllText(Path.Combine(repository, "src", "UnknownInventoryTerminal", "UnknownInventoryTerminal.csproj"));
+        project.Should().Contain("assets\\unknowninventoryterminal\\licenses\\modernity\\LICENSE.txt");
+        project.Should().Contain("assets\\unknowninventoryterminal\\textures\\%(RecursiveDir)");
+        var installer = File.ReadAllText(Path.Combine(repository, "scripts", "Install.ps1"));
+        installer.Should().Contain("licenses\\modernity\\LICENSE.txt");
+        installer.Should().Contain("textures\\creativecore\\textures\\gui\\sliderrail.png");
+        installer.Should().Contain("textures\\creativecore\\textures\\gui\\slider.png");
+    }
+
+    private static string FindRepositoryRoot(string start)
+    {
+        for (var directory = new DirectoryInfo(start); directory != null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "assets", "unknowninventoryterminal", "licenses", "modernity", "LICENSE.txt")))
+                return directory.FullName;
+        throw new DirectoryNotFoundException("Could not find the project assets from the test output directory.");
+    }
+
+    [TestMethod]
     [DataRow((int)Ae2Image.DragDrain, 1, 97, 14, 14, 2, 2, 10, 11)]
     [DataRow((int)Ae2Image.DragUse, 33, 97, 14, 14, 2, 2, 10, 11)]
     [DataRow((int)Ae2Image.DragPin, 53, 21, 6, 8, 0, 0, 6, 8)]
@@ -519,6 +581,7 @@ public sealed class Ae2ScreenStyleTests
     [DataRow("unknowninventoryterminal:textures/gui/sprites/../buttons.png")]
     [DataRow("unknowninventoryterminal:textures/guis/sub\\buttons.png")]
     [DataRow("unknowninventoryterminal:textures/gui/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/creativecore/textures/gui/other.png")]
     public void SkipsRegionsWithDisallowedTexturePaths(string texture)
     {
         var json = "{\"images\":{\"button\":{\"texture\":" + JsonConvert.ToString(texture) + ",\"srcRect\":[0,0,18,18]}}}";

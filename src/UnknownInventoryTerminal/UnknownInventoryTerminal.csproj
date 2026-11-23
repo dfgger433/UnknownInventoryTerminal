@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
     <Content Include="..\..\assets\unknowninventoryterminal\NOTICE.txt" Link="assets\unknowninventoryterminal\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\unknowninventoryterminal\licenses\modernity\LICENSE.txt" Link="assets\unknowninventoryterminal\licenses\modernity\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\screens\**\*.json" Link="assets\unknowninventoryterminal\screens\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\textures\**\*.png" Link="assets\unknowninventoryterminal\textures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

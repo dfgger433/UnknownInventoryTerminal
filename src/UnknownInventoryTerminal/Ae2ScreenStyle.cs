@@ -17,7 +17,8 @@ namespace UnknownInventoryTerminal
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
         TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg, VerticalButtonsBgVariant,
-        DragDrain, DragUse, DragPin, DragUnpin, PinnedRow, PinnedRowGutter, ScrollGrooveTop, VerticalButtonsBgBottom
+        DragDrain, DragUse, DragPin, DragUnpin, PinnedRow, PinnedRowGutter, ScrollGrooveTop, VerticalButtonsBgBottom,
+        FluidRailLeft, FluidRailMiddle, FluidRailRight, FluidThumb
     }
 
     internal static class Ae2ButtonBarAppearance
@@ -141,7 +142,9 @@ namespace UnknownInventoryTerminal
                 return false;
 
             var relative = id.Substring(TexturePrefix.Length);
-            if (!relative.StartsWith("guis/", StringComparison.Ordinal) && !relative.StartsWith("gui/sprites/", StringComparison.Ordinal))
+            var isFluidTexture = relative is "creativecore/textures/gui/sliderrail.png" or "creativecore/textures/gui/slider.png";
+            if (!relative.StartsWith("guis/", StringComparison.Ordinal) && !relative.StartsWith("gui/sprites/", StringComparison.Ordinal) &&
+                !isFluidTexture)
                 return false;
             foreach (var part in relative.Substring(0, relative.Length - 4).Split('/'))
             {

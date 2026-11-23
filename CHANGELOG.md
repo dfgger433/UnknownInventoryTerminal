@@ -6,6 +6,10 @@
 - 拖动时，左侧动作栏只排列当前可用的按钮，不给不可用动作留空位；进入确认状态时，所选按钮留在原位。
 - 恢复 `vertical_buttons_bg_2.png` 的 21×26 像素变体，并加入屏幕资源配置和安装清单；该重建文件像素已测试，但不是原始 PNG 字节。恢复 `贴图/states.pdn` 源文件；`drop_down_list.pdn` 未找回。
 
+## 0.4.34
+
+- 将两个具体液体容器拖放到一起时，弹出转移量窗口；可输入整数毫升或使用 Modernity 横向滑块，确认后沿用原版流体处理与 Together 的完成钩子。
+
 ## 0.4.33
 
 - 终端资源迁至 `assets/unknowninventoryterminal/`；游戏和贴图预览器改用 `unknowninventoryterminal:textures/...` 纹理引用，不再接受旧路径或无命名空间的引用。PNG 和裁切均未修改；自定义资源需迁移到新目录。

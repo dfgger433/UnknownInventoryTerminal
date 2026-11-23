@@ -66,9 +66,15 @@ namespace UnknownInventoryTerminal
         private void Update()
         {
             if (_window == null) return;
+            var fluidDialog = _nativePanel?.FluidDialog;
             if (IsVisible)
             {
                 if (!SessionValid()) Close();
+                else if (fluidDialog?.BlocksInput == true)
+                {
+                    if (Input.GetKeyDown(KeyBinds.GetBind("pause"))) fluidDialog.Hide();
+                    else fluidDialog.Tick();
+                }
                 else if (_window.CloseRequested || Input.GetKeyDown(KeyBinds.GetBind("pause"))) Close(preserveDrag: true);
                 else if (!SearchFocused && Input.GetKeyDown(KeyBinds.GetBind("woundview")) &&
                     _sessionCamera is { } camera && HasHeldLocalDrag(camera))
@@ -79,19 +85,19 @@ namespace UnknownInventoryTerminal
                     camera.ToggleWoundView();
                 }
             }
-            if (SettingsBridge.IsTogglePressed())
+            if (fluidDialog?.BlocksInput != true && SettingsBridge.IsTogglePressed())
             {
                 if (IsVisible) TryCloseTerminal();
                 else TryOpenTerminal();
             }
-            _window.Update();
+            _window.Update(fluidDialog?.BlocksInput == true);
             if (_window.Visible)
             {
                 HoldInput();
                 _shield?.SetVisible(true);
                 if (_window.SettingsOpen && _sessionCamera is { } settingsCamera) CancelDrag(settingsCamera);
                 _nativePanel?.SetVisible(true, _window.SettingsOpen);
-                _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput);
+                _nativePanel?.BlockPointerInput(_window.BlocksInventoryInput || fluidDialog?.BlocksInput == true);
             }
         }
 
@@ -106,7 +112,7 @@ namespace UnknownInventoryTerminal
                     _shield?.SetVisible(true);
                     UpdateDragActions(_sessionCamera!);
                     if (_nativePanel?.Chrome is { } chrome) _window!.DrawInventoryChrome(chrome);
-                    _nativePanel?.UpdateTooltips(_sessionCamera!, _window!.BlocksInventoryInput || _window.CloseRequested);
+                    _nativePanel?.UpdateTooltips(_sessionCamera!, FluidBlocksInput || _window!.BlocksInventoryInput || _window.CloseRequested);
                 }
             }
         }
@@ -118,8 +124,31 @@ namespace UnknownInventoryTerminal
             action = default;
             return Instance?._nativePanel?.TryGetDragAction(target, out action) == true;
         }
+        internal static bool FluidBlocksInput => Instance?._nativePanel?.FluidDialog?.BlocksInput == true;
         internal static bool CanInteractWithDragActions(PlayerCamera camera) => CanInteract(camera) &&
-            !Instance!._closing && !SearchFocused && Instance._window is { BlocksInventoryInput: false, CloseRequested: false };
+            !Instance!._closing && !SearchFocused && !FluidBlocksInput &&
+            Instance._window is { BlocksInventoryInput: false, CloseRequested: false };
+
+        internal static void OpenFluidTransfer(TerminalFluidTransfer transfer)
+        {
+            var maximumMl = transfer.MaximumMl();
+            if (maximumMl <= 0)
+            {
+                transfer.Camera.DoAlert(TerminalText.Get("fluidTransfer.unavailable"));
+                return;
+            }
+            Instance?._nativePanel?.ShowFluidTransfer(maximumMl, ml =>
+            {
+                var camera = transfer.Camera;
+                if (!Application.isFocused || !CanInteract(camera)) return;
+                try
+                {
+                    if (transfer.Finish(ml)) return;
+                }
+                catch (Exception ex) { Log.LogWarning("Native fluid transfer failed: " + ex); }
+                camera.DoAlert(TerminalText.Get("fluidTransfer.unavailable"));
+            });
+        }
 
         internal static TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, out TerminalDragAction actionLayout,
             TerminalDragAction armed = TerminalDragAction.None, TerminalDragAction originalLayout = TerminalDragAction.None)
@@ -351,6 +380,19 @@ namespace UnknownInventoryTerminal
             if (!IsVisible) return hits;
             var result = new List<RaycastResult>();
             var plugin = Instance!;
+            if (plugin._nativePanel?.FluidDialog is { BlocksInput: true } dialog)
+            {
+                foreach (var hit in hits)
+                {
+                    if (!hit.gameObject) continue;
+                    if (dialog.Contains(hit.gameObject) || plugin._shield?.IsBlocker(hit.gameObject) == true)
+                    {
+                        result.Add(hit);
+                        break;
+                    }
+                }
+                return result;
+            }
             RaycastResult blocker = default;
             bool hasBlocker = false;
             var terminalPoint = IsTerminalPoint(Input.mousePosition);
@@ -503,6 +545,7 @@ namespace UnknownInventoryTerminal
             // Keep the closing input blocked without clearing the drag handed back to the game.
             if (!Plugin.IsVisible) return false;
             if (!Plugin.CanInteract(__instance)) { Plugin.CancelDrag(__instance); return false; }
+            if (Plugin.FluidBlocksInput) return false;
             if (!__instance.dragItem) Plugin.SetTerminalDrag(__instance, null);
             uiCasts = Plugin.FilterHits(uiCasts);
             if (_pendingAction is { } pending && pending.Camera == __instance)
@@ -703,7 +746,7 @@ namespace UnknownInventoryTerminal
         {
             // The scoped call already has the native target. Re-filtering it would discard that hit.
             if (ReferenceEquals(_nativeDrainCall, __instance) || !Plugin.BlocksGameplay) return true;
-            if (!Plugin.CanInteract(__instance) || Plugin.SearchFocused) return false;
+            if (!Plugin.CanInteract(__instance) || Plugin.SearchFocused || Plugin.FluidBlocksInput) return false;
             uiCasts = Plugin.FilterHits(uiCasts);
             return true;
         }
@@ -712,7 +755,7 @@ namespace UnknownInventoryTerminal
             __state = false;
             if (!Plugin.BlocksGameplay) return true;
             uiCasts = Plugin.FilterHits(uiCasts);
-            if (!Plugin.CanInteract(__instance)) return false;
+            if (!Plugin.CanInteract(__instance) || Plugin.FluidBlocksInput) return false;
             if (!__instance.dragItem)
             {
                 Plugin.SetTerminalDrag(__instance, null);
@@ -736,10 +779,17 @@ namespace UnknownInventoryTerminal
             internal Item Item { get; } = item;
         }
 
+        // Keep native release handling (including Together's drag cleanup), but give this
+        // specific liquid pair to the terminal before swaps or automatic bag placement.
+        private sealed class FluidRelease(TerminalFluidTransfer transfer) : List<RaycastResult>
+        {
+            internal TerminalFluidTransfer Transfer { get; } = transfer;
+        }
+
         private static bool ReleasePrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
             if (!Plugin.BlocksGameplay) return true;
-            if (!Plugin.IsVisible) return false;
+            if (!Plugin.IsVisible || Plugin.FluidBlocksInput) return false;
             uiCasts = Plugin.FilterHits(uiCasts);
             // Revalidate before passing any target to the game's release path.
             var source = __instance.dragItem;
@@ -757,12 +807,30 @@ namespace UnknownInventoryTerminal
             }
             if (Plugin.IsTerminalPoint(pointer))
             {
+                var moved = Vector2.Distance(pointer, __instance.clickPos) >= 10f;
+                var top = uiCasts.FirstOrDefault().gameObject;
+                if (moved && !Input.GetMouseButtonDown(1) && Plugin.CanInteractWithDragActions(__instance) &&
+                    Plugin.IsTerminalDrag(__instance, source) && top && Plugin.IsInventorySurface(top) &&
+                    top.TryGetComponent<InvButton>(out var fluidTarget) &&
+                    fluidTarget.GetItem() is { } destination && TerminalFluidTransfer.IsPair(source, destination))
+                {
+                    // Together's release hook also expects a registered drag item. Never hand it a
+                    // locally valid liquid pair that the active network cannot synchronize.
+                    if (!GameInventoryAdapter.CanSyncFluidTransfer(source, destination))
+                    {
+                        Plugin.CancelDrag(__instance);
+                        __instance.DoAlert(TerminalText.Get("fluidTransfer.unavailable"));
+                        return false;
+                    }
+                    // Even if the bottle is full or the source is empty, this is not a bag drop or slot swap.
+                    uiCasts = new FluidRelease(new TerminalFluidTransfer(__instance, source, destination));
+                    return true;
+                }
                 var slotHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponentInParent<LoadoutCell>());
                 if (slotHit.gameObject)
                 {
                     var slot = slotHit.gameObject.GetComponentInParent<LoadoutCell>();
                     var target = slot.Button;
-                    var moved = Vector2.Distance(Input.mousePosition, __instance.clickPos) >= 10f;
                     var equip = moved && slot.CanEquip(__instance, source);
                     if (slot.IsCurrent(__instance) && (equip ||
                         (target && target!.gameObject.activeInHierarchy && Plugin.ValidHit(ButtonHit(slotHit, target)) &&
@@ -819,6 +887,18 @@ namespace UnknownInventoryTerminal
 
         private static bool InventoryActionPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts, ref bool __result)
         {
+            if (uiCasts is FluidRelease fluid)
+            {
+                __result = true;
+                var transfer = fluid.Transfer;
+                if (Application.isFocused && Plugin.CanInteractWithDragActions(__instance) &&
+                    transfer.Camera == __instance && ReferenceEquals(__instance.dragItem, transfer.Source))
+                {
+                    try { Plugin.OpenFluidTransfer(transfer); }
+                    catch (Exception ex) { Plugin.Log.LogWarning("Could not open fluid transfer: " + ex); }
+                }
+                return false;
+            }
             if (uiCasts is DiscardRelease discard)
             {
                 // Run only after vanilla's DoPickupCheck and Together's release prefix have run.
@@ -861,6 +941,39 @@ namespace UnknownInventoryTerminal
         private static readonly Type? NetType = AccessTools.TypeByName("Together.Net");
         private static readonly PropertyInfo? NetworkRunning = NetType == null ? null : AccessTools.Property(NetType, "IsRunning");
         private static readonly PropertyInfo? NetworkClient = NetType == null ? null : AccessTools.Property(NetType, "IsClient");
+        private static readonly Type? ItemSyncType = AccessTools.TypeByName("Together.ItemSync");
+        private static readonly Type? SyncInfoType = AccessTools.TypeByName("Together.SyncInfo");
+        private static readonly MethodInfo? TryGetSyncInfo = ItemSyncType == null || SyncInfoType == null ? null :
+            AccessTools.Method(ItemSyncType, "TryGetSyncInfo", new[] { typeof(Item), SyncInfoType.MakeByRefType() });
+        private static readonly MethodInfo? IgnoreForNetwork = ItemSyncType == null ? null :
+            AccessTools.Method(ItemSyncType, "ItemCanBeIgnoredForNetwork", new[] { typeof(Item) });
+        private static readonly MethodInfo? TransferPostfix = AccessTools.TypeByName("Together.LiquidTransfer_Finish_MultiplayerPatch") is { } patch ?
+            AccessTools.Method(patch, "Postfix", new[] { typeof(LiquidTransfer) }) : null;
+        private static readonly MethodInfo? NetworkWorldReady = AccessTools.TypeByName("Together.Multiplayer") is { } multiplayer ?
+            AccessTools.Method(multiplayer, "IsNetworkActiveAndIsWorldGenerated", Type.EmptyTypes) : null;
+
+        internal static bool CanSyncFluidTransfer(Item source, Item destination)
+        {
+            if (NetType == null) return true;
+            try
+            {
+                if (NetworkRunning?.GetValue(null) is not bool running) return false;
+                if (!running) return true;
+                // In multiplayer, don't mutate local liquid if Together cannot announce it.
+                return NetworkWorldReady?.Invoke(null, null) is true && TransferPostfix != null &&
+                    Harmony.GetPatchInfo(TerminalFluidTransfer.NativeFinish)?.Postfixes.Any(patch => patch.PatchMethod == TransferPostfix) == true &&
+                    IsRegistered(source) && IsRegistered(destination);
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning("Together fluid transfer preflight failed: " + ex.Message);
+                return false;
+            }
+
+            static bool IsRegistered(Item item) => IgnoreForNetwork?.Invoke(null, new object[] { item }) is false &&
+                TryGetSyncInfo?.Invoke(null, new object?[] { item, null }) is true;
+        }
+
         internal static bool IsTogetherClient
         {
             get
