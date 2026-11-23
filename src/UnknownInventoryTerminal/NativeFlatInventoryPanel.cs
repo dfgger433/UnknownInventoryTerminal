@@ -93,6 +93,7 @@ namespace UnknownInventoryTerminal
         private RectTransform? _actionBar, _actionBarBackground;
         private Image[] _actionBarParts = null!;
         private Ae2Image _actionBarArt = Ae2Image.VerticalButtonsBg;
+        private TerminalDragAction _dragActionLayout;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
         private (string Type, string Parent)? _selectionKey;
         private Rect _bounds, _windowBounds, _scrollTrackBounds;
@@ -566,16 +567,17 @@ namespace UnknownInventoryTerminal
             if (_actionBarBackground && _actionBarBackground!.gameObject.activeSelf) _actionBarBackground.gameObject.SetActive(false);
         }
 
-        internal void UpdateDragActions(PlayerCamera camera, Item? item, TerminalDragAction? armed)
+        internal void UpdateDragActions(PlayerCamera camera, Item? item, TerminalDragAction armed, TerminalDragAction originalLayout)
         {
             if (!_actionBar || !item || !_visible || !_root!.activeInHierarchy) { HideDragActions(); return; }
-            var drain = (armed is null or TerminalDragAction.Drain) && CanDrain(camera, item!);
-            var use = (armed is null or TerminalDragAction.Use) && CanUse(camera, item!);
-            var pin = armed == null && !string.IsNullOrEmpty(item!.id);
-            if (!drain && !use && !pin) { HideDragActions(); return; }
+            var available = AvailableDragActions(camera, item!);
+            var visible = armed == TerminalDragAction.None ? available : available & armed;
+            if (visible == TerminalDragAction.None) { HideDragActions(); return; }
 
+            // Keep the confirmed/armed button under the pointer when its siblings are hidden.
+            _dragActionLayout = armed == TerminalDragAction.None ? available : originalLayout;
             var scale = _layout.Scale;
-            var (x, y, width, height) = _layout.DragActionBackgroundBounds(drain, use, pin);
+            var (x, y, width, height) = _layout.DragActionBackgroundBounds(_dragActionLayout, armed);
             Position(_actionBar!, new Rect(_windowBounds.x + x, _windowBounds.y + y, width, height));
             Position(_actionBarBackground!, new Rect(x, y, width, height));
             var art = Ae2ButtonBarAppearance.DragBackground(_layout, y, height);
@@ -587,22 +589,23 @@ namespace UnknownInventoryTerminal
             LayoutBarParts(_actionBarParts, 0, 0, height / scale, scale, flushWithBoardTop: false);
             _actionBarBackground!.gameObject.SetActive(true);
             _pinAction!.IconArt = _pins.Contains(item!) ? Ae2Image.DragUnpin : Ae2Image.DragPin;
-            SetAction(_drainAction!, drain);
-            SetAction(_useAction!, use);
-            SetAction(_pinAction, pin);
+            SetAction(_drainAction!);
+            SetAction(_useAction!);
+            SetAction(_pinAction);
             if (!_actionBar!.gameObject.activeSelf)
             {
                 _actionBar.gameObject.SetActive(true);
                 LayoutButtonBar();
             }
 
-            void SetAction(TerminalDragActionTarget target, bool active)
+            void SetAction(TerminalDragActionTarget target)
             {
+                var active = (visible & target.Action) != 0;
                 if (target.gameObject.activeSelf != active) target.gameObject.SetActive(active);
                 if (!active) return;
-                var (left, topEdge, faceWidth, faceHeight) = _layout.DragActionBounds(target.Action);
+                var (left, topEdge, faceWidth, faceHeight) = _layout.DragActionBounds(_dragActionLayout, target.Action);
                 Position((RectTransform)target.transform, new Rect(left - x, topEdge - y, faceWidth, faceHeight));
-                target.Draw(_skin, scale, HitsDragAction(target.Action, Input.mousePosition), armed == target.Action);
+                target.Draw(_skin, scale, HitsDragAction(_dragActionLayout, target.Action, Input.mousePosition), armed == target.Action);
             }
         }
 
@@ -614,8 +617,8 @@ namespace UnknownInventoryTerminal
 
             void OfferIfHovered(TerminalDragActionTarget target)
             {
-                if (!target.gameObject.activeInHierarchy || !HitsDragAction(target.Action, pointer)) return;
-                var (x, y, width, height) = _layout.DragActionBounds(target.Action);
+                if (!target.gameObject.activeInHierarchy || !HitsDragAction(_dragActionLayout, target.Action, pointer)) return;
+                var (x, y, width, height) = _layout.DragActionBounds(_dragActionLayout, target.Action);
                 var key = target.HintKey;
                 _controlHint!.Offer(new Rect(_layout.Left + x, _layout.Top + y, width, height),
                     TerminalText.Get(key) + "\n" + TerminalText.Get(key + ".description"));
@@ -640,8 +643,8 @@ namespace UnknownInventoryTerminal
             return false;
         }
 
-        private bool HitsDragAction(TerminalDragAction action, Vector2 pointer) =>
-            _layout.HitsDragAction(action, pointer.x, Screen.height - pointer.y);
+        private bool HitsDragAction(TerminalDragAction actions, TerminalDragAction action, Vector2 pointer) =>
+            _layout.HitsDragAction(actions, action, pointer.x, Screen.height - pointer.y);
 
         internal void TogglePin(Body body, Item item)
         {
@@ -658,16 +661,24 @@ namespace UnknownInventoryTerminal
             Synchronize();
         }
 
-        internal TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, TerminalDragAction? armed = null)
+        private static TerminalDragAction AvailableDragActions(PlayerCamera camera, Item item) =>
+            (CanDrain(camera, item) ? TerminalDragAction.Drain : TerminalDragAction.None) |
+            (CanUse(camera, item) ? TerminalDragAction.Use : TerminalDragAction.None) |
+            (!string.IsNullOrEmpty(item.id) ? TerminalDragAction.Pin : TerminalDragAction.None);
+
+        internal TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, out TerminalDragAction actionLayout,
+            TerminalDragAction armed, TerminalDragAction originalLayout)
         {
+            actionLayout = TerminalDragAction.None;
             if (!_actionBar || !_visible || !_root!.activeInHierarchy) return null;
+            var available = AvailableDragActions(camera, item);
             var pointer = (Vector2)Input.mousePosition;
-            if (armed == null && HitsDragAction(TerminalDragAction.Pin, pointer) && !string.IsNullOrEmpty(item.id))
-                return TerminalDragAction.Pin;
-            if ((armed is null or TerminalDragAction.Drain) && HitsDragAction(TerminalDragAction.Drain, pointer) && CanDrain(camera, item))
-                return TerminalDragAction.Drain;
-            if ((armed is null or TerminalDragAction.Use) && HitsDragAction(TerminalDragAction.Use, pointer) && CanUse(camera, item))
-                return TerminalDragAction.Use;
+            actionLayout = armed == TerminalDragAction.None ? available : originalLayout;
+            if (armed != TerminalDragAction.None)
+                return (available & armed) != 0 && HitsDragAction(actionLayout, armed, pointer) ? armed : null;
+            if (HitsDragAction(actionLayout, TerminalDragAction.Pin, pointer)) return TerminalDragAction.Pin;
+            if (HitsDragAction(actionLayout, TerminalDragAction.Drain, pointer)) return TerminalDragAction.Drain;
+            if (HitsDragAction(actionLayout, TerminalDragAction.Use, pointer)) return TerminalDragAction.Use;
             return null;
         }
 

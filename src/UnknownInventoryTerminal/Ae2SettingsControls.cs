@@ -52,18 +52,18 @@ namespace UnknownInventoryTerminal
             finally { label.fontSize = fontSize; }
         }
 
-        // Keep one hit target across the row, with a separate pixel switch at its trailing edge.
+        // Keep one hit target across the row, with the switch before its caption.
         internal bool Toggle(Rect bounds, int scale, bool value, string text, GUIStyle label)
         {
             var clicked = GUI.Button(bounds, GUIContent.none, GUIStyle.none);
             if (Event.current.type == EventType.Repaint)
             {
-                var face = Ae2ToggleAppearance.Face(value, bounds.Contains(Event.current.mousePosition));
+                var face = Ae2ToggleAppearance.Face(value);
                 var width = (int)bounds.width / scale;
                 var height = (int)bounds.height / scale;
                 var size = _skin.SourceSize(face) ?? new Vector2Int(Ae2SettingsLayout.ToggleWidth, Ae2SettingsLayout.ToggleHeight);
                 var (switchX, switchY, switchWidth, switchHeight) = Ae2SettingsLayout.ToggleControlBounds(
-                    width, height, size.x, size.y, scale);
+                    height, size.x, size.y, scale);
                 _skin.Draw(new Rect(bounds.x + switchX, bounds.y + switchY, switchWidth, switchHeight), face, Color.clear);
 
                 var (captionX, captionY, captionWidth, captionHeight) = Ae2SettingsLayout.ToggleCaptionBounds(

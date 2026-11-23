@@ -11,7 +11,7 @@ namespace UnknownInventoryTerminal
         Header, FirstRow, Row, LastRow, Bottom,
         Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
         Close, SortName, SortAmount, SortAscending, SortDescending, Back, Settings, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
-        SettingsBackground, SettingsToggleOff, SettingsToggleOn, SettingsToggleOffHover, SettingsToggleOnHover,
+        SettingsBackground, SettingsToggleOff, SettingsToggleOn,
         SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected,
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
@@ -37,11 +37,11 @@ namespace UnknownInventoryTerminal
 
         internal static int KeepDraggingY(int visibleOptions) => PlacementY + FieldHeight + 5 + visibleOptions * OptionHeight;
 
-        internal static (int X, int Y, int Width, int Height) ToggleControlBounds(int width, int height, int spriteWidth, int spriteHeight, int scale) =>
-            ((width - spriteWidth - 2) * scale, (height - spriteHeight) * scale / 2, spriteWidth * scale, spriteHeight * scale);
+        internal static (int X, int Y, int Width, int Height) ToggleControlBounds(int height, int spriteWidth, int spriteHeight, int scale) =>
+            (2 * scale, (height - spriteHeight) * scale / 2, spriteWidth * scale, spriteHeight * scale);
 
         internal static (int X, int Y, int Width, int Height) ToggleCaptionBounds(int width, int height, int spriteWidth, int scale) =>
-            (4 * scale, 0, (width - spriteWidth - 10) * scale, height * scale);
+            ((spriteWidth + 6) * scale, 0, (width - spriteWidth - 10) * scale, height * scale);
 
         internal static int FieldY(bool placement, int languageRows) =>
             placement ? PlacementY + languageRows * OptionHeight : LanguageY;
@@ -66,9 +66,8 @@ namespace UnknownInventoryTerminal
 
     internal static class Ae2ToggleAppearance
     {
-        internal static Ae2Image Face(bool value, bool hovered) => value
-            ? hovered ? Ae2Image.SettingsToggleOnHover : Ae2Image.SettingsToggleOn
-            : hovered ? Ae2Image.SettingsToggleOffHover : Ae2Image.SettingsToggleOff;
+        // Only the saved value selects a frame; hover never shifts the knob.
+        internal static Ae2Image Face(bool value) => value ? Ae2Image.SettingsToggleOn : Ae2Image.SettingsToggleOff;
     }
 
     internal static class Ae2ToolbarAppearance

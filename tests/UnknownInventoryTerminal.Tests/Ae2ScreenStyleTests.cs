@@ -98,13 +98,12 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow(false, false, (int)Ae2Image.SettingsToggleOff, 0, 28, 0)]
-    [DataRow(true, false, (int)Ae2Image.SettingsToggleOn, 0, 40, 10)]
-    [DataRow(false, true, (int)Ae2Image.SettingsToggleOffHover, 22, 28, 2)]
-    [DataRow(true, true, (int)Ae2Image.SettingsToggleOnHover, 22, 40, 8)]
-    public void KeepDraggingSliderUsesTheMatchingAtlasFrameAtNativeSize(bool value, bool hovered, int image, int x, int y, int knobX)
+    [DataRow(false, (int)Ae2Image.SettingsToggleOff, 28, 0)]
+    [DataRow(true, (int)Ae2Image.SettingsToggleOn, 40, 10)]
+    public void KeepDraggingSliderUsesStaticAtlasFramesOnTheLeft(bool value, int image, int y, int knobX)
     {
-        var face = Ae2ToggleAppearance.Face(value, hovered);
+        const int x = 0;
+        var face = Ae2ToggleAppearance.Face(value);
         face.Should().Be((Ae2Image)image);
         ReadBundledStyle().TryGet(face, out var region).Should().BeTrue();
         (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be(("guis/checkbox.png", x, y, 22, 12));
@@ -120,11 +119,11 @@ public sealed class Ae2ScreenStyleTests
         foreach (var scale in new[] { 1, 2, 3, 4 })
         {
             const int width = Ae2SettingsLayout.FieldWidth, height = Ae2SettingsLayout.KeepDraggingHeight;
-            var control = Ae2SettingsLayout.ToggleControlBounds(width, height, region.Width, region.Height, scale);
+            var control = Ae2SettingsLayout.ToggleControlBounds(height, region.Width, region.Height, scale);
             var caption = Ae2SettingsLayout.ToggleCaptionBounds(width, height, region.Width, scale);
-            control.Should().Be(((width - 24) * scale, scale, 22 * scale, 12 * scale));
-            caption.X.Should().Be(4 * scale);
-            (caption.X + caption.Width).Should().BeLessThan(control.X, "the label must not collide with the switch");
+            control.Should().Be((2 * scale, scale, 22 * scale, 12 * scale));
+            (caption.X - control.X - control.Width).Should().Be(4 * scale);
+            (caption.X + caption.Width).Should().Be((width - 4) * scale);
             (control.Y + control.Height).Should().BeLessThan(height * scale);
             caption.Height.Should().Be(height * scale);
         }
@@ -353,8 +352,10 @@ public sealed class Ae2ScreenStyleTests
         using var board = PngPixels.Read(TextureFilePath("guis/terminal.png"));
         var flushWithBoardTop = toolbarButtons > 0;
         var layout = new Ae2TerminalLayout(320, 240);
-        var boardY = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarY : layout.DragActionBackgroundBounds(drain, use).Y;
-        var height = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarHeight(toolbarButtons) : layout.DragActionBackgroundBounds(drain, use).Height;
+        var actions = (drain ? TerminalDragAction.Drain : TerminalDragAction.None) |
+            (use ? TerminalDragAction.Use : TerminalDragAction.None);
+        var boardY = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarY : layout.DragActionBackgroundBounds(actions).Y;
+        var height = flushWithBoardTop ? Ae2TerminalLayout.ButtonBarHeight(toolbarButtons) : layout.DragActionBackgroundBounds(actions).Height;
         var end = 0;
         for (var i = 0; i < Ae2TerminalLayout.ButtonBarPatchCount; i++)
         {
@@ -378,14 +379,15 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow((int)TerminalHeight.Small, true, true, true, (int)Ae2Image.VerticalButtonsBgBottom)]
-    [DataRow((int)TerminalHeight.Small, false, false, true, (int)Ae2Image.VerticalButtonsBgBottom)]
-    [DataRow((int)TerminalHeight.Small, true, true, false, (int)Ae2Image.VerticalButtonsBg)]
-    [DataRow((int)TerminalHeight.Medium, true, true, true, (int)Ae2Image.VerticalButtonsBg)]
-    public void DragButtonBarUsesTheHandDrawnEndCapOnlyWhenFlushWithTheBoard(int style, bool drain, bool use, bool pin, int expectedArt)
+    [DataRow((int)TerminalHeight.Small, (int)(TerminalDragAction.Drain | TerminalDragAction.Use | TerminalDragAction.Pin), (int)TerminalDragAction.None, (int)Ae2Image.VerticalButtonsBgBottom)]
+    [DataRow((int)TerminalHeight.Small, (int)(TerminalDragAction.Drain | TerminalDragAction.Pin), (int)TerminalDragAction.None, (int)Ae2Image.VerticalButtonsBgBottom)]
+    [DataRow((int)TerminalHeight.Small, (int)(TerminalDragAction.Use | TerminalDragAction.Pin), (int)TerminalDragAction.Use, (int)Ae2Image.VerticalButtonsBg)]
+    [DataRow((int)TerminalHeight.Small, (int)TerminalDragAction.Use, (int)TerminalDragAction.Use, (int)Ae2Image.VerticalButtonsBgBottom)]
+    [DataRow((int)TerminalHeight.Medium, (int)(TerminalDragAction.Drain | TerminalDragAction.Use | TerminalDragAction.Pin), (int)TerminalDragAction.None, (int)Ae2Image.VerticalButtonsBg)]
+    public void DragButtonBarUsesTheHandDrawnEndCapOnlyWhenFlushWithTheBoard(int style, int actions, int armed, int expectedArt)
     {
         var layout = new Ae2TerminalLayout(1920, 1080, (TerminalHeight)style);
-        var (_, top, _, height) = layout.DragActionBackgroundBounds(drain, use, pin);
+        var (_, top, _, height) = layout.DragActionBackgroundBounds((TerminalDragAction)actions, (TerminalDragAction)armed);
         var art = Ae2ButtonBarAppearance.DragBackground(layout, top, height);
         art.Should().Be((Ae2Image)expectedArt);
         if (art != Ae2Image.VerticalButtonsBgBottom) return;

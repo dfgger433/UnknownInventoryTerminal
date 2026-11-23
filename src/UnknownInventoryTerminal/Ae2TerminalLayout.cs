@@ -5,7 +5,8 @@ namespace UnknownInventoryTerminal
     // Matches appeng.api.config.TerminalStyle: the storage gets a quarter, half, three quarters or all of the rows
     // that fit on the screen.
     internal enum TerminalHeight { Small = 1, Medium = 2, Tall = 3, Full = 4 }
-    internal enum TerminalDragAction { Drain, Use, Pin }
+    [Flags]
+    internal enum TerminalDragAction { None = 0, Drain = 1, Use = 2, Pin = 4 }
 
     // Positions follow the board drawn in terminal.png. Like AE2's MEStorageScreen, the board is stacked from the
     // header, first, middle and last storage rows and the bottom part, each drawn as cut at an integer scale.
@@ -93,32 +94,46 @@ namespace UnknownInventoryTerminal
 
         internal static int ToolbarY(int index) => ToolbarTop + index * ToolbarPitch;
         internal static int ThumbLeft(int thumbWidth) => GrooveLeft + (GrooveWidth - thumbWidth) / 2;
-        // The fifth toolbar button (return) is hidden during a live drag so even the smallest
-        // board can fit all three action faces, with the same bounds regardless of eligibility.
-        internal (int X, int Y, int Width, int Height) DragActionBounds(TerminalDragAction action)
+        private static int ActionCount(TerminalDragAction actions) =>
+            ((actions & TerminalDragAction.Drain) != 0 ? 1 : 0) +
+            ((actions & TerminalDragAction.Use) != 0 ? 1 : 0) +
+            ((actions & TerminalDragAction.Pin) != 0 ? 1 : 0);
+
+        // Keep the rail against the short board's bottom; center it on the equipment rows otherwise.
+        private int FirstDragActionY(int count) => Rows == MinRows
+            ? BoardHeight - ButtonBarHeight(count) + ButtonBarInsetY
+            : Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - (count - 1) * ToolbarPitch - ButtonHeight) / 2,
+                ButtonBarY + ButtonBarHeight(ToolbarButtons) + 5);
+
+        // Lower bits are earlier slots (Drain, Use, Pin); count only the ones present.
+        private static int DragActionIndex(TerminalDragAction actions, TerminalDragAction action) =>
+            ActionCount(actions & (TerminalDragAction)((int)action - 1));
+
+        internal (int X, int Y, int Width, int Height) DragActionBounds(TerminalDragAction actions, TerminalDragAction action)
         {
-            var firstY = Rows == MinRows
-                // Align the full action rail's bottom border with the bottom of the three-row board.
-                ? BoardHeight - ButtonBarHeight((int)TerminalDragAction.Pin + 1) + ButtonBarInsetY
-                : Math.Max(EquipmentTop + (EquipmentRowCount * Pitch - 2 * ToolbarPitch - ButtonHeight) / 2,
-                    ButtonBarY + ButtonBarHeight(ToolbarButtons) + 5);
-            return (ToolbarX * Scale, (firstY + (int)action * ToolbarPitch) * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
+            var y = FirstDragActionY(ActionCount(actions)) + DragActionIndex(actions, action) * ToolbarPitch;
+            return (ToolbarX * Scale, y * Scale, ButtonWidth * Scale, ButtonHeight * Scale);
         }
 
-        internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(bool drain, bool use, bool pin = false)
+        internal (int X, int Y, int Width, int Height) DragActionBackgroundBounds(TerminalDragAction actions,
+            TerminalDragAction armed = TerminalDragAction.None)
         {
-            var first = drain ? TerminalDragAction.Drain : use ? TerminalDragAction.Use : TerminalDragAction.Pin;
-            var last = pin ? TerminalDragAction.Pin : use ? TerminalDragAction.Use : TerminalDragAction.Drain;
-            var (_, y, _, _) = DragActionBounds(first);
-            var height = ButtonBarHeight((int)last - (int)first + 1);
-            return (ButtonBarX * Scale, y - ButtonBarInsetY * Scale, ButtonBarWidth * Scale, height * Scale);
+            var count = ActionCount(actions);
+            if (count == 0) return default;
+            var y = FirstDragActionY(count) - ButtonBarInsetY;
+            if (armed != TerminalDragAction.None)
+            {
+                y += DragActionIndex(actions, armed) * ToolbarPitch;
+                count = 1;
+            }
+            return (ButtonBarX * Scale, y * Scale, ButtonBarWidth * Scale, ButtonBarHeight(count) * Scale);
         }
 
-        // Like the toolbar, poll the fixed face rectangle. Hover art moves by one pixel;
-        // neither that offset nor the transparent background changes the hit area.
-        internal bool HitsDragAction(TerminalDragAction action, float screenX, float screenY)
+        // Hover art can move by one pixel without changing the hit rectangle.
+        internal bool HitsDragAction(TerminalDragAction actions, TerminalDragAction action, float screenX, float screenY)
         {
-            var (x, y, width, height) = DragActionBounds(action);
+            if ((actions & action) == 0) return false;
+            var (x, y, width, height) = DragActionBounds(actions, action);
             var left = Left + x;
             var top = Top + y;
             return screenX >= left && screenX < left + width && screenY >= top && screenY < top + height;

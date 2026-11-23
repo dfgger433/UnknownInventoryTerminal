@@ -121,9 +121,13 @@ namespace UnknownInventoryTerminal
         internal static bool CanInteractWithDragActions(PlayerCamera camera) => CanInteract(camera) &&
             !Instance!._closing && !SearchFocused && Instance._window is { BlocksInventoryInput: false, CloseRequested: false };
 
-        internal static TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, TerminalDragAction? armed = null) =>
-            CanInteractWithDragActions(camera) && GameInventoryAdapter.Owns(camera.body, item)
-                ? Instance!._nativePanel?.DragActionAtPointer(camera, item, armed) : null;
+        internal static TerminalDragAction? DragActionAtPointer(PlayerCamera camera, Item item, out TerminalDragAction actionLayout,
+            TerminalDragAction armed = TerminalDragAction.None, TerminalDragAction originalLayout = TerminalDragAction.None)
+        {
+            actionLayout = TerminalDragAction.None;
+            return CanInteractWithDragActions(camera) && GameInventoryAdapter.Owns(camera.body, item)
+                ? Instance!._nativePanel?.DragActionAtPointer(camera, item, out actionLayout, armed, originalLayout) : null;
+        }
 
         internal static void TogglePin(PlayerCamera camera, Item item) => Instance?._nativePanel?.TogglePin(camera.body, item);
 
@@ -139,10 +143,10 @@ namespace UnknownInventoryTerminal
             plugin._nativePanel?.UpdateLoadoutDragHighlight(camera, dragItem);
             if (CanInteractWithDragActions(camera))
             {
-                var item = GamePatches.PendingDragItem(camera, out var armed) ?? camera.dragItem;
+                var item = GamePatches.PendingDragItem(camera, out var armed, out var originalLayout) ?? camera.dragItem;
                 if (GameInventoryAdapter.Owns(camera.body, item))
                 {
-                    plugin._nativePanel?.UpdateDragActions(camera, item, armed);
+                    plugin._nativePanel?.UpdateDragActions(camera, item, armed, originalLayout);
                     return;
                 }
             }
@@ -507,7 +511,7 @@ namespace UnknownInventoryTerminal
                 if (__instance.dragItem) CancelPendingAction(__instance);
                 else if (HandlePendingAction(__instance, pending)) return false;
             }
-            if (__instance.dragItem is { } source && Plugin.DragActionAtPointer(__instance, source) is { } action)
+            if (__instance.dragItem is { } source && Plugin.DragActionAtPointer(__instance, source, out var actionLayout) is { } action)
             {
                 var dragKey = KeyBinds.GetBind("iteminteract");
                 var release = Input.GetKeyUp(dragKey);
@@ -531,7 +535,7 @@ namespace UnknownInventoryTerminal
                         Plugin.CancelDrag(__instance);
                         if (gesture != TerminalDragStart.Cancel)
                         {
-                            var pendingAction = new PendingAction(__instance, source, action, fromTerminal);
+                            var pendingAction = new PendingAction(__instance, source, action, actionLayout, fromTerminal);
                             _pendingAction = pendingAction;
                             if (gesture == TerminalDragStart.Confirm)
                                 HandlePendingAction(__instance, pendingAction, resumeDrag: !release && Input.GetKey(dragKey));
@@ -560,12 +564,14 @@ namespace UnknownInventoryTerminal
             __instance.radialOpen = true;
             return true;
         }
-        private sealed class PendingAction(PlayerCamera camera, Item item, TerminalDragAction action, bool fromTerminal)
+        private sealed class PendingAction(PlayerCamera camera, Item item, TerminalDragAction action,
+            TerminalDragAction actionLayout, bool fromTerminal)
         {
             internal PlayerCamera Camera { get; } = camera;
             internal Body Body { get; } = camera.body;
             internal Item Item { get; } = item;
             internal TerminalDragAction Action { get; } = action;
+            internal TerminalDragAction ActionLayout { get; } = actionLayout;
             internal bool FromTerminal { get; } = fromTerminal;
             internal bool Draining { get; set; }
             internal bool ResumeDragAfterAction { get; set; }
@@ -575,19 +581,20 @@ namespace UnknownInventoryTerminal
         private static PendingAction? _pendingAction;
         private static PlayerCamera? _nativeDrainCall;
 
-        internal static Item? PendingDragItem(PlayerCamera camera, out TerminalDragAction? action)
+        internal static Item? PendingDragItem(PlayerCamera camera, out TerminalDragAction action, out TerminalDragAction actionLayout)
         {
             if (_pendingAction is { } pending && pending.Camera == camera)
             {
                 action = pending.Action;
+                actionLayout = pending.ActionLayout;
                 return pending.Item;
             }
-            action = null;
+            action = actionLayout = TerminalDragAction.None;
             return null;
         }
 
         private static bool IsOverPendingAction(PlayerCamera camera, PendingAction pending) => camera && camera.body == pending.Body &&
-            Plugin.DragActionAtPointer(camera, pending.Item, pending.Action) == pending.Action;
+            Plugin.DragActionAtPointer(camera, pending.Item, out _, pending.Action, pending.ActionLayout) == pending.Action;
 
         private static bool DragKeyHeld(PlayerCamera camera)
         {
@@ -632,7 +639,7 @@ namespace UnknownInventoryTerminal
                     pending.Draining = true;
                     var drainHit = new RaycastResult { gameObject = camera.liquidDrainObject, screenPosition = Input.mousePosition };
                     if (!RunNativeDrain(pending, new List<RaycastResult> { drainHit }) ||
-                        Plugin.DragActionAtPointer(camera, pending.Item, pending.Action) != pending.Action)
+                        Plugin.DragActionAtPointer(camera, pending.Item, out _, pending.Action, pending.ActionLayout) != pending.Action)
                         CancelPendingAction(camera);
                     return false;
             }

@@ -104,43 +104,41 @@ public sealed class Ae2TerminalLayoutTests
     [TestMethod]
     [DataRow(320, 240, (int)TerminalHeight.Small)]
     [DataRow(1920, 1080, (int)TerminalHeight.Full)]
-    public void DragActionsFitTheLeftRailBelowTheToolbarAndBesideTheSlots(int width, int height, int style)
+    public void DragActionsPackOnlyEligibleFacesBelowTheToolbar(int width, int height, int style)
     {
         var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
-        var drain = layout.DragActionBounds(TerminalDragAction.Drain);
-        var use = layout.DragActionBounds(TerminalDragAction.Use);
         var scale = layout.Scale;
-        drain.X.Should().Be(Ae2TerminalLayout.ToolbarX * scale);
-        use.X.Should().Be(drain.X);
-        (drain.X + drain.Width).Should().BeLessThan((Ae2TerminalLayout.Rail + Ae2TerminalLayout.Inset) * scale);
-        (use.Y - drain.Y).Should().Be(Ae2TerminalLayout.ToolbarPitch * scale);
+        var topInset = Ae2TerminalLayout.ButtonBarInsetY * scale;
+        var pitch = Ae2TerminalLayout.ToolbarPitch * scale;
+        layout.DragActionBackgroundBounds(TerminalDragAction.None).Should().Be((0, 0, 0, 0));
 
-        var both = layout.DragActionBackgroundBounds(drain: true, use: true);
-        both.Y.Should().BeGreaterThan((Ae2TerminalLayout.ButtonBarY +
-            Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons)) * scale);
-        (both.Y + both.Height).Should().BeLessThanOrEqualTo(layout.Height);
-        both.Width.Should().Be(21 * scale);
-        both.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(2) * scale);
-        var topInset = (Ae2TerminalLayout.ToolbarTop - Ae2TerminalLayout.ButtonBarY) * scale;
-        var bottomInset = (Ae2TerminalLayout.ButtonBarY + Ae2TerminalLayout.ButtonBarHeight(2) -
-            Ae2TerminalLayout.ToolbarY(1) - Ae2TerminalLayout.ButtonHeight) * scale;
-        (drain.X - both.X, drain.Y - both.Y).Should().Be(((Ae2TerminalLayout.ToolbarX - Ae2TerminalLayout.ButtonBarX) * scale, topInset));
-        (both.Y + both.Height - use.Y - use.Height).Should().Be(bottomInset);
-        bottomInset.Should().BeGreaterThanOrEqualTo(Ae2TerminalLayout.ButtonBarBottomBorder * scale);
+        for (var mask = 1; mask <= (int)AllDragActions; mask++)
+        {
+            var actions = (TerminalDragAction)mask;
+            var bar = layout.DragActionBackgroundBounds(actions);
+            bar.Y.Should().BeGreaterThan((Ae2TerminalLayout.ButtonBarY +
+                Ae2TerminalLayout.ButtonBarHeight(Ae2TerminalLayout.ToolbarButtons)) * scale);
+            bar.Width.Should().Be(Ae2TerminalLayout.ButtonBarWidth * scale);
+            if (layout.Rows == Ae2TerminalLayout.MinRows) (bar.Y + bar.Height).Should().Be(layout.Height);
+            else (bar.Y + bar.Height).Should().BeLessThan(layout.Height);
 
-        var singleHeight = Ae2TerminalLayout.ButtonBarHeight(1) * scale;
-        layout.DragActionBackgroundBounds(drain: true, use: false).Should().Be((both.X, both.Y, both.Width, singleHeight));
-        layout.DragActionBackgroundBounds(drain: false, use: true).Should().Be((both.X, use.Y - topInset, both.Width, singleHeight));
-        var pin = layout.DragActionBounds(TerminalDragAction.Pin);
-        (pin.Y - use.Y).Should().Be(Ae2TerminalLayout.ToolbarPitch * scale);
-        var all = layout.DragActionBackgroundBounds(drain: true, use: true, pin: true);
-        all.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(3) * scale);
-        (all.Y + all.Height).Should().BeLessThanOrEqualTo(layout.Height);
-        layout.DragActionBackgroundBounds(drain: false, use: false, pin: true).Should()
-            .Be((both.X, pin.Y - topInset, both.Width, singleHeight));
-        layout.StorageRows(false).Should().Be(layout.Rows);
-        layout.StorageRows(true).Should().Be(layout.Rows - 1);
+            var count = 0;
+            foreach (var action in DragActions)
+            {
+                if ((actions & action) == 0) continue;
+                var face = layout.DragActionBounds(actions, action);
+                face.X.Should().Be(Ae2TerminalLayout.ToolbarX * scale);
+                face.Y.Should().Be(bar.Y + topInset + count * pitch);
+                (face.X + face.Width).Should().BeLessThan((Ae2TerminalLayout.Rail + Ae2TerminalLayout.Inset) * scale);
+                count++;
+            }
+            bar.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(count) * scale);
+        }
     }
+
+    private static readonly TerminalDragAction[] DragActions =
+        { TerminalDragAction.Drain, TerminalDragAction.Use, TerminalDragAction.Pin };
+    private const TerminalDragAction AllDragActions = TerminalDragAction.Drain | TerminalDragAction.Use | TerminalDragAction.Pin;
 
     [TestMethod]
     [DataRow(320, 240, (int)TerminalHeight.Small, 1, 3, 101)]
@@ -149,23 +147,25 @@ public sealed class Ae2TerminalLayoutTests
     [DataRow(1280, 720, (int)TerminalHeight.Full, 4, 3, 101)]
     [DataRow(1920, 1080, (int)TerminalHeight.Medium, 4, 4, 99)]
     [DataRow(1920, 1080, (int)TerminalHeight.Full, 4, 8, 170)]
-    public void PinActionRailJoinsTheBoardBottomOnlyAtMinimumHeight(int width, int height, int style, int scale, int rows, int drainY)
+    public void ArmingKeepsTheExactFaceInPlaceWhenItsSiblingsDisappear(int width, int height, int style, int scale, int rows, int drainY)
     {
         var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
         layout.Scale.Should().Be(scale);
         layout.Rows.Should().Be(rows);
-        layout.DragActionBounds(TerminalDragAction.Drain).Y.Should().Be(drainY * scale);
-        var pin = layout.DragActionBounds(TerminalDragAction.Pin);
-        // The hit targets do not jump when only some of the actions are eligible.
-        foreach (var (drain, use) in new[] { (true, true), (false, true), (true, false), (false, false) })
+        layout.DragActionBounds(AllDragActions, TerminalDragAction.Drain).Y.Should().Be(drainY * scale);
+
+        foreach (var actions in new[] { AllDragActions, TerminalDragAction.Drain | TerminalDragAction.Pin,
+                     TerminalDragAction.Use | TerminalDragAction.Pin, TerminalDragAction.Drain, TerminalDragAction.Use })
+        foreach (var action in new[] { TerminalDragAction.Drain, TerminalDragAction.Use })
         {
-            var bar = layout.DragActionBackgroundBounds(drain, use, pin: true);
-            (bar.Y + bar.Height - pin.Y - pin.Height).Should().Be(5 * scale);
-            if (rows == Ae2TerminalLayout.MinRows) (bar.Y + bar.Height).Should().Be(layout.Height);
-            else (bar.Y + bar.Height).Should().BeLessThan(layout.Height);
+            if ((actions & action) == 0) continue;
+            var face = layout.DragActionBounds(actions, action);
+            var bar = layout.DragActionBackgroundBounds(actions, armed: action);
+            bar.Height.Should().Be(Ae2TerminalLayout.ButtonBarHeight(1) * scale);
+            (face.Y - bar.Y).Should().Be(Ae2TerminalLayout.ButtonBarInsetY * scale);
+            (bar.Y + bar.Height - face.Y - face.Height).Should().Be(5 * scale);
+            layout.HitsDragAction(actions, action, layout.Left + face.X, layout.Top + face.Y).Should().BeTrue();
         }
-        var withoutPin = layout.DragActionBackgroundBounds(drain: true, use: true);
-        (withoutPin.Y + withoutPin.Height).Should().BeLessThan(layout.Height);
     }
 
     [TestMethod]
@@ -174,19 +174,25 @@ public sealed class Ae2TerminalLayoutTests
     public void DragActionHitsUseTheExactAbsoluteFaceRatherThanTheBackground(int width, int height, int style)
     {
         var layout = new Ae2TerminalLayout(width, height, (TerminalHeight)style);
-        foreach (var action in System.Enum.GetValues<TerminalDragAction>())
+        foreach (var actions in new[] { AllDragActions, TerminalDragAction.Drain | TerminalDragAction.Pin })
+        foreach (var action in DragActions)
         {
-            var (x, y, w, h) = layout.DragActionBounds(action);
+            var (x, y, w, h) = layout.DragActionBounds(actions, action);
             var left = layout.Left + x;
             var top = layout.Top + y;
-            layout.HitsDragAction(action, left, top).Should().BeTrue();
-            layout.HitsDragAction(action, left + w - 1, top + h - 1).Should().BeTrue();
-            layout.HitsDragAction(action, left - 1, top).Should().BeFalse();
-            layout.HitsDragAction(action, left, top - 1).Should().BeFalse();
-            layout.HitsDragAction(action, left + w, top).Should().BeFalse();
-            layout.HitsDragAction(action, left, top + h).Should().BeFalse();
-            var other = action == TerminalDragAction.Drain ? TerminalDragAction.Use : TerminalDragAction.Drain;
-            layout.HitsDragAction(other, left, top).Should().BeFalse();
+            if ((actions & action) == 0)
+            {
+                layout.HitsDragAction(actions, action, left, top).Should().BeFalse();
+                continue;
+            }
+            layout.HitsDragAction(actions, action, left, top).Should().BeTrue();
+            layout.HitsDragAction(actions, action, left + w - 1, top + h - 1).Should().BeTrue();
+            layout.HitsDragAction(actions, action, left - 1, top).Should().BeFalse();
+            layout.HitsDragAction(actions, action, left, top - 1).Should().BeFalse();
+            layout.HitsDragAction(actions, action, left + w, top).Should().BeFalse();
+            layout.HitsDragAction(actions, action, left, top + h).Should().BeFalse();
+            foreach (var other in DragActions)
+                if (other != action) layout.HitsDragAction(actions, other, left, top).Should().BeFalse();
         }
     }
 
