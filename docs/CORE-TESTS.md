@@ -9,7 +9,7 @@
 - 查询过滤先于分组；null/空白查询、大小写不敏感、多词 AND，以及外部 matcher 对各词的扩展匹配。
 - 外部 matcher 注册、释放、异常隔离及失败后禁用。
 - 必需构造参数、投影输入、搜索条目及 matcher 的 null 参数验证。
-- [终端屏幕描述](../Assets/AE2/screens/terminals/terminal.json)的命名区域、PNG 裁切边界，以及无效 JSON、路径和九宫格边宽的处理。
+- [终端屏幕描述](../assets/unknowninventoryterminal/screens/terminals/terminal.json)的命名区域、PNG 裁切边界，以及无效 JSON、路径和九宫格边宽的处理。
 
 在项目根目录运行：
 

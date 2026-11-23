@@ -25,8 +25,12 @@ internal static class Program
             var project = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(screen)!, "..", "..", "..", ".."));
             var findRoot = typeof(MainWindow).GetMethod("FindDefaultResourceRoot", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
             var fromPublish = findRoot.Invoke(null, new object[] { Path.Combine(project, "dist", "TexturePreviewer") });
-            if (!Equals(fromPublish, Path.Combine(project, "Assets", "AE2")))
-                throw new InvalidOperationException($"Published previewer must watch the project's source textures, not {fromPublish}.");
+            var sourceRoot = Path.Combine(project, "assets", "unknowninventoryterminal");
+            if (!Equals(fromPublish, sourceRoot) || ((TextBlock)window.FindName("FolderLabel")).Text != sourceRoot)
+                throw new InvalidOperationException($"Both development and published previewers must watch {sourceRoot}; published root: {fromPublish}.");
+            if (((TextBox)window.FindName("StatusBox")).Text != "屏幕定义和所有图集区域均有效。")
+                throw new InvalidOperationException("Previewer reported warnings while loading the new asset namespace.");
+            CheckLegacyRootIsIgnored(findRoot, sourceRoot);
             var style = UnknownInventoryTerminal.Ae2ScreenStyle.Parse(File.ReadAllText(screen));
             CheckSelection(window, regions, viewport, "Close", Expected(style, UnknownInventoryTerminal.Ae2Image.Close));
             CheckSelection(window, regions, viewport, "ButtonHover", Expected(style, UnknownInventoryTerminal.Ae2Image.ButtonHover));
@@ -80,10 +84,27 @@ internal static class Program
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            var path = Path.Combine(directory.FullName, "Assets", "AE2", "screens", "terminals", "terminal.json");
+            var path = Path.Combine(directory.FullName, "assets", "unknowninventoryterminal", "screens", "terminals", "terminal.json");
             if (File.Exists(path)) return path;
         }
-        throw new FileNotFoundException("Assets/AE2/screens/terminals/terminal.json was not found above the harness output.");
+        throw new FileNotFoundException("assets/unknowninventoryterminal/screens/terminals/terminal.json was not found above the harness output.");
+    }
+
+    private static void CheckLegacyRootIsIgnored(System.Reflection.MethodInfo findRoot, string sourceRoot)
+    {
+        // Put the fixture in the ignored harness output; the nearest legacy tree must lose to the real source tree.
+        var fixture = Directory.CreateDirectory(Path.Combine(AppContext.BaseDirectory, $"uit-preview-root-{Guid.NewGuid():N}"));
+        try
+        {
+            var oldScreenDir = Directory.CreateDirectory(Path.Combine(fixture.FullName, "Assets", "AE2", "screens", "terminals"));
+            File.WriteAllText(Path.Combine(oldScreenDir.FullName, "terminal.json"), "{}");
+            if (!Equals(findRoot.Invoke(null, new object[] { fixture.FullName }), sourceRoot))
+                throw new InvalidOperationException("Previewer must ignore a legacy-only asset tree.");
+        }
+        finally
+        {
+            fixture.Delete(recursive: true);
+        }
     }
 
     private static Int32Rect Expected(UnknownInventoryTerminal.Ae2ScreenStyle style, UnknownInventoryTerminal.Ae2Image id) =>

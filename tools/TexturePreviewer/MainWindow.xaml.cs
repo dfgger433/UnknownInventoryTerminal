@@ -45,8 +45,8 @@ public partial class MainWindow : Window
         string? nearest = null;
         for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
         {
-            var candidate = Path.Combine(directory.FullName, "Assets", "AE2");
-            if (!File.Exists(Path.Combine(candidate, "screens", "terminals", "terminal.json"))) continue;
+            var candidate = TerminalAssets.RootUnder(directory.FullName);
+            if (!File.Exists(TerminalAssets.ScreenPath(candidate))) continue;
             if (File.Exists(Path.Combine(directory.FullName, "src", "UnknownInventoryTerminal", "UnknownInventoryTerminal.csproj")))
                 return candidate;
             nearest ??= candidate;
@@ -56,7 +56,7 @@ public partial class MainWindow : Window
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Title = "选择 AE2 资源目录（包含 screens 和 textures）", Multiselect = false };
+        var dialog = new OpenFolderDialog { Title = "选择终端资源目录（包含 screens 和 textures）", Multiselect = false };
         if (dialog.ShowDialog(this) == true) SetRoot(dialog.FolderName);
     }
 
@@ -105,7 +105,7 @@ public partial class MainWindow : Window
         _loading = true;
         try
         {
-            var jsonPath = Path.Combine(_root, "screens", "terminals", "terminal.json");
+            var jsonPath = TerminalAssets.ScreenPath(_root);
             if (!File.Exists(jsonPath)) throw new FileNotFoundException("找不到 screens/terminals/terminal.json", jsonPath);
             _style = Ae2ScreenStyle.Parse(File.ReadAllText(jsonPath));
             var previouslySelected = _selected;
@@ -156,7 +156,7 @@ public partial class MainWindow : Window
         finally { _loading = false; }
     }
 
-    private string TexturePath(string logical) => Path.Combine(_root!, "textures", logical.Replace('/', Path.DirectorySeparatorChar));
+    private string TexturePath(string logical) => TerminalAssets.TexturePath(_root!, logical);
 
     private static BitmapSource LoadBitmap(string path)
     {

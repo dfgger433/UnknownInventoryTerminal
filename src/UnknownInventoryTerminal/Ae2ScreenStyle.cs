@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -122,6 +123,38 @@ namespace UnknownInventoryTerminal
         };
     }
 
+    internal static class TerminalAssets
+    {
+        private const string Namespace = "unknowninventoryterminal";
+        private const string TexturePrefix = Namespace + ":textures/";
+
+        internal static string RootUnder(string directory) => Path.Combine(directory, "assets", Namespace);
+        internal static string ScreenPath(string root) => Path.Combine(root, "screens", "terminals", "terminal.json");
+        internal static string TexturePath(string root, string relative) =>
+            Path.Combine(root, "textures", relative.Replace('/', Path.DirectorySeparatorChar));
+
+        // Resolve only this mod's namespaced PNGs. Do not normalize legacy IDs or arbitrary filesystem paths.
+        internal static bool TryGetTextureRelativePath(string id, out string path)
+        {
+            path = string.Empty;
+            if (!id.StartsWith(TexturePrefix, StringComparison.Ordinal) || !id.EndsWith(".png", StringComparison.Ordinal))
+                return false;
+
+            var relative = id.Substring(TexturePrefix.Length);
+            if (!relative.StartsWith("guis/", StringComparison.Ordinal) && !relative.StartsWith("gui/sprites/", StringComparison.Ordinal))
+                return false;
+            foreach (var part in relative.Substring(0, relative.Length - 4).Split('/'))
+            {
+                if (part.Length == 0) return false;
+                foreach (var c in part)
+                    if (c is not (>= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-')) return false;
+            }
+
+            path = relative;
+            return true;
+        }
+    }
+
     // AE2 uses top-left source coordinates: [x, y, width, height].
     internal readonly struct Ae2ImageRegion
     {
@@ -183,7 +216,7 @@ namespace UnknownInventoryTerminal
         private static bool TryParseRegion(JObject entry, out Ae2ImageRegion region)
         {
             region = default;
-            if (entry["texture"] is not JValue { Value: string path } || !IsTexturePath(path) ||
+            if (entry["texture"] is not JValue { Value: string id } || !TerminalAssets.TryGetTextureRelativePath(id, out var path) ||
                 entry["srcRect"] is not JArray rect || rect.Count != 4 ||
                 !TryNonnegativeInt(rect[0], out var x) || !TryNonnegativeInt(rect[1], out var y) ||
                 !TryNonnegativeInt(rect[2], out var width) || width == 0 ||
@@ -207,20 +240,6 @@ namespace UnknownInventoryTerminal
             }
             number = 0;
             return false;
-        }
-
-        private static bool IsTexturePath(string path)
-        {
-            if ((!path.StartsWith("guis/", StringComparison.Ordinal) && !path.StartsWith("gui/sprites/", StringComparison.Ordinal)) ||
-                !path.EndsWith(".png", StringComparison.Ordinal)) return false;
-            var parts = path.Substring(0, path.Length - 4).Split('/');
-            foreach (var part in parts)
-            {
-                if (part.Length == 0) return false;
-                foreach (var c in part)
-                    if (c is not (>= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-')) return false;
-            }
-            return true;
         }
     }
 }

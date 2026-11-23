@@ -19,7 +19,7 @@
       </StackPanel>
       <StackPanel>
         <TextBlock Text="终端贴图工作台" FontSize="23" FontWeight="SemiBold" />
-        <TextBlock x:Name="FolderLabel" Text="选择包含 screens/ 和 textures/ 的 AE2 资源目录" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
+        <TextBlock x:Name="FolderLabel" Text="选择包含 screens/ 和 textures/ 的终端资源目录" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
       </StackPanel>
     </DockPanel>
 

@@ -6,7 +6,7 @@ $destinationDir = Join-Path $GameRoot 'BepInEx\plugins\UnknownInventoryTerminal'
 if (!(Test-Path (Join-Path $GameRoot 'CasualtiesUnknown_Data\Managed\Assembly-CSharp.dll'))) { throw 'Invalid game directory.' }
 if (!(Test-Path (Join-Path $GameRoot 'BepInEx\plugins\CUCoreLib.dll'))) { throw 'CUCoreLib is required.' }
 if (Get-Process -Name CasualtiesUnknown -ErrorAction SilentlyContinue) { throw 'Close the game before installation.' }
-$assetSubdir = 'Assets\AE2'
+$assetSubdir = 'assets\unknowninventoryterminal'
 $langSubdir = 'Lang'
 $files = @(
     'UnknownInventoryTerminal.dll',

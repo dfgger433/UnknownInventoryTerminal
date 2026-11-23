@@ -16,8 +16,8 @@ namespace UnknownInventoryTerminal
         internal static readonly Color Focus = new Color32(170, 216, 255, 255);
         private static readonly Color SlotHoverFill = Argb(Ae2SlotAppearance.HoverFill);
         private static readonly Color SlotHoverBorder = Argb(Ae2SlotAppearance.HoverBorder);
-        private static readonly string Root = Path.Combine(
-            Path.GetDirectoryName(typeof(Ae2TerminalSkin).Assembly.Location)!, "Assets", "AE2");
+        private static readonly string Root = TerminalAssets.RootUnder(
+            Path.GetDirectoryName(typeof(Ae2TerminalSkin).Assembly.Location)!);
         private readonly ManualLogSource _log;
         private readonly Dictionary<string, Texture2D?> _textures = new Dictionary<string, Texture2D?>();
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
@@ -33,15 +33,15 @@ namespace UnknownInventoryTerminal
         {
             if (_loadedStyle) return;
             _loadedStyle = true;
-            const string name = "screens/terminals/terminal.json";
+            var path = TerminalAssets.ScreenPath(Root);
             try
             {
-                _style = Ae2ScreenStyle.Parse(File.ReadAllText(Path.Combine(Root, name)));
+                _style = Ae2ScreenStyle.Parse(File.ReadAllText(path));
                 foreach (var warning in _style.Warnings) _log.LogWarning("AE2 terminal screen: " + warning);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                _log.LogWarning("AE2 terminal screen unavailable (" + name + "): " + ex.Message);
+                _log.LogWarning("AE2 terminal screen unavailable (" + path + "): " + ex.Message);
             }
         }
 
@@ -51,7 +51,7 @@ namespace UnknownInventoryTerminal
             Texture2D? texture = null;
             try
             {
-                var bytes = File.ReadAllBytes(Path.Combine(Root, "textures", name));
+                var bytes = File.ReadAllBytes(TerminalAssets.TexturePath(Root, name));
                 texture = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = "UIT.AE2." + name };
                 // LoadImage can reset texture settings during decoding.
                 // Keep the PNG readable so toolbar icons can be aligned to their actual alpha bounds.

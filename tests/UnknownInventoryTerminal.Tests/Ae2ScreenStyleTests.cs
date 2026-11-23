@@ -12,10 +12,12 @@ namespace UnknownInventoryTerminal.Tests;
 [TestClass]
 public sealed class Ae2ScreenStyleTests
 {
+    private static readonly string BundledAssetRoot = Path.Combine(AppContext.BaseDirectory, "assets", "unknowninventoryterminal");
+
     [TestMethod]
     public void MigratedTerminalStyleDefinesEveryImageAndFitsItsPng()
     {
-        var jsonPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json");
+        var jsonPath = TerminalAssets.ScreenPath(BundledAssetRoot);
         File.Exists(jsonPath).Should().BeTrue($"the migrated terminal screen definition must be copied to test output: {jsonPath}");
 
         var style = Ae2ScreenStyle.Parse(File.ReadAllText(jsonPath));
@@ -297,7 +299,7 @@ public sealed class Ae2ScreenStyleTests
     {
         var path = TextureFilePath("guis/terminal.png");
         using var bitmap = PngPixels.Read(path);
-        var style = Ae2ScreenStyle.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
+        var style = Ae2ScreenStyle.Parse(File.ReadAllText(TerminalAssets.ScreenPath(BundledAssetRoot)));
         style.TryGet(Ae2Image.Bottom, out var bottom).Should().BeTrue();
         // The shipped parts are cut from the 3-row board, which is the Small layout.
         var layout = new Ae2TerminalLayout(1280, 720);
@@ -316,7 +318,7 @@ public sealed class Ae2ScreenStyleTests
     public void MiddleRowRepeatsAndTheScrollbarGrooveRunsThroughEveryRow()
     {
         using var bitmap = PngPixels.Read(TextureFilePath("guis/terminal.png"));
-        var style = Ae2ScreenStyle.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
+        var style = Ae2ScreenStyle.Parse(File.ReadAllText(TerminalAssets.ScreenPath(BundledAssetRoot)));
         style.TryGet(Ae2Image.Row, out var row).Should().BeTrue();
         // Repeated middle rows extend the groove, so its inside must reach the first and last pixel row of the part.
         foreach (var y in new[] { row.Y, row.Y + row.Height - 1 })
@@ -456,7 +458,7 @@ public sealed class Ae2ScreenStyleTests
     public void ParsesValidRegionAndDefaultsOptionalBorderToZero()
     {
         var style = Ae2ScreenStyle.Parse("""
-            { "images": { "button": { "texture": "guis/buttons.png", "srcRect": [1, 2, 18, 18] } } }
+            { "images": { "button": { "texture": "unknowninventoryterminal:textures/guis/buttons.png", "srcRect": [1, 2, 18, 18] } } }
             """);
 
         style.TryGet(Ae2Image.Button, out var region).Should().BeTrue();
@@ -472,7 +474,7 @@ public sealed class Ae2ScreenStyleTests
     public void ParsesOptionalBorderAndChecksRectangleBounds()
     {
         var style = Ae2ScreenStyle.Parse("""
-            { "images": { "tooltip": { "texture": "gui/sprites/tooltip.png", "srcRect": [0, 0, 16, 16], "border": 6 } } }
+            { "images": { "tooltip": { "texture": "unknowninventoryterminal:textures/gui/sprites/tooltip.png", "srcRect": [0, 0, 16, 16], "border": 6 } } }
             """);
 
         style.TryGet(Ae2Image.Tooltip, out var region).Should().BeTrue();
@@ -489,7 +491,7 @@ public sealed class Ae2ScreenStyleTests
     [DataRow("\"6\"")]
     public void SkipsRegionsWithMalformedBorders(string border)
     {
-        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"guis/buttons.png\",\"srcRect\":[0,0,10,10],\"border\":" + border + "}}}");
+        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"srcRect\":[0,0,10,10],\"border\":" + border + "}}}");
 
         style.TryGet(Ae2Image.Button, out _).Should().BeFalse();
         style.Warnings.Any(warning => warning.Contains("images.button", StringComparison.Ordinal)).Should().BeTrue();
@@ -498,19 +500,25 @@ public sealed class Ae2ScreenStyleTests
     [TestMethod]
     public void RejectsDuplicatePropertiesInTheJsonDocument()
     {
-        var act = () => Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"guis/buttons.png\",\"texture\":\"guis/other.png\",\"srcRect\":[0,0,18,18]}}}");
+        var act = () => Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"texture\":\"unknowninventoryterminal:textures/guis/other.png\",\"srcRect\":[0,0,18,18]}}}");
 
         act.Should().Throw<JsonReaderException>();
     }
 
     [TestMethod]
-    [DataRow("../secret.png")]
-    [DataRow("guis/../secret.png")]
-    [DataRow("guis/buttons.jpg")]
+    [DataRow("guis/buttons.png")]
+    [DataRow("gui/sprites/buttons.png")]
     [DataRow("textures/guis/buttons.png")]
-    [DataRow("Guis/buttons.png")]
-    [DataRow("guis//buttons.png")]
-    [DataRow("gui/sprites/../buttons.png")]
+    [DataRow("ae2:textures/guis/buttons.png")]
+    [DataRow("unknowninventoryterminal:guis/buttons.png")]
+    [DataRow("UnknownInventoryTerminal:textures/guis/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/guis/../secret.png")]
+    [DataRow("unknowninventoryterminal:textures/guis/buttons.jpg")]
+    [DataRow("unknowninventoryterminal:textures/Guis/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/guis//buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/sprites/../buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/guis/sub\\buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/buttons.png")]
     public void SkipsRegionsWithDisallowedTexturePaths(string texture)
     {
         var json = "{\"images\":{\"button\":{\"texture\":" + JsonConvert.ToString(texture) + ",\"srcRect\":[0,0,18,18]}}}";
@@ -526,7 +534,7 @@ public sealed class Ae2ScreenStyleTests
     [DataRow("[2147483648, 0, 18, 18]")]
     public void SkipsMalformedSourceRectangles(string sourceRect)
     {
-        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"guis/buttons.png\",\"srcRect\":" + sourceRect + "}}}");
+        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"srcRect\":" + sourceRect + "}}}");
 
         style.TryGet(Ae2Image.Button, out _).Should().BeFalse();
         style.Warnings.Any(warning => warning.Contains("images.button", StringComparison.Ordinal)).Should().BeTrue();
@@ -544,13 +552,9 @@ public sealed class Ae2ScreenStyleTests
     }
 
     private static Ae2ScreenStyle ReadBundledStyle() => Ae2ScreenStyle.Parse(File.ReadAllText(
-        Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "screens", "terminals", "terminal.json")));
+        TerminalAssets.ScreenPath(BundledAssetRoot)));
 
-    private static string TextureFilePath(string logicalTexture)
-    {
-        var relative = logicalTexture.Replace('/', Path.DirectorySeparatorChar);
-        return Path.Combine(AppContext.BaseDirectory, "Assets", "AE2", "textures", relative);
-    }
+    private static string TextureFilePath(string logicalTexture) => TerminalAssets.TexturePath(BundledAssetRoot, logicalTexture);
 
     private static (int Width, int Height) ReadPngDimensions(string path)
     {

@@ -2,7 +2,7 @@
 
 Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生终端，不再包含 WebUI 网页前端。
 
-## 终端 0.4.32
+## 终端 0.4.33
 
 - 只读取本地玩家的真实物品实例，按实例身份去重；不复制物品、不修改真实容器层级。
 - 终端窗口固定在屏幕中央，不可拖动。打开时不显示原版径向物品栏或容器面板。上部是六列可搜索仓储网格，按精确物品 ID 聚合同类；下部显示双手、主槽位和装备，不受搜索过滤。
@@ -41,9 +41,9 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 
 ## GUI 资源
 
-终端按 AE2 的结构将贴图放在 [textures 目录](Assets/AE2/textures/)，将背景裁切、按钮状态与图标映射放在[终端屏幕描述](Assets/AE2/screens/terminals/terminal.json)。旧的平铺贴图及 `AE2_New` 不再读取；定制方法见[贴图替换说明](Assets/AE2/README.md)。
+终端只从插件 DLL 同级的 `assets/unknowninventoryterminal/` 读取资源。[贴图](assets/unknowninventoryterminal/textures/)和[终端屏幕描述](assets/unknowninventoryterminal/screens/terminals/terminal.json)共用这一命名空间。旧目录及旧的无命名空间纹理引用不再读取；升级时请按[贴图替换说明](assets/unknowninventoryterminal/README.md)迁移自定义资源。
 
-AE2 原图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。终端底板和按钮图集含本地手绘修改；界面在运行时裁切和重组。完整来源和使用条款见[贴图授权说明](Assets/AE2/NOTICE.txt)。
+AE2 原图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。终端底板和按钮图集含本地手绘修改；界面在运行时裁切和重组。完整来源和使用条款见[贴图授权说明](assets/unknowninventoryterminal/NOTICE.txt)。
 
 ## 文档
 
