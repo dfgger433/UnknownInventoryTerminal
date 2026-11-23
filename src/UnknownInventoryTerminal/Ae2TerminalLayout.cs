@@ -123,8 +123,12 @@ namespace UnknownInventoryTerminal
             var top = Top + y;
             return screenX >= left && screenX < left + width && screenY >= top && screenY < top + height;
         }
+        // A pinned row with multiple pages reserves the first storage row for the pager, but a single page
+        // leaves the scrollbar alongside the pinned row so its thumb still starts at the top of the groove.
+        internal int ScrollTrackTop(bool hasPinnedPager = false) => (hasPinnedPager ? Pitch : 0) + GrooveBorder;
         // Like AE2, the thumb travels between the two end borders of the painted groove.
-        internal int ScrollTrackHeight(bool hasPinnedRow = false) => StorageRows(hasPinnedRow) * Pitch - 2 * GrooveBorder;
+        internal int ScrollTrackHeight(bool hasPinnedPager = false) =>
+            (hasPinnedPager ? StorageRows(hasPinnedRow: true) : Rows) * Pitch - 2 * GrooveBorder;
         // Height of vertical_buttons_bg.png behind the given number of visible buttons.
         internal static int ButtonBarHeight(int buttons) => buttons * ToolbarPitch + 6;
         internal static int ContentRows(int tiles) => (Math.Max(0, tiles) + Columns - 1) / Columns;

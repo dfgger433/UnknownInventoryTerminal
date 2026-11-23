@@ -92,9 +92,13 @@ public sealed class Ae2TerminalLayoutTests
         left.Should().Be(121);
         (left * 2 + Ae2TerminalLayout.DefaultThumbWidth).Should().Be(2 * Ae2TerminalLayout.GrooveLeft + Ae2TerminalLayout.GrooveWidth);
         (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder).Should().Be(18);
+        layout.ScrollTrackTop().Should().Be(Ae2TerminalLayout.GrooveBorder);
+        layout.ScrollTrackTop(hasPinnedPager: true).Should().Be(Ae2TerminalLayout.Pitch + Ae2TerminalLayout.GrooveBorder);
         layout.ScrollTrackHeight().Should().Be(trackHeight);
-        layout.ScrollTrackHeight(hasPinnedRow: true).Should().Be(trackHeight - Ae2TerminalLayout.Pitch);
-        (Ae2TerminalLayout.Header + Ae2TerminalLayout.GrooveBorder + trackHeight).Should().Be(layout.StatusTop - 1);
+        layout.ScrollTrackHeight(hasPinnedPager: true).Should().Be(trackHeight - Ae2TerminalLayout.Pitch);
+        (Ae2TerminalLayout.Header + layout.ScrollTrackTop() + trackHeight).Should().Be(layout.StatusTop - 1);
+        (Ae2TerminalLayout.Header + layout.ScrollTrackTop(hasPinnedPager: true) +
+            layout.ScrollTrackHeight(hasPinnedPager: true)).Should().Be(layout.StatusTop - 1);
     }
 
     [TestMethod]

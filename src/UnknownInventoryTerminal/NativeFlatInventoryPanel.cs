@@ -68,7 +68,7 @@ namespace UnknownInventoryTerminal
         private Image? _pinnedGutter, _grooveTop, _pinnedHighlight;
         private TextMeshProUGUI? _pinPageLabel;
         private Button? _pinPager;
-        private bool _hasPinnedRow;
+        private bool _hasPinnedRow, _hasPinnedPager;
         private int _storageTileCount;
         private GameObject? _root;
         private RectTransform? _windowSurface, _board, _panel, _viewport, _content, _lower, _extensionRoot;
@@ -467,7 +467,8 @@ namespace UnknownInventoryTerminal
             var thumbSize = _skin.SourceSize(Ae2Image.Thumb) ??
                 new Vector2Int(Ae2TerminalLayout.DefaultThumbWidth, Ae2TerminalLayout.DefaultThumbHeight);
             _scrollTrackBounds = new Rect(Ae2TerminalLayout.ThumbLeft(thumbSize.x) * scale,
-                storageTop + Ae2TerminalLayout.GrooveBorder * scale, thumbSize.x * scale, _layout.ScrollTrackHeight(_hasPinnedRow) * scale);
+                _layout.ScrollTrackTop(_hasPinnedPager) * scale, thumbSize.x * scale,
+                _layout.ScrollTrackHeight(_hasPinnedPager) * scale);
             Position(_slider!.GetComponent<RectTransform>(), _scrollTrackBounds);
             var handle = _thumb!.rectTransform;
             handle.sizeDelta = new Vector2(0, thumbSize.y * scale);
@@ -755,14 +756,16 @@ namespace UnknownInventoryTerminal
             _pins.SetOwner(body);
             _pins.Prune(item => GameInventoryAdapter.Owns(body, item));
             var hasPinnedRow = _pins.PageCount > 0;
+            var hasPinnedPager = _pins.PageCount > 1;
             _pinnedRow!.gameObject.SetActive(hasPinnedRow);
-            _pinnedGutter!.gameObject.SetActive(hasPinnedRow);
-            _grooveTop!.gameObject.SetActive(hasPinnedRow);
-            _pinPager!.gameObject.SetActive(_pins.PageCount > 1);
-            if (_pins.PageCount > 1) _pinPageLabel!.text = $"{_pins.Page + 1}/{_pins.PageCount}";
-            if (_hasPinnedRow != hasPinnedRow)
+            _pinnedGutter!.gameObject.SetActive(hasPinnedPager);
+            _grooveTop!.gameObject.SetActive(hasPinnedPager);
+            _pinPager!.gameObject.SetActive(hasPinnedPager);
+            if (hasPinnedPager) _pinPageLabel!.text = $"{_pins.Page + 1}/{_pins.PageCount}";
+            if (_hasPinnedRow != hasPinnedRow || _hasPinnedPager != hasPinnedPager)
             {
                 _hasPinnedRow = hasPinnedRow;
+                _hasPinnedPager = hasPinnedPager;
                 ApplyLayout();
             }
             var rows = InventoryProjection.Build(_entries.Where(e => e.NativeItem is Item item && item && !_pins.Contains(item)),
