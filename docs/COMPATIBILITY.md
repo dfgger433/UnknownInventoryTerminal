@@ -98,6 +98,12 @@ Input.GetKeyDown(KeyBinds.GetBind("casualtiestogether_chat"))
 
 因此“Original item menu”和“Drag with original controls”必须最终调用原版 `PlayerCamera`/`InvButton`/`Container` 路径（或在主线程模拟同一原版调用），不得从终端直接修改 transform、parent 或仅修改本地列表来宣称已同步。主机无需安装额外 mod 的前提是：客户端动作仍进入 Together 已有的原版 inventory-action patch 与 `ItemSync` 路径；本终端本身不新增网络消息。
 
+### 拖出终端丢弃
+
+只有从终端实际物品格开始的拖拽，在游戏画面内、终端完整边界外松开原版拖拽键，才进入丢弃流程。仍由 `PlayerCamera.HandleReleaseDragging` 执行原版 `DoPickupCheck` 和收尾；在其 UI 处理阶段分别调用 `Container.UnloadItem`、`Body.DropItem` 或 `Body.DropWearable`。原版世界点击仍被屏蔽，因此不会向光标下的场景容器存入物品。Together 的原版释放钩子可对比释放前后的物品归属，无需新增网络消息。
+
+实机验收：分别从仓储实例、固定栏、手持槽和穿戴格尝试丢弃；确认只丢当前实例，且拖回终端、仅按住不松、失焦或窗口内空白不会丢弃。有 Together 时从客户端重复，并在主机侧确认物品落地且双方库存一致。
+
 ## 本次未实测 / 风险
 
 - 未启动游戏、未进入主机/客户端会话，未验证不同 Together 规则、容器损坏/休眠袋、距离限制和物品权限。

@@ -6,8 +6,14 @@ namespace UnknownInventoryTerminal
 
     internal static class TerminalDragGesture
     {
-        // Releasing the drag key alone never performs an action. If left is a separate
-        // input, a new left press over the action can confirm even before the drag key is released.
+        // Keep the native 10px movement threshold so a click near an edge never drops an item.
+        internal static bool CanDiscard(bool dragReleased, bool cancelPressed, bool insideTerminal,
+            float x, float y, int screenWidth, int screenHeight, float travelSquared) =>
+            dragReleased && !cancelPressed && !insideTerminal &&
+            x >= 0 && x < screenWidth && y >= 0 && y < screenHeight && travelSquared > 100f;
+
+        // Releasing over a Use/Drain button only arms it. If left is a separate input,
+        // a new left press over the action can confirm even before the drag key is released.
         internal static TerminalDragStart Begin(bool dragReleased, bool leftPressed, bool rightPressed) =>
             rightPressed ? TerminalDragStart.Cancel : leftPressed ? TerminalDragStart.Confirm :
             dragReleased ? TerminalDragStart.Arm : TerminalDragStart.None;

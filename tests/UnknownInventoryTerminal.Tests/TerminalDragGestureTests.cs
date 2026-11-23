@@ -7,6 +7,24 @@ namespace UnknownInventoryTerminal.Tests;
 public sealed class TerminalDragGestureTests
 {
     [TestMethod]
+    [DataRow(true, false, false, 24f, 60f, 121f, true)]
+    [DataRow(false, false, false, 24f, 60f, 121f, false)] // still dragging
+    [DataRow(true, true, false, 24f, 60f, 121f, false)] // cancel and release together
+    [DataRow(true, false, true, 24f, 60f, 121f, false)] // anywhere inside, including blank chrome
+    [DataRow(true, false, false, 24f, 60f, 100f, false)] // exactly 10px is not a drag
+    [DataRow(true, false, false, 24f, 60f, 81f, false)]
+    [DataRow(true, false, false, -1f, 60f, 121f, false)]
+    [DataRow(true, false, false, 320f, 60f, 121f, false)]
+    [DataRow(true, false, false, 24f, -1f, 121f, false)]
+    [DataRow(true, false, false, 24f, 240f, 121f, false)]
+    [DataRow(true, false, false, 319f, 239f, 121f, true)]
+    public void DiscardRequiresReleaseOutsideTerminalButInsideGameScreen(bool released, bool cancelled, bool inside,
+        float x, float y, float travelSquared, bool expected)
+    {
+        TerminalDragGesture.CanDiscard(released, cancelled, inside, x, y, 320, 240, travelSquared).Should().Be(expected);
+    }
+
+    [TestMethod]
     public void DragCanConfirmWithLeftBeforeReleasingASeparateDragKey()
     {
         TerminalDragGesture.Begin(dragReleased: false, leftPressed: false, rightPressed: false)

@@ -39,6 +39,7 @@ namespace UnknownInventoryTerminal
         private bool _inputReady, _sessionActive, _closing;
         private PlayerCamera? _sessionCamera;
         private Body? _sessionBody;
+        private Item? _terminalDragItem;
         private CursorLockMode _cursorLock;
         private bool _cursorVisible, _forceNoMovementValue, _radialOpen;
         private GameObject? _selectedObject;
@@ -186,6 +187,21 @@ namespace UnknownInventoryTerminal
             : Array.Empty<Item>();
         internal static bool IsTerminalPoint(Vector2 screenPoint) =>
             Instance?._window?.ContainsScreenPoint(screenPoint) == true;
+
+        internal static void SetTerminalDrag(PlayerCamera camera, Item? item)
+        {
+            if (Instance is { } plugin && camera == plugin._sessionCamera) plugin._terminalDragItem = item;
+        }
+
+        internal static bool IsTerminalDrag(PlayerCamera camera, Item item) => Instance is { } plugin &&
+            camera == plugin._sessionCamera && ReferenceEquals(plugin._terminalDragItem, item);
+
+        internal static bool CanDiscardAtPointer(PlayerCamera camera, Item source, Vector2 pointer) =>
+            CanInteractWithDragActions(camera) && IsTerminalDrag(camera, source) &&
+            Application.isFocused && !SettingsBridge.IsTogglePressed() && !Input.GetKeyDown(KeyBinds.GetBind("pause")) &&
+            TerminalDragGesture.CanDiscard(Input.GetKeyUp(KeyBinds.GetBind("iteminteract")), Input.GetMouseButtonDown(1),
+                IsTerminalPoint(pointer), pointer.x, pointer.y, Screen.width, Screen.height, (pointer - camera.clickPos).sqrMagnitude);
+
         internal static InvButton? ResolveTerminalDrop(PlayerCamera camera)
         {
             var panel = Instance?._nativePanel;
@@ -305,6 +321,7 @@ namespace UnknownInventoryTerminal
                 if (!handOff) CancelDrag(_sessionCamera!);
                 _sessionCamera!.radialOpen = _radialOpen;
             }
+            _terminalDragItem = null;
             // Restore the exact body saved at open, even if main.body has changed.
             if (_sessionBody) _sessionBody!.forceNoMovement = _forceNoMovementValue;
             Cursor.lockState = _cursorLock; Cursor.visible = _cursorVisible;
@@ -319,6 +336,7 @@ namespace UnknownInventoryTerminal
         internal static void CancelDrag(PlayerCamera camera)
         {
             GamePatches.CancelPendingAction(camera);
+            SetTerminalDrag(camera, null);
             camera.dragItem = null;
             if (camera.dragImage) camera.dragImage.enabled = false;
             UpdateDragActions(camera);
@@ -402,7 +420,7 @@ namespace UnknownInventoryTerminal
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformWorldActions", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromUI", nameof(PickupPrefix), log, nameof(PickupPostfix));
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleReleaseDragging", nameof(ReleasePrefix), log);
-            ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformUIActions", nameof(LoadoutActionPrefix), log);
+            ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformUIActions", nameof(InventoryActionPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), nameof(PlayerCamera.OpenContainer), nameof(OpenContainerPrefix), log);
             ready &= Patch(harmony, typeof(UIUtil), "GetEventSystemRaycastResults", null, log, nameof(RaycastPostfix));
             Patch(harmony, AccessTools.TypeByName("Together.Chat"), "Update", nameof(ChatPrefix), log);
@@ -481,6 +499,7 @@ namespace UnknownInventoryTerminal
             // Keep the closing input blocked without clearing the drag handed back to the game.
             if (!Plugin.IsVisible) return false;
             if (!Plugin.CanInteract(__instance)) { Plugin.CancelDrag(__instance); return false; }
+            if (!__instance.dragItem) Plugin.SetTerminalDrag(__instance, null);
             uiCasts = Plugin.FilterHits(uiCasts);
             if (_pendingAction is { } pending && pending.Camera == __instance)
             {
@@ -508,10 +527,11 @@ namespace UnknownInventoryTerminal
                     if (gesture != TerminalDragStart.None)
                     {
                         // Capture before vanilla treats the confirm click as a new pickup or release.
+                        var fromTerminal = Plugin.IsTerminalDrag(__instance, source);
                         Plugin.CancelDrag(__instance);
                         if (gesture != TerminalDragStart.Cancel)
                         {
-                            var pendingAction = new PendingAction(__instance, source, action);
+                            var pendingAction = new PendingAction(__instance, source, action, fromTerminal);
                             _pendingAction = pendingAction;
                             if (gesture == TerminalDragStart.Confirm)
                                 HandlePendingAction(__instance, pendingAction, resumeDrag: !release && Input.GetKey(dragKey));
@@ -540,12 +560,13 @@ namespace UnknownInventoryTerminal
             __instance.radialOpen = true;
             return true;
         }
-        private sealed class PendingAction(PlayerCamera camera, Item item, TerminalDragAction action)
+        private sealed class PendingAction(PlayerCamera camera, Item item, TerminalDragAction action, bool fromTerminal)
         {
             internal PlayerCamera Camera { get; } = camera;
             internal Body Body { get; } = camera.body;
             internal Item Item { get; } = item;
             internal TerminalDragAction Action { get; } = action;
+            internal bool FromTerminal { get; } = fromTerminal;
             internal bool Draining { get; set; }
             internal bool ResumeDragAfterAction { get; set; }
         }
@@ -629,6 +650,7 @@ namespace UnknownInventoryTerminal
                     break;
                 case TerminalDragAfterAction.ResumeDrag:
                     camera.dragItem = pending.Item;
+                    Plugin.SetTerminalDrag(camera, pending.FromTerminal ? pending.Item : null);
                     if (camera.dragImage)
                     {
                         camera.dragImage.rectTransform.position = Input.mousePosition;
@@ -678,17 +700,35 @@ namespace UnknownInventoryTerminal
             uiCasts = Plugin.FilterHits(uiCasts);
             return true;
         }
-        private static bool PickupPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
+        private static bool PickupPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts, out bool __state)
         {
+            __state = false;
             if (!Plugin.BlocksGameplay) return true;
             uiCasts = Plugin.FilterHits(uiCasts);
-            return Plugin.CanInteract(__instance);
+            if (!Plugin.CanInteract(__instance)) return false;
+            if (!__instance.dragItem)
+            {
+                Plugin.SetTerminalDrag(__instance, null);
+                __state = uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject) &&
+                    hit.gameObject.GetComponent<InvButton>());
+            }
+            return true;
         }
-        private static void PickupPostfix(PlayerCamera __instance)
+        private static void PickupPostfix(PlayerCamera __instance, bool __state)
         {
-            if (Plugin.IsVisible && __instance.dragItem && !GameInventoryAdapter.Owns(__instance.body, __instance.dragItem))
-                Plugin.CancelDrag(__instance);
+            if (!Plugin.IsVisible || !__instance.dragItem) return;
+            if (!GameInventoryAdapter.Owns(__instance.body, __instance.dragItem)) Plugin.CancelDrag(__instance);
+            else if (__state) Plugin.SetTerminalDrag(__instance, __instance.dragItem);
         }
+
+        // The empty list belongs to this specific native release only. Never interpret an
+        // ordinary empty raycast (e.g. a blank cell or the input shield) as a discard.
+        private sealed class DiscardRelease(PlayerCamera camera, Item item) : List<RaycastResult>
+        {
+            internal PlayerCamera Camera { get; } = camera;
+            internal Item Item { get; } = item;
+        }
+
         private static bool ReleasePrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
             if (!Plugin.BlocksGameplay) return true;
@@ -702,7 +742,13 @@ namespace UnknownInventoryTerminal
             // through to the inventory drop path if the item is no longer eligible.
             if (uiCasts.Count == 1 && Plugin.TryGetDragAction(uiCasts[0].gameObject, out _))
             { Plugin.CancelDrag(__instance); return false; }
-            if (Plugin.IsTerminalPoint(Input.mousePosition))
+            var pointer = (Vector2)Input.mousePosition;
+            if (Plugin.CanDiscardAtPointer(__instance, source, pointer))
+            {
+                uiCasts = new DiscardRelease(__instance, source);
+                return true;
+            }
+            if (Plugin.IsTerminalPoint(pointer))
             {
                 var slotHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponentInParent<LoadoutCell>());
                 if (slotHit.gameObject)
@@ -723,7 +769,7 @@ namespace UnknownInventoryTerminal
                 }
             }
             // Only the searchable storage grid uses the configured automatic container destination.
-            if (Plugin.IsTerminalPoint(Input.mousePosition))
+            if (Plugin.IsTerminalPoint(pointer))
             {
                 var destination = uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject))
                     ? Plugin.ResolveTerminalDrop(__instance) : null;
@@ -739,8 +785,7 @@ namespace UnknownInventoryTerminal
                     uiCasts.Exists(hit => hit.gameObject && hit.gameObject.TryGetComponent<InvButton>(out var button) &&
                         button.GetItem() == __instance.dragItem)) return true;
             }
-            // Releasing over the shield/blank content cancels, rather than unloading
-            // into the world underneath the modal window.
+            // Blank content and non-discard releases over the shield do not change inventory.
             Plugin.CancelDrag(__instance);
             return false;
         }
@@ -765,8 +810,28 @@ namespace UnknownInventoryTerminal
             return !target || !body.HoldingItem(source) || !target.Stats.onlyHoldInHands || body.slots[body.SlotOf(source)].isHand;
         }
 
-        private static bool LoadoutActionPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts, ref bool __result)
+        private static bool InventoryActionPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts, ref bool __result)
         {
+            if (uiCasts is DiscardRelease discard)
+            {
+                // Run only after vanilla's DoPickupCheck and Together's release prefix have run.
+                // Use native Drop/Unload hooks, not the world path (which can fill a world container).
+                __result = true;
+                var item = discard.Item;
+                if (__instance == discard.Camera && ReferenceEquals(__instance.dragItem, item) &&
+                    Plugin.CanDiscardAtPointer(__instance, item, Input.mousePosition) && GameInventoryAdapter.Owns(__instance.body, item))
+                {
+                    Plugin.SetTerminalDrag(__instance, null);
+                    if (item.TryGetParentContainer(out var container))
+                    {
+                        container.UnloadItem(item);
+                        __instance.PlayBackpackSound();
+                    }
+                    else if (__instance.body.HoldingItem(item)) __instance.body.DropItem(item);
+                    else if (__instance.body.HasWearable(item)) __instance.body.DropWearable(item);
+                }
+                return false;
+            }
             if (!Plugin.CanInteract(__instance) || uiCasts.Count == 0 || !uiCasts[0].gameObject) return true;
             var source = __instance.dragItem;
             var slot = uiCasts[0].gameObject.GetComponentInParent<LoadoutCell>();
