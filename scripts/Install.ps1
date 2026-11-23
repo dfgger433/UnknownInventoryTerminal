@@ -28,6 +28,7 @@ $files = @(
     (Join-Path $assetSubdir 'textures\gui\sprites\big_scroller_disabled.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\transparent.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg.png'),
+    (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg_2.png'),
     (Join-Path $assetSubdir 'textures\gui\sprites\vertical_buttons_bg_3.png')
 )
 foreach ($file in $files) {

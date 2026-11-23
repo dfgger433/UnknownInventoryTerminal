@@ -13,7 +13,9 @@ gui/sprites/button.png, gui/sprites/button_highlighted.png,
 gui/sprites/big_scroller.png,
 gui/sprites/big_scroller_disabled.png, gui/sprites/vertical_buttons_bg.png.
 guis/terminal.png, guis/states.png and gui/sprites/vertical_buttons_bg_3.png
-contain local edits to AE2 artwork.
+contain local edits to AE2 artwork. gui/sprites/vertical_buttons_bg_2.png is a
+pixel-level reconstruction from the archived 21x26 session table; the deleted
+original PNG byte stream was not recovered.
 gui/sprites/drop_down_list.png was supplied by the terminal project operator.
 The local transparent.png is not an AE2 asset. The mod slices, scales and
 rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to

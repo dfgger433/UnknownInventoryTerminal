@@ -15,7 +15,7 @@ namespace UnknownInventoryTerminal
         SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected,
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
         SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
-        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg,
+        TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg, VerticalButtonsBgVariant,
         DragDrain, DragUse, DragPin, DragUnpin, PinnedRow, PinnedRowGutter, ScrollGrooveTop, VerticalButtonsBgBottom
     }
 
@@ -24,7 +24,7 @@ namespace UnknownInventoryTerminal
         internal static Ae2Image DragBackground(Ae2TerminalLayout layout, int top, int height) =>
             top + height == layout.Height ? Ae2Image.VerticalButtonsBgBottom : Ae2Image.VerticalButtonsBg;
 
-        internal static bool IsBackground(Ae2Image id) => id is Ae2Image.VerticalButtonsBg or Ae2Image.VerticalButtonsBgBottom;
+        internal static bool IsBackground(Ae2Image id) => id is Ae2Image.VerticalButtonsBg or Ae2Image.VerticalButtonsBgVariant or Ae2Image.VerticalButtonsBgBottom;
     }
 
     internal static class Ae2SettingsLayout

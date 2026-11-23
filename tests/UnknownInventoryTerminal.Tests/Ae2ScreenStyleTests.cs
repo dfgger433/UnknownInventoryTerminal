@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -339,6 +340,39 @@ public sealed class Ae2ScreenStyleTests
         for (var y = Ae2TerminalLayout.ButtonBarTopBorder + 1; y < bitmap.Height - Ae2TerminalLayout.ButtonBarBottomBorder; y++)
             for (var x = 0; x < bitmap.Width; x++)
                 bitmap.Pixel(x, y).Should().Be(bitmap.Pixel(x, Ae2TerminalLayout.ButtonBarTopBorder), $"middle row {y} must repeat");
+    }
+
+    [TestMethod]
+    public void RecoveredButtonBarVariantMatchesItsArchivedPixelTable()
+    {
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.VerticalButtonsBgBottom, out var originalRegion).Should().BeTrue();
+        style.TryGet(Ae2Image.VerticalButtonsBgVariant, out var recoveredRegion).Should().BeTrue();
+        recoveredRegion.Texture.Should().Be("gui/sprites/vertical_buttons_bg_2.png");
+        (recoveredRegion.X, recoveredRegion.Y, recoveredRegion.Width, recoveredRegion.Height)
+            .Should().Be((0, 0, 21, 26));
+
+        using var original = PngPixels.Read(TextureFilePath(originalRegion.Texture));
+        using var recovered = PngPixels.Read(TextureFilePath(recoveredRegion.Texture));
+        (recovered.Width, recovered.Height).Should().Be((21, 26));
+        var expectedChanges = new Dictionary<(int X, int Y), uint>
+        {
+            [(20, 23)] = 0xFFF2F2F2,
+            [(20, 24)] = 0xFFF2F2F2,
+            [(20, 25)] = 0xFFF2F2F2
+        };
+        var actualChanges = new HashSet<(int X, int Y)>();
+        for (var y = 0; y < recovered.Height; y++)
+        for (var x = 0; x < recovered.Width; x++)
+        {
+            var pixel = recovered.Pixel(x, y);
+            if (pixel == original.Pixel(x, y)) continue;
+            actualChanges.Add((x, y));
+            expectedChanges.TryGetValue((x, y), out var expectedPixel);
+            pixel.Should().Be(expectedPixel, $"pixel ({x}, {y}) must follow the archived variant table");
+        }
+        actualChanges.Should().BeEquivalentTo(expectedChanges.Keys,
+            "the archived table differs from the bottom-joining sprite at exactly three right-edge pixels");
     }
 
     [TestMethod]

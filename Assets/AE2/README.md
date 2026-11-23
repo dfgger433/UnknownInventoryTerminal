@@ -8,7 +8,9 @@
 | [terminal.png](textures/guis/terminal.png) | 终端底板（3 行时为 141×170）：窗框、仓储格、滚动槽、3 行装备格和 1 行主物品栏。 |
 | [states.png](textures/guis/states.png) | 手绘图集：按钮底图（普通、聚焦、悬停）及关闭、排序、设置（x=32/48，y=48）、返回、终端风格（短/中等/长/最长，y=112）等图标。 |
 | [vertical_buttons_bg.png](textures/gui/sprites/vertical_buttons_bg.png) | AE2 原版左侧按钮栏背景（21×26），用于工具栏和未贴齐面板底边的拖拽动作栏。 |
-| [vertical_buttons_bg_3.png](textures/gui/sprites/vertical_buttons_bg_3.png) | 手绘接缝变体（21×26），当拖拽动作栏贴齐三行面板的底边时使用。 |
+| [vertical_buttons_bg_2.png](textures/gui/sprites/vertical_buttons_bg_2.png) | 恢复的按钮栏变体（21×26）。原 PNG 字节不可得，但像素表已核验；通过 `verticalButtonsBgVariant` 保留独立替换入口。 |
+| [vertical_buttons_bg_3.png](textures/gui/sprites/vertical_buttons_bg_3.png) | 当前布局使用的手绘接缝变体（21×26），拖拽动作栏贴齐三行面板底边时连接侧栏与面板。 |
+| [贴图目录恢复记录](../../贴图/README.md) | `states.pdn` 是 SHA256 已核验的 2026-11-20 较早版本，并非被删除的 2026-11-22 稿件；`drop_down_list.pdn` 原件未找回。 |
 | [text_field.png](textures/guis/text_field.png) | 搜索框普通/聚焦状态和工具提示背景。 |
 | [background.png](textures/guis/background.png) | 终端内设置面板的浅色背景。 |
 | [checkbox.png](textures/guis/checkbox.png) | 设置页「使用后保持拖动」的滑动开关图集。 |
