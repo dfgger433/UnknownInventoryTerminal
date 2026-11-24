@@ -1,173 +1,74 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using UnityEngine;
 
-// Minimal Unity/game/CCL surface consumed by the linked formatter. Tests do not load game binaries.
-internal sealed class Item : UnityEngine.Object
+// Minimal stand-ins for the live item, native formatter and global liquid definitions.
+internal sealed class Item
 {
-    private readonly Dictionary<Type, UnityEngine.Object> _components = new();
-    internal string id = "";
-    internal ItemInfo Stats = new();
-    internal string label = "";
-    internal float condition = 1f;
-    internal float totalWeight;
-    internal bool favourited;
-    internal bool isWet;
-    internal Container container => TryGetComponent<Container>(out var value) ? value : null!;
-    internal TimeSpan DecayRemaining;
-    internal TimeSpan TimeUntilDecayed() => DecayRemaining;
-    internal void Attach<T>(T component) where T : UnityEngine.Object => _components[typeof(T)] = component;
+    internal ItemInfo Stats { get; init; } = new();
+    internal string fullName { get; init; } = "Item";
+    internal float totalWeight { get; init; }
+    internal WaterContainerItem? Liquid { get; init; }
+    internal Func<Item, (string, string)>? NativeTooltip { get; init; }
 
-    internal bool TryGetComponent<T>([NotNullWhen(true)] out T? component) where T : UnityEngine.Object
+    internal bool TryGetComponent<T>([NotNullWhen(true)] out T? component) where T : class
     {
-        component = _components.TryGetValue(typeof(T), out var result) ? (T)result : null;
+        component = Liquid as T;
         return component != null;
     }
 }
 
 internal sealed class ItemInfo
 {
-    [Flags]
-    internal enum DecayType : byte
-    {
-        NoDecayWithoutContainerItem = 1,
-        NoDecayWhenStill = 2,
-        NoDecayWhenNotWorn = 4
-    }
-
-    internal string fullName = "";
-    internal string description = "";
-    internal string category = "";
-    internal Recognition rec = new();
-    internal float rotSpeed;
-    internal byte decayInfo;
-    internal bool onlyHoldInHands;
-    internal bool wearable;
-    internal string wearSlotId = "";
-    internal float wearableArmor;
-    internal float wearableIsolation;
-    internal bool usable;
-    internal bool usableWithLMB;
-    internal bool UsableOnLimb;
-    internal int Value;
-    internal List<CraftingQuality> qualities = new();
-    internal bool ActuallyUsableOnLimb(Item item) => UsableOnLimb;
-    internal int GetValue(Item item) => Value;
+    internal string description { get; init; } = "Description";
+    internal Recognition rec { get; init; } = new();
 }
 
 internal sealed class Recognition
 {
-    internal bool recognizable = true;
-    internal int min;
+    internal bool recognizable { get; init; } = true;
 }
 
-internal sealed class Container : UnityEngine.Object
+internal sealed class WaterContainerItem
 {
-    internal float HoldingWeight;
-    internal float maxWeight;
-    internal float maxWeightPerItem;
-    internal float encumberanceMult = 1f;
-    internal float GetHoldingWeight() => HoldingWeight;
-}
-
-internal sealed class BatteryItem : UnityEngine.Object
-{
-    internal string Info = "";
-    internal string GetBatteryInfo() => Info;
-}
-
-internal sealed class WaterContainerItem : UnityEngine.Object
-{
-    internal float CurrentTotal;
-    internal float Capacity;
-    internal List<LiquidStack> stack = new();
-    internal Color AverageColor() => Color.white;
-}
-
-internal sealed class AmmoScript : UnityEngine.Object
-{
-    internal enum AmmoItemType { Magazine }
-    internal AmmoItemType itemType = AmmoItemType.Magazine;
-    internal int rounds;
-    internal int maxRounds;
-}
-
-internal sealed class BoughtItem : UnityEngine.Object
-{
-    internal float time;
-}
-
-internal sealed class CraftingQuality
-{
-    internal string LocaleName = "";
-    internal float amount;
+    internal float Capacity { get; init; }
+    internal List<LiquidStack?> stack { get; } = new();
 }
 
 internal sealed class LiquidStack
 {
-    internal string liquidId = "";
-    internal float amount;
+    internal string? liquidId { get; init; }
+    internal float amount { get; set; }
 }
 
 internal static class Liquids
 {
     internal sealed class Definition
     {
-        internal bool localeFromItem;
-        internal string localeName = "";
-        internal Color color = Color.white;
-        internal List<CraftingQuality> qualities = new();
-        internal IEnumerable<CraftingQuality> GetScaledQualities(float amount) => qualities;
+        internal bool localeFromItem { get; init; }
+        internal string localeName { get; init; } = "liquid";
     }
 
-    internal static ConcurrentDictionary<string, Definition> Registry { get; } = new();
+    internal static System.Collections.Concurrent.ConcurrentDictionary<string, Definition> Registry { get; } = new();
 }
 
 internal static class Locale
 {
-    internal static string GetOther(string key) => key is "unknownobjectwarning" or "decaysin" ? key + " <>" : key;
+    internal static string GetOther(string key) => key;
     internal static string GetItem(string id) => "item:" + id;
 }
 
 internal static class PlayerCamera
 {
-    internal static string ConditionToColorCode(float condition) => "<color=#FFFFFF>";
-    internal static string EndColor() => "</color>";
-    internal static string TimeToString(TimeSpan remaining) => remaining.ToString();
-}
-
-namespace CUCoreLib.Registries
-{
-    internal static class ItemRegistry
-    {
-        internal static ConcurrentDictionary<string, ItemInfo> Definitions { get; } = new();
-        internal static bool TryGetItemInfo(string id, [NotNullWhen(true)] out ItemInfo? info) => Definitions.TryGetValue(id, out info);
-    }
+    internal static (string, string) ItemHoverDescription(Item item) =>
+        (item.NativeTooltip ?? throw new InvalidOperationException("Native tooltip should not be called for this item."))(item);
 }
 
 namespace UnityEngine
 {
-    internal class Object
-    {
-        public static implicit operator bool(Object? value) => value is not null;
-    }
-
-    internal readonly struct Color
-    {
-        internal static Color white => default;
-        internal static Color Lerp(Color first, Color second, float fraction) => first;
-    }
-
-    internal static class ColorUtility
-    {
-        internal static string ToHtmlStringRGB(Color color) => "FFFFFF";
-    }
-
     internal static class Mathf
     {
-        internal static int FloorToInt(float value) => (int)Math.Floor(value);
         internal static int RoundToInt(float value) => (int)Math.Round(value);
     }
 }

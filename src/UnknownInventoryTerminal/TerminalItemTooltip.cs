@@ -6,16 +6,17 @@ using UnityEngine.UI;
 
 namespace UnknownInventoryTerminal
 {
-    // The terminal owns its tooltip canvas; the game's GlobalDark tooltip and its controls are not modified.
+    // The terminal owns the frame and pointer positioning. The game's tooltip objects are read-only templates.
     internal sealed class TerminalItemTooltip
     {
         private readonly ManualLogSource _log;
         private readonly Ae2TerminalSkin _skin;
         private readonly Image _frame;
-        private readonly RectTransform _divider;
-        private readonly TextMeshProUGUI _title, _body;
+        private readonly RectTransform _readingSurface, _textLayer;
+        private readonly TextMeshProUGUI _title, _body, _group;
+        private TextMeshProUGUI? _nativeTitle, _nativeBody;
         private Item? _lastFailure;
-        private float _width, _height;
+        private float _width, _height, _nativeWidth, _nativeTitleHeight;
         private int _screenWidth, _screenHeight, _scale;
 
         internal TerminalItemTooltip(Transform parent, ManualLogSource log, Ae2TerminalSkin skin)
@@ -25,13 +26,17 @@ namespace UnknownInventoryTerminal
             var overlay = TerminalCanvasOrder.AddTooltipLayer(parent, "UIT.ItemTooltipOverlay", TerminalCanvasOrder.ItemTooltip);
             _frame = NativeFlatInventoryPanel.Add(overlay, "Item tooltip", typeof(Image)).GetComponent<Image>();
             _frame.raycastTarget = false;
-            var divider = NativeFlatInventoryPanel.Add(_frame.transform, "Title separator", typeof(Image)).GetComponent<Image>();
-            divider.raycastTarget = false;
-            divider.color = Ae2TerminalSkin.Ink;
-            _divider = divider.rectTransform;
-            _title = CreateLabel("Item name", GlobalDark.main ? GlobalDark.main.tooltipNameObj : null);
-            _body = CreateLabel("Item details", GlobalDark.main ? GlobalDark.main.tooltipDescObj : null);
-            Hide();
+            _frame.gameObject.SetActive(false);
+            // Native colors include both bright accents and dim description text. Keep their original contrast
+            // against a dark reading surface while retaining the terminal's existing outer frame.
+            var surface = NativeFlatInventoryPanel.Add(_frame.transform, "Item text backdrop", typeof(Image)).GetComponent<Image>();
+            surface.raycastTarget = false;
+            surface.color = new Color32(22, 23, 29, 255);
+            _readingSurface = surface.rectTransform;
+            _textLayer = NativeFlatInventoryPanel.Add(_readingSurface, "Item text").GetComponent<RectTransform>();
+            _title = CreateLabel("Item name");
+            _body = CreateLabel("Item details");
+            _group = CreateLabel("Item group");
         }
 
         internal void Hide() => _frame.gameObject.SetActive(false);
@@ -40,11 +45,10 @@ namespace UnknownInventoryTerminal
         {
             try
             {
-                var expanded = PlayerCamera.alwaysExpandDescriptions || Input.GetKey(KeyBinds.GetBind("expanddesc"));
-                var (title, body) = TerminalItemTooltipContent.Read(item, expanded);
+                var (title, body) = TerminalItemTooltipContent.Read(item);
                 if (string.IsNullOrWhiteSpace(title)) { Hide(); return; }
-                if (count > 1) body = TerminalText.Format("inventory.tooltip.group", count) + "\n\n" + body;
-                Draw(title, body, pointer, scale);
+                var group = count > 1 ? TerminalText.Format("inventory.tooltip.group", count) : "";
+                Draw(title, body, group, pointer, scale);
                 _lastFailure = null;
             }
             catch (Exception ex)
@@ -55,18 +59,21 @@ namespace UnknownInventoryTerminal
             }
         }
 
-        private void Draw(string title, string body, Vector2 pointer, int scale)
+        private void Draw(string title, string body, string group, Vector2 pointer, int scale)
         {
             var margin = 4 * scale;
             var screenWidth = Screen.width;
             var screenHeight = Screen.height;
-            if (_screenWidth != screenWidth || _screenHeight != screenHeight || _scale != scale ||
-                _title.text != title || _body.text != body)
+            // Activate before the first measurement so TMP has initialized its CanvasRenderer and font assets.
+            _frame.gameObject.SetActive(true);
+            var nativeStyleChanged = RefreshNativeStyle();
+            if (nativeStyleChanged || _screenWidth != screenWidth || _screenHeight != screenHeight || _scale != scale ||
+                _title.text != title || _body.text != body || _group.text != group)
             {
-                var availableWidth = Mathf.Min(154 * scale, screenWidth - 2 * margin);
+                var availableWidth = screenWidth - 2 * margin;
                 var availableHeight = screenHeight - 2 * margin;
-                if (availableWidth <= 2 * margin || availableHeight <= 4 * margin) { Hide(); return; }
-                Layout(title, body, availableWidth, availableHeight, scale, margin);
+                if (availableWidth <= 2 * margin || availableHeight <= 2 * margin) { Hide(); return; }
+                Layout(title, body, group, availableWidth, availableHeight, scale, margin);
                 _screenWidth = screenWidth;
                 _screenHeight = screenHeight;
                 _scale = scale;
@@ -74,44 +81,115 @@ namespace UnknownInventoryTerminal
             var (x, y) = TerminalItemTooltipLayout.Place(pointer.x, screenHeight - pointer.y,
                 _width, _height, screenWidth, screenHeight, 5 * scale, margin);
             NativeFlatInventoryPanel.Position(_frame.rectTransform, new Rect(x, y, _width, _height));
-            _frame.gameObject.SetActive(true);
         }
 
-        private void Layout(string title, string body, float availableWidth, float availableHeight, int scale, float padding)
+        private void Layout(string title, string body, string group, float availableWidth, float availableHeight, int scale, float padding)
         {
-            _title.fontSize = 8 * scale;
-            _body.fontSize = 7 * scale;
-            var maxTextWidth = availableWidth - 2 * padding;
-            var width = Mathf.Clamp(Mathf.Ceil(Mathf.Max(_title.GetPreferredValues(title).x, _body.GetPreferredValues(body).x)),
-                Mathf.Min(46 * scale, maxTextWidth), maxTextWidth);
-            var titleHeight = Mathf.Min(Mathf.Ceil(_title.GetPreferredValues(title, width, 0).y), availableHeight - 4 * padding);
-            var bodyY = titleHeight + 3 * padding;
-            var bodyHeight = Mathf.Min(Mathf.Ceil(_body.GetPreferredValues(body, width, 0).y), availableHeight - bodyY - padding);
-            _width = width + 2 * padding;
-            _height = bodyY + bodyHeight + padding;
-            _skin.ApplyTooltipFrame(_frame, scale);
-            NativeFlatInventoryPanel.Position(_divider, new Rect(padding, titleHeight + 2 * padding, width, scale));
-            NativeFlatInventoryPanel.Position(_title.rectTransform, new Rect(padding, padding, width, titleHeight));
-            NativeFlatInventoryPanel.Position(_body.rectTransform, new Rect(padding, bodyY, width, bodyHeight));
             _title.text = title;
             _body.text = body;
+            _group.text = group;
+            _group.gameObject.SetActive(group.Length > 0);
+            // Assign text first, like GlobalDark. TMP's preferred size properties run the normal input
+            // parser (including textPreprocessor); its string-taking measurement overloads do not.
+            var textScale = Screen.height / 1080f;
+            var maxWidth = (availableWidth - 2 * padding) / textScale;
+            var bodyWidth = Mathf.Min(maxWidth, _nativeWidth > 0f ? _nativeWidth : 500f);
+            var width = Mathf.Min(maxWidth, Mathf.Ceil(Mathf.Max(_title.preferredWidth,
+                Mathf.Min(bodyWidth, Mathf.Max(_body.preferredWidth, group.Length > 0 ? _group.preferredWidth : 0f)))));
+            var titleHeight = Measure(_title, width, 0f, _nativeTitleHeight);
+            var bodyHeight = Measure(_body, Mathf.Min(width, bodyWidth), titleHeight);
+            var groupHeight = group.Length > 0 ? Measure(_group, Mathf.Min(width, bodyWidth), titleHeight + bodyHeight + 6f) + 6f : 0f;
+            var height = titleHeight + bodyHeight + groupHeight;
+            // Only shrink pathological, unusually long tooltips to fit the screen; never ellipsize a stat row.
+            if (height > 0f) textScale = Mathf.Min(textScale, (availableHeight - 2 * padding) / height);
+            _width = Mathf.Ceil(width * textScale) + 2 * padding;
+            _height = Mathf.Ceil(height * textScale) + 2 * padding;
+            _skin.ApplyTooltipFrame(_frame, scale);
+            NativeFlatInventoryPanel.Position(_readingSurface, new Rect(scale, scale, _width - 2 * scale, _height - 2 * scale));
+            NativeFlatInventoryPanel.Position(_textLayer, new Rect(padding - scale, padding - scale, width, height));
+            _textLayer.localScale = new Vector3(textScale, textScale, 1f);
         }
 
-        private TextMeshProUGUI CreateLabel(string name, TextMeshProUGUI? source)
+        private static float Measure(TextMeshProUGUI label, float width, float top, float minimumHeight = 0f)
         {
-            var label = NativeFlatInventoryPanel.CreateText(_frame.transform, name, 14, TextAlignmentOptions.TopLeft);
-            // Keep the native font's locale fallbacks and inline stat sprites, but use terminal-owned labels.
-            if (source && source!.font) label.font = source.font;
-            if (source && source!.spriteAsset) label.spriteAsset = source.spriteAsset;
-            if (label.font)
+            NativeFlatInventoryPanel.Position(label.rectTransform, new Rect(0f, top, width, minimumHeight));
+            var height = Mathf.Max(minimumHeight, Mathf.Ceil(label.preferredHeight));
+            NativeFlatInventoryPanel.Position(label.rectTransform, new Rect(0f, top, width, height));
+            return height;
+        }
+
+        private bool RefreshNativeStyle()
+        {
+            var native = GlobalDark.main;
+            if (!native) return false;
+            var title = native.tooltipNameObj;
+            var body = native.tooltipDescObj;
+            var changed = false;
+            if (title && !ReferenceEquals(_nativeTitle, title))
             {
-                // Some inline game colors are very light. Outline glyphs without changing their meaning.
-                label.outlineColor = Ae2TerminalSkin.Ink;
-                label.outlineWidth = 0.18f;
+                CopyStyle(_title, title);
+                _nativeTitle = title;
+                _nativeTitleHeight = title.rectTransform.rect.height;
+                changed = true;
             }
+            if (body && !ReferenceEquals(_nativeBody, body))
+            {
+                CopyStyle(_body, body);
+                CopyStyle(_group, body);
+                _group.richText = false;
+                _group.textPreprocessor = null;
+                _nativeBody = body;
+                _nativeWidth = body.rectTransform.rect.width;
+                changed = true;
+            }
+            return changed;
+        }
+
+        private TextMeshProUGUI CreateLabel(string name)
+        {
+            var label = NativeFlatInventoryPanel.CreateText(_textLayer, name, 16, TextAlignmentOptions.TopLeft);
+            label.color = Color.white;
             label.richText = true;
             label.enableWordWrapping = true;
+            label.overflowMode = TextOverflowModes.Overflow;
             return label;
+        }
+
+        private static void CopyStyle(TextMeshProUGUI label, TextMeshProUGUI source)
+        {
+            label.font = source.font;
+            label.fontSharedMaterial = source.fontSharedMaterial;
+            label.spriteAsset = source.spriteAsset;
+            label.styleSheet = source.styleSheet;
+            label.textStyle = source.textStyle;
+            label.textPreprocessor = source.textPreprocessor;
+            label.richText = source.richText;
+            label.parseCtrlCharacters = source.parseCtrlCharacters;
+            label.isRightToLeftText = source.isRightToLeftText;
+            label.overrideColorTags = source.overrideColorTags;
+            label.tintAllSprites = source.tintAllSprites;
+            label.color = source.color;
+            label.enableVertexGradient = source.enableVertexGradient;
+            label.colorGradient = source.colorGradient;
+            label.colorGradientPreset = source.colorGradientPreset;
+            label.fontSize = source.fontSize;
+            label.fontSizeMin = source.fontSizeMin;
+            label.fontSizeMax = source.fontSizeMax;
+            label.enableAutoSizing = source.enableAutoSizing;
+            label.characterWidthAdjustment = source.characterWidthAdjustment;
+            label.lineSpacingAdjustment = source.lineSpacingAdjustment;
+            label.fontStyle = source.fontStyle;
+            label.fontWeight = source.fontWeight;
+            label.enableKerning = source.enableKerning;
+            label.extraPadding = source.extraPadding;
+            label.alignment = source.alignment;
+            label.margin = source.margin;
+            label.characterSpacing = source.characterSpacing;
+            label.wordSpacing = source.wordSpacing;
+            label.lineSpacing = source.lineSpacing;
+            label.paragraphSpacing = source.paragraphSpacing;
+            label.enableWordWrapping = source.enableWordWrapping;
+            label.wordWrappingRatios = source.wordWrappingRatios;
         }
     }
 }
