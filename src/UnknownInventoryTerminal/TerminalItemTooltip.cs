@@ -12,7 +12,7 @@ namespace UnknownInventoryTerminal
         private readonly ManualLogSource _log;
         private readonly Ae2TerminalSkin _skin;
         private readonly Image _frame;
-        private readonly RectTransform _readingSurface, _textLayer;
+        private readonly RectTransform _textLayer;
         private readonly TextMeshProUGUI _title, _body, _group;
         private TextMeshProUGUI? _nativeTitle, _nativeBody;
         private Item? _lastFailure;
@@ -27,13 +27,8 @@ namespace UnknownInventoryTerminal
             _frame = NativeFlatInventoryPanel.Add(overlay, "Item tooltip", typeof(Image)).GetComponent<Image>();
             _frame.raycastTarget = false;
             _frame.gameObject.SetActive(false);
-            // Native colors include both bright accents and dim description text. Keep their original contrast
-            // against a dark reading surface while retaining the terminal's existing outer frame.
-            var surface = NativeFlatInventoryPanel.Add(_frame.transform, "Item text backdrop", typeof(Image)).GetComponent<Image>();
-            surface.raycastTarget = false;
-            surface.color = new Color32(22, 23, 29, 255);
-            _readingSurface = surface.rectTransform;
-            _textLayer = NativeFlatInventoryPanel.Add(_readingSurface, "Item text").GetComponent<RectTransform>();
+            // Keep the terminal's textured frame as the only background behind the native-styled text.
+            _textLayer = NativeFlatInventoryPanel.Add(_frame.transform, "Item text").GetComponent<RectTransform>();
             _title = CreateLabel("Item name");
             _body = CreateLabel("Item details");
             _group = CreateLabel("Item group");
@@ -105,8 +100,7 @@ namespace UnknownInventoryTerminal
             _width = Mathf.Ceil(width * textScale) + 2 * padding;
             _height = Mathf.Ceil(height * textScale) + 2 * padding;
             _skin.ApplyTooltipFrame(_frame, scale);
-            NativeFlatInventoryPanel.Position(_readingSurface, new Rect(scale, scale, _width - 2 * scale, _height - 2 * scale));
-            NativeFlatInventoryPanel.Position(_textLayer, new Rect(padding - scale, padding - scale, width, height));
+            NativeFlatInventoryPanel.Position(_textLayer, new Rect(padding, padding, width, height));
             _textLayer.localScale = new Vector3(textScale, textScale, 1f);
         }
 
