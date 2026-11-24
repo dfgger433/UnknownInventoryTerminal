@@ -6,9 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../src/UnknownInventoryTerminal/InputShield.cs" Link="InputShield.cs" />
-    <Compile Include="../../src/UnknownInventoryTerminal/TerminalHitSurface.cs" Link="TerminalHitSurface.cs" />
-    <Compile Include="../../src/UnknownInventoryTerminal/TerminalCanvasOrder.cs" Link="TerminalCanvasOrder.cs" />
-    <Compile Include="../../src/UnknownInventoryTerminal/TerminalModalInput.cs" Link="TerminalModalInput.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/UI/Input/InputShield.cs" Link="InputShield.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/UI/Input/TerminalHitSurface.cs" Link="TerminalHitSurface.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/UI/Input/TerminalCanvasOrder.cs" Link="TerminalCanvasOrder.cs" />
+    <Compile Include="../../src/UnknownInventoryTerminal/UI/Modal/TerminalModalInput.cs" Link="TerminalModalInput.cs" />
   </ItemGroup>
 </Project>

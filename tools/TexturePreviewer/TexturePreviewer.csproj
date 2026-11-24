@@ -10,7 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2ScreenStyle.cs" Link="Backend\Ae2ScreenStyle.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Backend\Ae2TerminalLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Style\Ae2ScreenStyle.cs" Link="Backend\Ae2ScreenStyle.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\Ae2TerminalLayout.cs" Link="Backend\Ae2TerminalLayout.cs" />
   </ItemGroup>
 </Project>

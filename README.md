@@ -40,11 +40,21 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 
 安装脚本只向模组专用目录复制插件 DLL、Core DLL、GUI 屏幕描述、贴图、授权声明和语言文件，不修改游戏 DLL、Together 或存档。终端只使用原生窗口，旧的 `UseLegacyWebUi` 配置不再生效。
 
+## 源码结构
+
+源码按功能目录组织，物理移动不改变现有 C# 命名空间或程序集边界：
+
+- [`src/UnknownInventoryTerminal.Core/Domain/`](src/UnknownInventoryTerminal.Core/Domain/)：与 Unity 无关的库存投影、搜索及容器数据模型。
+- [`src/UnknownInventoryTerminal/Api/`](src/UnknownInventoryTerminal/Api/)：对外的 `TerminalApi` / `TerminalItemsApi`。
+- [`src/UnknownInventoryTerminal/Presentation/`](src/UnknownInventoryTerminal/Presentation/)：布局、交互状态、贴图 schema、装备和本地化等逻辑。
+- [`src/UnknownInventoryTerminal/UI/`](src/UnknownInventoryTerminal/UI/)：原生窗口、设置、输入、工具提示和弹窗。
+- [`src/UnknownInventoryTerminal/Integration/`](src/UnknownInventoryTerminal/Integration/)：游戏补丁、设置绑定、可选拼音接入。
+
 ## GUI 资源
 
-终端只从插件 DLL 同级的 `assets/unknowninventoryterminal/` 读取资源。[贴图](assets/unknowninventoryterminal/textures/)和[终端屏幕描述](assets/unknowninventoryterminal/screens/terminals/terminal.json)共用这一命名空间。旧目录及旧的无命名空间纹理引用不再读取；升级时请按[贴图替换说明](assets/unknowninventoryterminal/README.md)迁移自定义资源。
+终端只从插件 DLL 同级的 `assets/unknowninventoryterminal/` 读取资源。[贴图](assets/unknowninventoryterminal/textures/gui/)和[终端屏幕描述](assets/unknowninventoryterminal/screens/terminals/terminal.json)共用这一命名空间。旧目录及旧的无命名空间纹理引用不再读取；升级时请按[贴图替换说明](assets/unknowninventoryterminal/README.md)迁移自定义资源。
 
-AE2 原图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。终端底板和按钮图集含本地手绘修改；界面在运行时裁切和重组。横向滑轨和滑块来自 Modernity-GTNH-UI，原图保留其上游第三方许可。完整来源和使用条款见[贴图授权说明](assets/unknowninventoryterminal/NOTICE.txt)。
+AE2 原图由 Ridanisaurus Rid 和 AlgorithmX2 等创作者提供，采用 **CC BY-NC-SA 3.0**。终端底板和按钮图集含本地手绘修改；界面在运行时裁切和重组。横向滑轨和滑块来自 Modernity-GTNH-UI，原图保留其上游第三方许可。完整来源和使用条款见[贴图授权说明](assets/unknowninventoryterminal/NOTICE.txt)。资源遵循 NeoForge 命名空间式目录：`assets/unknowninventoryterminal/textures/gui/` 下按 `terminal`、`settings`、`storage`、`fluid`、`widgets` 用途归类。
 
 ## 文档
 

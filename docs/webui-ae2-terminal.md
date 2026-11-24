@@ -59,12 +59,12 @@ TerminalWindow（IMGUI chrome）
 
 | 责任 | 路径 | 备注 |
 |---|---|---|
-| 插件入口、会话生命周期、Harmony 输入门、本地归属检查 | [`src/UnknownInventoryTerminal/Plugin.cs`](../src/UnknownInventoryTerminal/Plugin.cs) | 客户端插件；稳定 GUID 为 `com.unknown.inventoryterminal` |
-| IMGUI 窗口、搜索和工具栏 | [`src/UnknownInventoryTerminal/TerminalWindow.cs`](../src/UnknownInventoryTerminal/TerminalWindow.cs) | 只拥有 chrome；内容区交给 UGUI |
-| 原生库存网格、实例选择、滚动视口 | [`src/UnknownInventoryTerminal/NativeFlatInventoryPanel.cs`](../src/UnknownInventoryTerminal/NativeFlatInventoryPanel.cs) | 使用原版 `ContainerItem`/`InvButton` |
-| 容器候选与投放校验 | [`src/UnknownInventoryTerminal/ContainerPlacement.cs`](../src/UnknownInventoryTerminal/ContainerPlacement.cs) | 推荐逻辑不直接调用 `LoadItem`，不改变网络状态 |
+| 插件入口、会话生命周期、Harmony 输入门、本地归属检查 | [`src/UnknownInventoryTerminal/Integration/Game/Plugin.cs`](../src/UnknownInventoryTerminal/Integration/Game/Plugin.cs) | 客户端插件；稳定 GUID 为 `com.unknown.inventoryterminal` |
+| IMGUI 窗口、搜索和工具栏 | [`src/UnknownInventoryTerminal/UI/Window/TerminalWindow.cs`](../src/UnknownInventoryTerminal/UI/Window/TerminalWindow.cs) | 只拥有 chrome；内容区交给 UGUI |
+| 原生库存网格、实例选择、滚动视口 | [`src/UnknownInventoryTerminal/UI/Native/NativeFlatInventoryPanel.cs`](../src/UnknownInventoryTerminal/UI/Native/NativeFlatInventoryPanel.cs) | 使用原版 `ContainerItem`/`InvButton` |
+| 容器候选与投放校验 | [`src/UnknownInventoryTerminal/Integration/Game/ContainerPlacement.cs`](../src/UnknownInventoryTerminal/Integration/Game/ContainerPlacement.cs) | 推荐逻辑不直接调用 `LoadItem`，不改变网络状态 |
 | 搜索/投影 core | [`src/UnknownInventoryTerminal.Core/`](../src/UnknownInventoryTerminal.Core/) | `netstandard2.1`；可被外部搜索 provider 引用 |
-| 设置、快捷键、可选拼音桥接 | [`src/UnknownInventoryTerminal/SettingsBridge.cs`](../src/UnknownInventoryTerminal/SettingsBridge.cs)、[`src/UnknownInventoryTerminal/PinyinBridge.cs`](../src/UnknownInventoryTerminal/PinyinBridge.cs) | CCL 为硬依赖；拼音 mod 为软依赖 |
+| 设置、快捷键、可选拼音桥接 | [`src/UnknownInventoryTerminal/Integration/Settings/SettingsBridge.cs`](../src/UnknownInventoryTerminal/Integration/Settings/SettingsBridge.cs)、[`src/UnknownInventoryTerminal/Integration/Optional/PinyinBridge.cs`](../src/UnknownInventoryTerminal/Integration/Optional/PinyinBridge.cs) | CCL 为硬依赖；拼音 mod 为软依赖 |
 | 构建 | [`scripts/Build.ps1`](../scripts/Build.ps1) | Release build + core tests |
 | 安装 | [`scripts/Install.ps1`](../scripts/Install.ps1) | 只写入本插件专用目录 |
 | 兼容性证据与未实测风险 | [`docs/COMPATIBILITY.md`](COMPATIBILITY.md) | 本机 DLL 静态核对，不等于运行时联机验收 |

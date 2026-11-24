@@ -15,21 +15,21 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2ScreenStyle.cs" Link="Ae2ScreenStyle.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalText.cs" Link="TerminalText.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Style\Ae2ScreenStyle.cs" Link="Ae2ScreenStyle.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Localization\TerminalText.cs" Link="TerminalText.cs" />
     <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\screens\terminals\terminal.json" Link="assets\unknowninventoryterminal\screens\terminals\terminal.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\textures\**\*" Link="assets\unknowninventoryterminal\textures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2TerminalLayout.cs" Link="Ae2TerminalLayout.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalButtonInput.cs" Link="TerminalButtonInput.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalDragGesture.cs" Link="TerminalDragGesture.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalFluidAmount.cs" Link="TerminalFluidAmount.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalPins.cs" Link="TerminalPins.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalItemTooltipContent.cs" Link="TerminalItemTooltipContent.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalItemTooltipLayout.cs" Link="TerminalItemTooltipLayout.cs" />
-    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalTooltipText.cs" Link="TerminalTooltipText.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\Ae2TerminalLayout.cs" Link="Ae2TerminalLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalButtonInput.cs" Link="TerminalButtonInput.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalDragGesture.cs" Link="TerminalDragGesture.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalFluidAmount.cs" Link="TerminalFluidAmount.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalPins.cs" Link="TerminalPins.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Equipment\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\UI\Tooltip\TerminalItemTooltipContent.cs" Link="TerminalItemTooltipContent.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\TerminalItemTooltipLayout.cs" Link="TerminalItemTooltipLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Tooltip\TerminalTooltipText.cs" Link="TerminalTooltipText.cs" />
   </ItemGroup>
 </Project>
