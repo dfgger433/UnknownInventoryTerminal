@@ -30,5 +30,6 @@
     <Compile Include="..\..\src\UnknownInventoryTerminal\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalItemTooltipContent.cs" Link="TerminalItemTooltipContent.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalItemTooltipLayout.cs" Link="TerminalItemTooltipLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\TerminalTooltipText.cs" Link="TerminalTooltipText.cs" />
   </ItemGroup>
 </Project>

@@ -6,8 +6,14 @@ namespace UnknownInventoryTerminal
     internal static class TerminalItemTooltipLayout
     {
         // NEI's logical text size and 380-unit width cap; leave the terminal's atlas scale independent.
-        internal const float TitleSize = 13f, DetailSize = 12f, Padding = 7f, DetailGap = 3f, GroupGap = 6f;
-        internal static float ReadableScale(float screenHeight) => Clamp(screenHeight / 720f, .9f, 2f);
+        internal const int TitleSize = 13, DetailSize = 12;
+        internal const float Padding = 7f, DetailGap = 3f, GroupGap = 6f;
+        internal static float ReadableScale(float screenWidth, float screenHeight)
+        {
+            // Same default zoom and viewport limits as NEI (default left/right panel widths).
+            var centerLimit = screenWidth * ((2560f - 20f - 741f - 719f) / 2560f) / 255f;
+            return Math.Max(.01f, Math.Min(Clamp(screenHeight / 720f, .9f, 2f), Math.Min(centerLimit, screenHeight / 440f)));
+        }
         internal static float TextWidth(float preferredWidth, float availableWidth) =>
             Math.Min(availableWidth, Clamp((float)Math.Ceiling(preferredWidth), 58f - 2 * Padding, 380f - 2 * Padding));
         internal static float FitScale(float preferredScale, float availableHeight, float contentHeight) =>

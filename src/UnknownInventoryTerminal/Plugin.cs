@@ -118,7 +118,12 @@ namespace UnknownInventoryTerminal
                 }
             }
         }
-        private void OnGUI() => _window?.DrawSettings();
+        private void OnGUI()
+        {
+            _window?.DrawSettings();
+            if (IsVisible && !FluidBlocksInput && !_window!.BlocksInventoryInput && !_window.CloseRequested)
+                _nativePanel?.DrawItemTooltip();
+        }
         internal static bool SearchFocused => IsVisible && Instance?._nativePanel?.Chrome?.SearchFocused == true;
         internal static bool IsInventorySurface(GameObject target) => Instance?._nativePanel?.Contains(target) == true;
         internal static bool TryGetDragAction(GameObject target, out TerminalDragAction action)

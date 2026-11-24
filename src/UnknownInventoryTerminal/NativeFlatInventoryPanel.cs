@@ -144,6 +144,8 @@ namespace UnknownInventoryTerminal
         internal bool IsNativeItemTooltip(GameObject target) => Contains(target) && !ContainsExtension(target) &&
             (target.GetComponent<InvButton>() || target.GetComponent<TilePointer>() || target.GetComponent<LoadoutCell>());
 
+        internal void DrawItemTooltip() => _itemTooltip?.Draw();
+
         internal void UpdateTooltips(PlayerCamera camera, bool blocked)
         {
             if (_itemTooltip == null || _controlHint == null) return;
@@ -450,7 +452,7 @@ namespace UnknownInventoryTerminal
             _useAction = CreateDragAction(TerminalDragAction.Use, Ae2Image.DragUse);
             _pinAction = CreateDragAction(TerminalDragAction.Pin, Ae2Image.DragPin);
             HideDragActions();
-            _itemTooltip = new TerminalItemTooltip(_root.transform, _log, _skin);
+            _itemTooltip = new TerminalItemTooltip(_log, _skin);
             _controlHint = new TerminalControlHint(_root.transform, _skin);
             Chrome = new NativeTerminalChrome(_root.transform, _skin, _controlHint);
             Position(_panel, _bounds);

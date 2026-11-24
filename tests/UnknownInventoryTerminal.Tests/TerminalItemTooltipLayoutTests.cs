@@ -21,13 +21,14 @@ public sealed class TerminalItemTooltipLayoutTests
 
     /// <summary>Small windows maintain a readable starting size; larger displays do not scale unboundedly.</summary>
     [TestMethod]
-    [DataRow(480f, .9f)]
-    [DataRow(720f, 1f)]
-    [DataRow(1080f, 1.5f)]
-    [DataRow(2160f, 2f)]
-    public void PicksReadableTextScaleIndependentlyOfTheSpriteScale(float screenHeight, float expected)
+    [DataRow(854f, 480f, .9f)]
+    [DataRow(1280f, 720f, 1f)]
+    [DataRow(1920f, 1080f, 1.5f)]
+    [DataRow(3840f, 2160f, 2f)]
+    [DataRow(640f, 1080f, 1.05882f)]
+    public void UsesNeiDefaultZoomAndViewportLimits(float screenWidth, float screenHeight, float expected)
     {
-        TerminalItemTooltipLayout.ReadableScale(screenHeight).Should().Be(expected);
+        TerminalItemTooltipLayout.ReadableScale(screenWidth, screenHeight).Should().BeApproximately(expected, .00001f);
     }
 
     /// <summary>Bounds wrap long text, without making a panel wider than a narrow screen.</summary>
