@@ -10,14 +10,16 @@ License text: https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode
 Source: https://github.com/AppliedEnergistics/Applied-Energistics-2/tree/f0ee8bf4bf35431b9f43788401aa609ca2adbcef/src/main/resources/assets/ae2/textures
 Original files: guis/text_field.png, guis/cpu_selector.png,
 gui/sprites/button.png, gui/sprites/button_highlighted.png,
-gui/sprites/big_scroller.png,
-gui/sprites/big_scroller_disabled.png, gui/sprites/vertical_buttons_bg.png.
-guis/terminal.png, guis/states.png and gui/sprites/vertical_buttons_bg_3.png
-contain local edits to AE2 artwork. gui/sprites/vertical_buttons_bg_2.png is a
+gui/sprites/big_scroller.png, gui/sprites/big_scroller_disabled.png,
+and gui/sprites/vertical_buttons_bg.png. Local copies are organized under
+textures/gui/{widgets,settings,storage}/ and named for their use.
+textures/gui/terminal/terminal_background.png, textures/gui/terminal/terminal_controls.png,
+and textures/gui/widgets/vertical_button_bar_bottom.png contain local edits to
+AE2 artwork. textures/gui/widgets/vertical_button_bar_variant.png is a
 pixel-level reconstruction from the archived 21x26 session table; the deleted
 original PNG byte stream was not recovered.
-gui/sprites/drop_down_list.png was supplied by the terminal project operator.
-The local transparent.png is not an AE2 asset. The mod slices, scales and
+textures/gui/widgets/drop_down_list.png was supplied by the terminal project operator.
+The local textures/gui/widgets/transparent_button.png is not an AE2 asset. The mod slices, scales and
 rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to
 the same CC BY-NC-SA 3.0 terms. Do not use them commercially without permission.
 No Minecraft or Applied Energistics 2 runtime or source code is bundled.
@@ -28,7 +30,7 @@ Credit: Modernity-GTNH-UI contributors (CreativeCore GUI textures added by WanQu
 Texture history: https://github.com/ModernityGTNH/Modernity-GTNH-UI/commit/12f56bb47098643843f2b62560892957745dbf33
 Source: https://github.com/ModernityGTNH/Modernity-GTNH-UI/tree/2ab52b96da3d81419fbd7b99ed941e301fda9298/assets/creativecore/textures/gui
 Original files: SliderRail.png and Slider.png, copied byte-for-byte as
-textures/creativecore/textures/gui/sliderrail.png and slider.png.
+textures/gui/fluid/fluid_slider_rail.png and textures/gui/fluid/fluid_slider_thumb.png.
 
 The upstream README states CC BY-NC-SA 3.0, while the upstream LICENSE.txt
 contains the CC BY-NC-SA 4.0 International text. This discrepancy is retained

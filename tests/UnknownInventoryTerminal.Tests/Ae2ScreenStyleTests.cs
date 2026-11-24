@@ -63,7 +63,7 @@ public sealed class Ae2ScreenStyleTests
     {
         var style = ReadBundledStyle();
         style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
-        region.Texture.Should().Be("gui/sprites/drop_down_list.png");
+        region.Texture.Should().Be("gui/widgets/drop_down_list.png");
         (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, Ae2SettingsLayout.FieldWidth, height));
         using var png = PngPixels.Read(TextureFilePath(region.Texture));
         png.Alpha(x + region.Width - 1, y + 1).Should().BeGreaterThan(0);
@@ -110,7 +110,7 @@ public sealed class Ae2ScreenStyleTests
         var face = Ae2ToggleAppearance.Face(value, hovered);
         face.Should().Be((Ae2Image)image);
         ReadBundledStyle().TryGet(face, out var region).Should().BeTrue();
-        (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be(("guis/checkbox.png", x, y, 22, 12));
+        (region.Texture, region.X, region.Y, region.Width, region.Height).Should().Be(("gui/settings/toggle.png", x, y, 22, 12));
 
         using var png = PngPixels.Read(TextureFilePath(region.Texture));
         for (var px = 0; px < region.Width; px++)
@@ -155,7 +155,7 @@ public sealed class Ae2ScreenStyleTests
     {
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.SettingsBackground, out var region).Should().BeTrue();
-        region.Texture.Should().Be("guis/background.png");
+        region.Texture.Should().Be("gui/settings/settings_background.png");
         (region.X, region.Y, region.Width, region.Height).Should().Be((0, 0, 124, 82));
         using var bitmap = PngPixels.Read(TextureFilePath(region.Texture));
         foreach (var x in new[] { region.X, region.X + region.Width - 1 })
@@ -173,8 +173,8 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    [DataRow((int)Ae2Image.Thumb, "gui/sprites/big_scroller.png")]
-    [DataRow((int)Ae2Image.ThumbDisabled, "gui/sprites/big_scroller_disabled.png")]
+    [DataRow((int)Ae2Image.Thumb, "gui/storage/scroll_thumb.png")]
+    [DataRow((int)Ae2Image.ThumbDisabled, "gui/storage/scroll_thumb_disabled.png")]
     public void ScrollThumbUsesTheWholeNativeAe2Sprite(int image, string texture)
     {
         var style = ReadBundledStyle();
@@ -189,8 +189,8 @@ public sealed class Ae2ScreenStyleTests
     public void ModernityFluidSliderAssetsMatchPinnedSourceAndCropContract()
     {
         var style = ReadBundledStyle();
-        var railPath = TextureFilePath("creativecore/textures/gui/sliderrail.png");
-        var thumbPath = TextureFilePath("creativecore/textures/gui/slider.png");
+        var railPath = TextureFilePath("gui/fluid/fluid_slider_rail.png");
+        var thumbPath = TextureFilePath("gui/fluid/fluid_slider_thumb.png");
         ReadPngDimensions(railPath).Should().Be((82, 18));
         ReadPngDimensions(thumbPath).Should().Be((5, 18));
         Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(railPath)))
@@ -200,10 +200,10 @@ public sealed class Ae2ScreenStyleTests
 
         foreach (var (image, texture, x, y, width, height) in new[]
         {
-            (Ae2Image.FluidRailLeft, "creativecore/textures/gui/sliderrail.png", 1, 7, 1, 4),
-            (Ae2Image.FluidRailMiddle, "creativecore/textures/gui/sliderrail.png", 2, 7, 1, 4),
-            (Ae2Image.FluidRailRight, "creativecore/textures/gui/sliderrail.png", 80, 7, 1, 4),
-            (Ae2Image.FluidThumb, "creativecore/textures/gui/slider.png", 0, 0, 5, 18)
+            (Ae2Image.FluidRailLeft, "gui/fluid/fluid_slider_rail.png", 1, 7, 1, 4),
+            (Ae2Image.FluidRailMiddle, "gui/fluid/fluid_slider_rail.png", 2, 7, 1, 4),
+            (Ae2Image.FluidRailRight, "gui/fluid/fluid_slider_rail.png", 80, 7, 1, 4),
+            (Ae2Image.FluidThumb, "gui/fluid/fluid_slider_thumb.png", 0, 0, 5, 18)
         })
         {
             style.TryGet(image, out var region).Should().BeTrue();
@@ -235,8 +235,8 @@ public sealed class Ae2ScreenStyleTests
         project.Should().Contain("assets\\unknowninventoryterminal\\textures\\%(RecursiveDir)");
         var installer = File.ReadAllText(Path.Combine(repository, "scripts", "Install.ps1"));
         installer.Should().Contain("licenses\\modernity\\LICENSE.txt");
-        installer.Should().Contain("textures\\creativecore\\textures\\gui\\sliderrail.png");
-        installer.Should().Contain("textures\\creativecore\\textures\\gui\\slider.png");
+        installer.Should().Contain("textures\\gui\\fluid\\fluid_slider_rail.png");
+        installer.Should().Contain("textures\\gui\\fluid\\fluid_slider_thumb.png");
     }
 
     private static string FindRepositoryRoot(string start)
@@ -257,7 +257,7 @@ public sealed class Ae2ScreenStyleTests
     {
         var style = ReadBundledStyle();
         style.TryGet((Ae2Image)image, out var region).Should().BeTrue();
-        region.Texture.Should().Be("guis/states.png");
+        region.Texture.Should().Be("gui/terminal/terminal_controls.png");
         (region.X, region.Y, region.Width, region.Height).Should().Be((x, y, width, height));
         using var png = PngPixels.Read(TextureFilePath(region.Texture));
         var visible = Ae2ToolbarAppearance.VisibleBounds(region.Width, region.Height,
@@ -269,7 +269,7 @@ public sealed class Ae2ScreenStyleTests
     public void LockAndUnlockIconsShareTheToolbarHorizontalCenterAtEveryScale()
     {
         var style = ReadBundledStyle();
-        using var png = PngPixels.Read(TextureFilePath("guis/states.png"));
+        using var png = PngPixels.Read(TextureFilePath("gui/terminal/terminal_controls.png"));
         var icons = new[] { Ae2Image.DragPin, Ae2Image.DragUnpin };
         foreach (var scale in new[] { 1, 2, 3, 4 })
         foreach (var faceHeight in new[] { 20, 19 })
@@ -295,7 +295,7 @@ public sealed class Ae2ScreenStyleTests
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.PinnedRow, out var row).Should().BeTrue();
         (row.Texture, row.X, row.Y, row.Width, row.Height).Should()
-            .Be(("guis/terminal.png", 0, 204, Ae2TerminalLayout.GridWidth, Ae2TerminalLayout.Pitch));
+            .Be(("gui/terminal/terminal_background.png", 0, 204, Ae2TerminalLayout.GridWidth, Ae2TerminalLayout.Pitch));
         using var png = PngPixels.Read(TextureFilePath(row.Texture));
         png.Alpha(row.X, row.Y - 1).Should().Be(0);
         png.Alpha(row.X, row.Y + row.Height).Should().Be(0);
@@ -320,7 +320,7 @@ public sealed class Ae2ScreenStyleTests
         face.Should().Be((Ae2Image)image);
         Ae2ToolbarAppearance.OffsetY(face).Should().Be(offset);
         style.TryGet(face, out var region).Should().BeTrue();
-        region.Texture.Should().Be("guis/states.png");
+        region.Texture.Should().Be("gui/terminal/terminal_controls.png");
         (region.X, region.Y, region.Width, region.Height).Should().Be((x, 65, 18, height));
         (region.Height + offset).Should().Be(Ae2TerminalLayout.ButtonHeight,
             "the shorter inset face still fills the button down to the same bottom edge");
@@ -332,7 +332,7 @@ public sealed class Ae2ScreenStyleTests
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.Tooltip, out var hint).Should().BeTrue();
         (hint.Texture, hint.X, hint.Y, hint.Width, hint.Height, hint.Border).Should()
-            .Be(("guis/text_field.png", 0, 0, 128, 12, 3));
+            .Be(("gui/widgets/text_field.png", 0, 0, 128, 12, 3));
 
         using var png = PngPixels.Read(TextureFilePath(hint.Texture));
         for (var y = 0; y < hint.Height; y++)
@@ -359,7 +359,7 @@ public sealed class Ae2ScreenStyleTests
     [TestMethod]
     public void BoardSectionsMatchTheGridsDrawnInTerminalPng()
     {
-        var path = TextureFilePath("guis/terminal.png");
+        var path = TextureFilePath("gui/terminal/terminal_background.png");
         using var bitmap = PngPixels.Read(path);
         var style = Ae2ScreenStyle.Parse(File.ReadAllText(TerminalAssets.ScreenPath(BundledAssetRoot)));
         style.TryGet(Ae2Image.Bottom, out var bottom).Should().BeTrue();
@@ -379,7 +379,7 @@ public sealed class Ae2ScreenStyleTests
     [TestMethod]
     public void MiddleRowRepeatsAndTheScrollbarGrooveRunsThroughEveryRow()
     {
-        using var bitmap = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        using var bitmap = PngPixels.Read(TextureFilePath("gui/terminal/terminal_background.png"));
         var style = Ae2ScreenStyle.Parse(File.ReadAllText(TerminalAssets.ScreenPath(BundledAssetRoot)));
         style.TryGet(Ae2Image.Row, out var row).Should().BeTrue();
         // Repeated middle rows extend the groove, so its inside must reach the first and last pixel row of the part.
@@ -412,7 +412,7 @@ public sealed class Ae2ScreenStyleTests
         var style = ReadBundledStyle();
         style.TryGet(Ae2Image.VerticalButtonsBgBottom, out var originalRegion).Should().BeTrue();
         style.TryGet(Ae2Image.VerticalButtonsBgVariant, out var recoveredRegion).Should().BeTrue();
-        recoveredRegion.Texture.Should().Be("gui/sprites/vertical_buttons_bg_2.png");
+        recoveredRegion.Texture.Should().Be("gui/widgets/vertical_button_bar_variant.png");
         (recoveredRegion.X, recoveredRegion.Y, recoveredRegion.Width, recoveredRegion.Height)
             .Should().Be((0, 0, 21, 26));
 
@@ -447,8 +447,8 @@ public sealed class Ae2ScreenStyleTests
     [DataRow(0, true, true)]
     public void ButtonBarSlicesMeetTheBoardWithoutBreakingItsBevel(int toolbarButtons, bool drain, bool use)
     {
-        using var bar = PngPixels.Read(TextureFilePath("gui/sprites/vertical_buttons_bg.png"));
-        using var board = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        using var bar = PngPixels.Read(TextureFilePath("gui/widgets/vertical_button_bar.png"));
+        using var board = PngPixels.Read(TextureFilePath("gui/terminal/terminal_background.png"));
         var flushWithBoardTop = toolbarButtons > 0;
         var layout = new Ae2TerminalLayout(320, 240);
         var actions = (drain ? TerminalDragAction.Drain : TerminalDragAction.None) |
@@ -493,7 +493,7 @@ public sealed class Ae2ScreenStyleTests
 
         ReadBundledStyle().TryGet(art, out var region).Should().BeTrue();
         using var bar = PngPixels.Read(TextureFilePath(region.Texture));
-        using var board = PngPixels.Read(TextureFilePath("guis/terminal.png"));
+        using var board = PngPixels.Read(TextureFilePath("gui/terminal/terminal_background.png"));
         // These patches are never stretched. Compare the final column of the rail to the adjacent board pixels.
         var (_, topWidth, _) = Ae2TerminalLayout.ButtonBarPatch(region.Height, 0, flushWithBoardTop: false);
         bar.Pixel(region.X + topWidth - 1, region.Y).Should().Be(board.Pixel(0, top / layout.Scale));
@@ -520,11 +520,11 @@ public sealed class Ae2ScreenStyleTests
     public void ParsesValidRegionAndDefaultsOptionalBorderToZero()
     {
         var style = Ae2ScreenStyle.Parse("""
-            { "images": { "button": { "texture": "unknowninventoryterminal:textures/guis/buttons.png", "srcRect": [1, 2, 18, 18] } } }
+            { "images": { "button": { "texture": "unknowninventoryterminal:textures/gui/widgets/buttons.png", "srcRect": [1, 2, 18, 18] } } }
             """);
 
         style.TryGet(Ae2Image.Button, out var region).Should().BeTrue();
-        region.Texture.Should().Be("guis/buttons.png");
+        region.Texture.Should().Be("gui/widgets/buttons.png");
         region.X.Should().Be(1);
         region.Y.Should().Be(2);
         region.Width.Should().Be(18);
@@ -553,7 +553,7 @@ public sealed class Ae2ScreenStyleTests
     [DataRow("\"6\"")]
     public void SkipsRegionsWithMalformedBorders(string border)
     {
-        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"srcRect\":[0,0,10,10],\"border\":" + border + "}}}");
+        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/gui/widgets/buttons.png\",\"srcRect\":[0,0,10,10],\"border\":" + border + "}}}");
 
         style.TryGet(Ae2Image.Button, out _).Should().BeFalse();
         style.Warnings.Any(warning => warning.Contains("images.button", StringComparison.Ordinal)).Should().BeTrue();
@@ -562,25 +562,25 @@ public sealed class Ae2ScreenStyleTests
     [TestMethod]
     public void RejectsDuplicatePropertiesInTheJsonDocument()
     {
-        var act = () => Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"texture\":\"unknowninventoryterminal:textures/guis/other.png\",\"srcRect\":[0,0,18,18]}}}");
+        var act = () => Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/gui/widgets/buttons.png\",\"texture\":\"unknowninventoryterminal:textures/gui/widgets/other.png\",\"srcRect\":[0,0,18,18]}}}");
 
         act.Should().Throw<JsonReaderException>();
     }
 
     [TestMethod]
     [DataRow("guis/buttons.png")]
-    [DataRow("gui/sprites/buttons.png")]
-    [DataRow("textures/guis/buttons.png")]
-    [DataRow("ae2:textures/guis/buttons.png")]
-    [DataRow("unknowninventoryterminal:guis/buttons.png")]
-    [DataRow("UnknownInventoryTerminal:textures/guis/buttons.png")]
-    [DataRow("unknowninventoryterminal:textures/guis/../secret.png")]
-    [DataRow("unknowninventoryterminal:textures/guis/buttons.jpg")]
-    [DataRow("unknowninventoryterminal:textures/Guis/buttons.png")]
-    [DataRow("unknowninventoryterminal:textures/guis//buttons.png")]
-    [DataRow("unknowninventoryterminal:textures/gui/sprites/../buttons.png")]
-    [DataRow("unknowninventoryterminal:textures/guis/sub\\buttons.png")]
-    [DataRow("unknowninventoryterminal:textures/gui/buttons.png")]
+    [DataRow("sprites/buttons.png")]
+    [DataRow("textures/gui/widgets/buttons.png")]
+    [DataRow("ae2:textures/gui/widgets/buttons.png")]
+    [DataRow("unknowninventoryterminal:gui/widgets/buttons.png")]
+    [DataRow("UnknownInventoryTerminal:textures/gui/widgets/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/../secret.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/widgets/buttons.jpg")]
+    [DataRow("unknowninventoryterminal:textures/GUI/widgets/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui//widgets/buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/widgets/../buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/gui/widgets/sub\\buttons.png")]
+    [DataRow("unknowninventoryterminal:textures/buttons.png")]
     [DataRow("unknowninventoryterminal:textures/creativecore/textures/gui/other.png")]
     public void SkipsRegionsWithDisallowedTexturePaths(string texture)
     {
@@ -597,7 +597,7 @@ public sealed class Ae2ScreenStyleTests
     [DataRow("[2147483648, 0, 18, 18]")]
     public void SkipsMalformedSourceRectangles(string sourceRect)
     {
-        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/guis/buttons.png\",\"srcRect\":" + sourceRect + "}}}");
+        var style = Ae2ScreenStyle.Parse("{\"images\":{\"button\":{\"texture\":\"unknowninventoryterminal:textures/gui/widgets/buttons.png\",\"srcRect\":" + sourceRect + "}}}");
 
         style.TryGet(Ae2Image.Button, out _).Should().BeFalse();
         style.Warnings.Any(warning => warning.Contains("images.button", StringComparison.Ordinal)).Should().BeTrue();

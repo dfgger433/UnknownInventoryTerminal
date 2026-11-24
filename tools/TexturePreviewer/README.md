@@ -22,10 +22,10 @@ Windows WPF 桌面工具，直接编译链接模组的 `Ae2ScreenStyle` 与 `Ae2
 ```text
 unknowninventoryterminal/
   screens/terminals/terminal.json
-  textures/guis/terminal.png
-  textures/guis/states.png
-  textures/guis/text_field.png
-  textures/gui/sprites/...
+  textures/gui/terminal/terminal_background.png
+  textures/gui/terminal/terminal_controls.png
+  textures/gui/widgets/text_field.png
+  textures/gui/{settings,storage,fluid,widgets}/...
 ```
 
 屏幕 JSON 只接受 `unknowninventoryterminal:textures/...` 纹理引用，不会退回旧目录或解析无命名空间的引用。程序监视选定目录中的 PNG 和 JSON 变更，短暂合并连续保存后自动重新解析和绘制。若编辑器使用“临时文件替换”保存，监视器也会监听新增、删除与重命名事件。

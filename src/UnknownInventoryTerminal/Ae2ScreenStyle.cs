@@ -142,9 +142,7 @@ namespace UnknownInventoryTerminal
                 return false;
 
             var relative = id.Substring(TexturePrefix.Length);
-            var isFluidTexture = relative is "creativecore/textures/gui/sliderrail.png" or "creativecore/textures/gui/slider.png";
-            if (!relative.StartsWith("guis/", StringComparison.Ordinal) && !relative.StartsWith("gui/sprites/", StringComparison.Ordinal) &&
-                !isFluidTexture)
+            if (!relative.StartsWith("gui/", StringComparison.Ordinal))
                 return false;
             foreach (var part in relative.Substring(0, relative.Length - 4).Split('/'))
             {
