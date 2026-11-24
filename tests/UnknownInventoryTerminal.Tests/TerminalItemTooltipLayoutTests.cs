@@ -19,6 +19,39 @@ public sealed class TerminalItemTooltipLayoutTests
         position.Should().Be((x, y));
     }
 
+    /// <summary>Small windows maintain a readable starting size; larger displays do not scale unboundedly.</summary>
+    [TestMethod]
+    [DataRow(480f, .9f)]
+    [DataRow(720f, 1f)]
+    [DataRow(1080f, 1.5f)]
+    [DataRow(2160f, 2f)]
+    public void PicksReadableTextScaleIndependentlyOfTheSpriteScale(float screenHeight, float expected)
+    {
+        TerminalItemTooltipLayout.ReadableScale(screenHeight).Should().Be(expected);
+    }
+
+    /// <summary>Bounds wrap long text, without making a panel wider than a narrow screen.</summary>
+    [TestMethod]
+    [DataRow(8f, 700f, 44f)]
+    [DataRow(87.3f, 700f, 88f)]
+    [DataRow(680f, 700f, 366f)]
+    [DataRow(680f, 255f, 255f)]
+    [DataRow(8f, 20f, 20f)]
+    public void WrapsInsideTheContentWidth(float wanted, float available, float expected)
+    {
+        TerminalItemTooltipLayout.TextWidth(wanted, available).Should().Be(expected);
+    }
+
+    /// <summary>Expanded content only shrinks when all lines cannot fit at the preferred size.</summary>
+    [TestMethod]
+    [DataRow(1.5f, 750f, 420f, 1.5f)]
+    [DataRow(1.5f, 750f, 600f, 1.25f)]
+    [DataRow(1.5f, 750f, 0f, 1.5f)]
+    public void ShrinksOnlyWhenTheContentExceedsTheScreen(float preferred, float available, float height, float expected)
+    {
+        TerminalItemTooltipLayout.FitScale(preferred, available, height).Should().Be(expected);
+    }
+
     [TestMethod]
     [DataRow(20f, 60f, 38f, 80f, false, 41f, 60f)] // Left toolbar: float over the board, not within the control.
     [DataRow(302f, 20f, 320f, 40f, false, 149f, 20f)]

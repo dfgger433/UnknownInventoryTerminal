@@ -13,10 +13,10 @@ namespace UnknownInventoryTerminal
         private readonly Ae2TerminalSkin _skin;
         private readonly Image _frame;
         private readonly RectTransform _textLayer;
-        private readonly TextMeshProUGUI _title, _body, _group;
+        private readonly LabelPair _title, _body, _group;
         private TextMeshProUGUI? _nativeTitle, _nativeBody;
         private Item? _lastFailure;
-        private float _width, _height, _nativeWidth, _nativeTitleHeight;
+        private float _width, _height;
         private int _screenWidth, _screenHeight, _scale;
 
         internal TerminalItemTooltip(Transform parent, ManualLogSource log, Ae2TerminalSkin skin)
@@ -29,9 +29,9 @@ namespace UnknownInventoryTerminal
             _frame.gameObject.SetActive(false);
             // Keep the terminal's textured frame as the only background behind the native-styled text.
             _textLayer = NativeFlatInventoryPanel.Add(_frame.transform, "Item text").GetComponent<RectTransform>();
-            _title = CreateLabel("Item name");
-            _body = CreateLabel("Item details");
-            _group = CreateLabel("Item group");
+            _title = CreateLabel("Item name", TerminalItemTooltipLayout.TitleSize, new Color32(244, 242, 251, 255));
+            _body = CreateLabel("Item details", TerminalItemTooltipLayout.DetailSize, new Color32(238, 234, 250, 255));
+            _group = CreateLabel("Item group", TerminalItemTooltipLayout.DetailSize, new Color32(230, 224, 246, 255), richText: false);
         }
 
         internal void Hide() => _frame.gameObject.SetActive(false);
@@ -43,7 +43,7 @@ namespace UnknownInventoryTerminal
                 var (title, body) = TerminalItemTooltipContent.Read(item);
                 if (string.IsNullOrWhiteSpace(title)) { Hide(); return; }
                 var group = count > 1 ? TerminalText.Format("inventory.tooltip.group", count) : "";
-                Draw(title, body, group, pointer, scale);
+                Draw(title, body ?? string.Empty, group, pointer, scale);
                 _lastFailure = null;
             }
             catch (Exception ex)
@@ -63,12 +63,14 @@ namespace UnknownInventoryTerminal
             _frame.gameObject.SetActive(true);
             var nativeStyleChanged = RefreshNativeStyle();
             if (nativeStyleChanged || _screenWidth != screenWidth || _screenHeight != screenHeight || _scale != scale ||
-                _title.text != title || _body.text != body || _group.text != group)
+                _title.Text.text != title || _body.Text.text != body || _group.Text.text != group)
             {
                 var availableWidth = screenWidth - 2 * margin;
                 var availableHeight = screenHeight - 2 * margin;
-                if (availableWidth <= 2 * margin || availableHeight <= 2 * margin) { Hide(); return; }
-                Layout(title, body, group, availableWidth, availableHeight, scale, margin);
+                var textScale = TerminalItemTooltipLayout.ReadableScale(screenHeight);
+                var padding = Mathf.Ceil(TerminalItemTooltipLayout.Padding * textScale);
+                if (availableWidth <= 2 * padding || availableHeight <= 2 * padding) { Hide(); return; }
+                Layout(title, body, group, availableWidth, availableHeight, scale, textScale, padding);
                 _screenWidth = screenWidth;
                 _screenHeight = screenHeight;
                 _scale = scale;
@@ -78,38 +80,33 @@ namespace UnknownInventoryTerminal
             NativeFlatInventoryPanel.Position(_frame.rectTransform, new Rect(x, y, _width, _height));
         }
 
-        private void Layout(string title, string body, string group, float availableWidth, float availableHeight, int scale, float padding)
+        private void Layout(string title, string body, string group, float availableWidth, float availableHeight,
+            int scale, float textScale, float padding)
         {
-            _title.text = title;
-            _body.text = body;
-            _group.text = group;
-            _group.gameObject.SetActive(group.Length > 0);
-            // Assign text first, like GlobalDark. TMP's preferred size properties run the normal input
-            // parser (including textPreprocessor); its string-taking measurement overloads do not.
-            var textScale = Screen.height / 1080f;
-            var maxWidth = (availableWidth - 2 * padding) / textScale;
-            var bodyWidth = Mathf.Min(maxWidth, _nativeWidth > 0f ? _nativeWidth : 500f);
-            var width = Mathf.Min(maxWidth, Mathf.Ceil(Mathf.Max(_title.preferredWidth,
-                Mathf.Min(bodyWidth, Mathf.Max(_body.preferredWidth, group.Length > 0 ? _group.preferredWidth : 0f)))));
-            var titleHeight = Measure(_title, width, 0f, _nativeTitleHeight);
-            var bodyHeight = Measure(_body, Mathf.Min(width, bodyWidth), titleHeight);
-            var groupHeight = group.Length > 0 ? Measure(_group, Mathf.Min(width, bodyWidth), titleHeight + bodyHeight + 6f) + 6f : 0f;
-            var height = titleHeight + bodyHeight + groupHeight;
-            // Only shrink pathological, unusually long tooltips to fit the screen; never ellipsize a stat row.
-            if (height > 0f) textScale = Mathf.Min(textScale, (availableHeight - 2 * padding) / height);
+            _title.SetText(title);
+            _body.SetText(body);
+            _group.SetText(group);
+            // Assign raw text before measuring: TMP's preferred size properties use its normal parser.
+            var wanted = Mathf.Max(_title.PreferredWidth, Mathf.Max(_body.PreferredWidth, _group.PreferredWidth));
+            var width = TerminalItemTooltipLayout.TextWidth(wanted, (availableWidth - 2 * padding) / textScale);
+            var height = _title.Place(width, 0f);
+            if (body.Length > 0)
+            {
+                height += TerminalItemTooltipLayout.DetailGap;
+                height += _body.Place(width, height);
+            }
+            if (group.Length > 0)
+            {
+                height += TerminalItemTooltipLayout.GroupGap;
+                height += _group.Place(width, height);
+            }
+            // Keep all the stat lines on screen; only shrink when a long tooltip exceeds the viewport.
+            textScale = TerminalItemTooltipLayout.FitScale(textScale, availableHeight - 2 * padding, height);
             _width = Mathf.Ceil(width * textScale) + 2 * padding;
             _height = Mathf.Ceil(height * textScale) + 2 * padding;
             _skin.ApplyTooltipFrame(_frame, scale);
             NativeFlatInventoryPanel.Position(_textLayer, new Rect(padding, padding, width, height));
             _textLayer.localScale = new Vector3(textScale, textScale, 1f);
-        }
-
-        private static float Measure(TextMeshProUGUI label, float width, float top, float minimumHeight = 0f)
-        {
-            NativeFlatInventoryPanel.Position(label.rectTransform, new Rect(0f, top, width, minimumHeight));
-            var height = Mathf.Max(minimumHeight, Mathf.Ceil(label.preferredHeight));
-            NativeFlatInventoryPanel.Position(label.rectTransform, new Rect(0f, top, width, height));
-            return height;
         }
 
         private bool RefreshNativeStyle()
@@ -121,69 +118,100 @@ namespace UnknownInventoryTerminal
             var changed = false;
             if (title && !ReferenceEquals(_nativeTitle, title))
             {
-                CopyStyle(_title, title);
+                _title.CopyNativeParser(title);
                 _nativeTitle = title;
-                _nativeTitleHeight = title.rectTransform.rect.height;
                 changed = true;
             }
             if (body && !ReferenceEquals(_nativeBody, body))
             {
-                CopyStyle(_body, body);
-                CopyStyle(_group, body);
-                _group.richText = false;
-                _group.textPreprocessor = null;
+                _body.CopyNativeParser(body);
+                _group.CopyNativeParser(body);
                 _nativeBody = body;
-                _nativeWidth = body.rectTransform.rect.width;
                 changed = true;
             }
             return changed;
         }
 
-        private TextMeshProUGUI CreateLabel(string name)
-        {
-            var label = NativeFlatInventoryPanel.CreateText(_textLayer, name, 16, TextAlignmentOptions.TopLeft);
-            label.color = Color.white;
-            label.richText = true;
-            label.enableWordWrapping = true;
-            label.overflowMode = TextOverflowModes.Overflow;
-            return label;
-        }
+        private LabelPair CreateLabel(string name, float size, Color32 color, bool richText = true) =>
+            new LabelPair(_textLayer, name, size, color, richText);
 
-        private static void CopyStyle(TextMeshProUGUI label, TextMeshProUGUI source)
+        private sealed class LabelPair
         {
-            label.font = source.font;
-            label.fontSharedMaterial = source.fontSharedMaterial;
-            label.spriteAsset = source.spriteAsset;
-            label.styleSheet = source.styleSheet;
-            label.textStyle = source.textStyle;
-            label.textPreprocessor = source.textPreprocessor;
-            label.richText = source.richText;
-            label.parseCtrlCharacters = source.parseCtrlCharacters;
-            label.isRightToLeftText = source.isRightToLeftText;
-            label.overrideColorTags = source.overrideColorTags;
-            label.tintAllSprites = source.tintAllSprites;
-            label.color = source.color;
-            label.enableVertexGradient = source.enableVertexGradient;
-            label.colorGradient = source.colorGradient;
-            label.colorGradientPreset = source.colorGradientPreset;
-            label.fontSize = source.fontSize;
-            label.fontSizeMin = source.fontSizeMin;
-            label.fontSizeMax = source.fontSizeMax;
-            label.enableAutoSizing = source.enableAutoSizing;
-            label.characterWidthAdjustment = source.characterWidthAdjustment;
-            label.lineSpacingAdjustment = source.lineSpacingAdjustment;
-            label.fontStyle = source.fontStyle;
-            label.fontWeight = source.fontWeight;
-            label.enableKerning = source.enableKerning;
-            label.extraPadding = source.extraPadding;
-            label.alignment = source.alignment;
-            label.margin = source.margin;
-            label.characterSpacing = source.characterSpacing;
-            label.wordSpacing = source.wordSpacing;
-            label.lineSpacing = source.lineSpacing;
-            label.paragraphSpacing = source.paragraphSpacing;
-            label.enableWordWrapping = source.enableWordWrapping;
-            label.wordWrappingRatios = source.wordWrappingRatios;
+            private readonly TextMeshProUGUI _shadow;
+            private readonly bool _richText;
+            internal TextMeshProUGUI Text { get; }
+            internal float PreferredWidth => Text.gameObject.activeSelf ? Text.preferredWidth : 0f;
+
+            internal LabelPair(Transform parent, string name, float size, Color32 color, bool richText)
+            {
+                _richText = richText;
+                _shadow = Create(name + " shadow");
+                Text = Create(name);
+                // TMP lays out both passes identically, including CJK fallback glyphs and inline sprites.
+                // Only the shadow mesh is recolored after parsing: raw text, colors and alpha tags stay intact.
+                _shadow.OnPreRenderText += ShadowColor;
+
+                TextMeshProUGUI Create(string labelName)
+                {
+                    var label = NativeFlatInventoryPanel.CreateText(parent, labelName, size, TextAlignmentOptions.TopLeft);
+                    label.color = color;
+                    label.richText = richText;
+                    label.enableWordWrapping = true;
+                    label.enableAutoSizing = false;
+                    label.lineSpacing = 8f;
+                    label.overflowMode = TextOverflowModes.Overflow;
+                    return label;
+                }
+            }
+
+            internal void CopyNativeParser(TextMeshProUGUI source)
+            {
+                Copy(Text);
+                Copy(_shadow);
+
+                void Copy(TextMeshProUGUI label)
+                {
+                    label.font = source.font;
+                    label.fontSharedMaterial = source.fontSharedMaterial;
+                    label.spriteAsset = source.spriteAsset;
+                    label.styleSheet = source.styleSheet;
+                    label.textStyle = source.textStyle;
+                    label.textPreprocessor = _richText ? source.textPreprocessor : null;
+                    label.parseCtrlCharacters = source.parseCtrlCharacters;
+                    label.isRightToLeftText = source.isRightToLeftText;
+                    label.tintAllSprites = source.tintAllSprites;
+                    label.fontStyle = source.fontStyle;
+                    label.fontWeight = source.fontWeight;
+                    label.enableKerning = source.enableKerning;
+                }
+            }
+
+            internal void SetText(string value)
+            {
+                Text.text = _shadow.text = value;
+                Text.gameObject.SetActive(value.Length > 0);
+                _shadow.gameObject.SetActive(value.Length > 0);
+            }
+
+            internal float Place(float width, float top)
+            {
+                NativeFlatInventoryPanel.Position(Text.rectTransform, new Rect(0f, top, width, 0f));
+                var height = Mathf.Ceil(Text.preferredHeight);
+                NativeFlatInventoryPanel.Position(Text.rectTransform, new Rect(0f, top, width, height));
+                NativeFlatInventoryPanel.Position(_shadow.rectTransform, new Rect(1f, top + 1f, width, height));
+                return height;
+            }
+
+            private static void ShadowColor(TMP_TextInfo text)
+            {
+                for (var i = 0; i < text.materialCount; ++i)
+                {
+                    var mesh = text.meshInfo[i];
+                    var colors = mesh.colors32;
+                    for (var v = 0; v < mesh.vertexCount; ++v)
+                        colors[v] = new Color32(25, 24, 39, colors[v].a);
+                }
+            }
         }
     }
 }

@@ -5,6 +5,14 @@ namespace UnknownInventoryTerminal
     // Top-left screen coordinates, shared by the overlay and the headless layout tests.
     internal static class TerminalItemTooltipLayout
     {
+        // NEI's logical text size and 380-unit width cap; leave the terminal's atlas scale independent.
+        internal const float TitleSize = 13f, DetailSize = 12f, Padding = 7f, DetailGap = 3f, GroupGap = 6f;
+        internal static float ReadableScale(float screenHeight) => Clamp(screenHeight / 720f, .9f, 2f);
+        internal static float TextWidth(float preferredWidth, float availableWidth) =>
+            Math.Min(availableWidth, Clamp((float)Math.Ceiling(preferredWidth), 58f - 2 * Padding, 380f - 2 * Padding));
+        internal static float FitScale(float preferredScale, float availableHeight, float contentHeight) =>
+            contentHeight > 0f ? Math.Min(preferredScale, availableHeight / contentHeight) : preferredScale;
+
         internal static (float X, float Y) Place(float x, float y, float width, float height,
             float screenWidth, float screenHeight, float gap, float margin)
         {
