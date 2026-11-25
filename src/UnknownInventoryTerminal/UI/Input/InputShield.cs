@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -7,7 +9,8 @@ using Object = UnityEngine.Object;
 
 namespace UnknownInventoryTerminal
 {
-    // The blocker sits below the terminal. Only the drag cursor and tooltip are lifted above it.
+    // The blocker sits below the terminal. Only the drag cursor is lifted above it;
+    // GlobalDark keeps ownership of the native tooltip's Canvas and visibility.
     internal sealed class InputShield
     {
         private GameObject? _root, _blocker;
@@ -33,8 +36,6 @@ namespace UnknownInventoryTerminal
                     Want<MenuLease>(camera.containerMenu, root => new MenuLease(root));
                     Want<VisualLease>(camera.dragImage ? camera.dragImage.gameObject : null, root => new VisualLease(root));
                 }
-                var hoverBox = GlobalDark.main ? GlobalDark.main.tooltipRect : null;
-                Want<VisualLease>(hoverBox ? hoverBox!.gameObject : null, root => new VisualLease(root));
             }
 
             bool unused = false;

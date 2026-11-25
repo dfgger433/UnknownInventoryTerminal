@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 namespace UnknownInventoryTerminal
 {
     internal enum TerminalButton { None, Close, Sort, Direction, Style, Settings, Return, SettingsBack }
@@ -8,6 +10,7 @@ namespace UnknownInventoryTerminal
         private TerminalButton _pressed;
         private int _pointerButton;
         internal TerminalButton Focused { get; private set; }
+        internal TerminalButton Pressed => _pressed;
         internal bool SettingsOpen { get; private set; }
         internal const int SettingsCloseX = Ae2SettingsLayout.PanelWidth - 22, SettingsCloseY = 2;
 

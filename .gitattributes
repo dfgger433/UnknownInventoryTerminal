@@ -1,2 +1,3 @@
-# Preserve the third-party license bytes exactly as published upstream.
+# Keep the upstream license texts unchanged across checkouts.
+/LICENSE text eol=lf
 /assets/unknowninventoryterminal/licenses/modernity/LICENSE.txt -text

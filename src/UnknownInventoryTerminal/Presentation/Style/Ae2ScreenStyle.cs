@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,14 +12,14 @@ namespace UnknownInventoryTerminal
     {
         // terminalStyle parts, as in AE2's base_terminal.json.
         Header, FirstRow, Row, LastRow, Bottom,
-        Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover,
+        Search, SearchFocused, Tooltip, Button, ButtonFocus, ButtonHover, ButtonPressed, ButtonDisabled,
         Close, SortName, SortAmount, SortAscending, SortDescending, Back, Settings, Refresh, Thumb, ThumbDisabled, NativeButtonFace,
         SettingsBackground, SettingsToggleOff, SettingsToggleOn, SettingsToggleOffHover, SettingsToggleOnHover,
-        SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected,
+        SettingsOption, SettingsOptionDisabled, SettingsOptionHover, SettingsOptionSelected, SettingsOptionPressed,
         SettingsDropDownClosed, SettingsDropDownClosedDisabled, SettingsDropDownClosedHover, SettingsDropDownClosedPressed,
-        SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover,
+        SettingsDropDownOpen, SettingsDropDownOpenDisabled, SettingsDropDownOpenHover, SettingsDropDownOpenPressed,
         TerminalStyleSmall, TerminalStyleMedium, TerminalStyleTall, TerminalStyleFull, VerticalButtonsBg, VerticalButtonsBgVariant,
-        DragDrain, DragUse, DragPin, DragUnpin, PinnedRow, PinnedRowGutter, ScrollGrooveTop, VerticalButtonsBgBottom,
+        DragDrain, DragUse, DragPin, DragUnpin, UnavailableSlotBadge, PinnedRow, PinnedRowGutter, ScrollGrooveTop, VerticalButtonsBgBottom,
         FluidRailLeft, FluidRailMiddle, FluidRailRight, FluidThumb
     }
 
@@ -58,12 +60,86 @@ namespace UnknownInventoryTerminal
 
     internal static class Ae2DropdownAppearance
     {
-        internal static Ae2Image Field(bool open, bool enabled, bool hovered, bool pressed) => open
-            ? !enabled ? Ae2Image.SettingsDropDownOpenDisabled : hovered && !pressed ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownOpen
-            : !enabled ? Ae2Image.SettingsDropDownClosedDisabled : pressed ? Ae2Image.SettingsDropDownClosedPressed : hovered ? Ae2Image.SettingsDropDownClosedHover : Ae2Image.SettingsDropDownClosed;
+        internal static (Ae2Image Face, uint Ink, uint FallbackFill) Field(bool open, bool enabled, bool hovered, bool pressed)
+        {
+            // Each directional field frame already contains its chevron. The entire
+            // field gets one state, including the color shared by arrow and caption.
+            if (!enabled) return (open ? Ae2Image.SettingsDropDownOpenDisabled : Ae2Image.SettingsDropDownClosedDisabled,
+                0xFFBEC2D2, 0xFF696D88);
+            if (pressed) return (open ? Ae2Image.SettingsDropDownOpenPressed : Ae2Image.SettingsDropDownClosedPressed,
+                0xFF263D5B, 0xFF9CD3FF);
+            if (hovered) return (open ? Ae2Image.SettingsDropDownOpenHover : Ae2Image.SettingsDropDownClosedHover,
+                0xFF294F70, 0xFF9CD3FF);
+            return (open ? Ae2Image.SettingsDropDownOpen : Ae2Image.SettingsDropDownClosed,
+                0xFF413F54, open ? 0xFF9CD3FF : 0xFF9A9FB4);
+        }
 
-        internal static Ae2Image Option(bool enabled, bool hovered, bool selected) => !enabled ? Ae2Image.SettingsOptionDisabled
-            : hovered ? Ae2Image.SettingsOptionHover : selected ? Ae2Image.SettingsOptionSelected : Ae2Image.SettingsOption;
+        // Fixed caption box centered on the chevron; do not center it on the varying lower shadow.
+        internal const int FieldContentHeight = 18;
+        internal const int ChevronLeft = 94, ChevronTop = 6, ChevronWidth = 9, ChevronHeight = 5;
+        internal static int ChevronRow(bool open, int column)
+        {
+            var distance = Math.Abs(column - ChevronWidth / 2);
+            return open ? distance : ChevronHeight - 1 - distance;
+        }
+
+        internal static bool HasChevron(int width, int height, bool open, Func<int, int, uint> pixel)
+        {
+            if (width != Ae2SettingsLayout.FieldWidth || height < FieldContentHeight) return false;
+            for (var column = 0; column < ChevronWidth; column++)
+                if (pixel(ChevronLeft + column, ChevronTop + ChevronRow(open, column)) != 0xFF413F54) return false;
+            return true;
+        }
+
+        // Recognize the complete original arrow before replacing any pixels. A custom
+        // skin with different arrow artwork is drawn as-is, not stamped with a second arrow.
+        internal static bool TryPaintChevron(int width, int height, bool open, Func<int, int, uint> pixel, Action<int, int> paint)
+        {
+            if (!HasChevron(width, height, open, pixel)) return false;
+            for (var column = 0; column < ChevronWidth; column++)
+                paint(ChevronLeft + column, ChevronTop + ChevronRow(open, column));
+            return true;
+        }
+
+        internal static int BundledFieldHeight(Ae2Image face) => face switch
+        {
+            Ae2Image.SettingsDropDownClosed => 20,
+            Ae2Image.SettingsDropDownClosedHover or Ae2Image.SettingsDropDownOpen or Ae2Image.SettingsDropDownOpenHover => 19,
+            _ => 18
+        };
+
+        internal static (int Top, int Height, (int X, int Y, int Width, int Height) Caption) FieldLayout(int frameHeight, int scale)
+        {
+            var height = Math.Min(frameHeight, Ae2SettingsLayout.FieldHeight) * scale;
+            var top = Ae2SettingsLayout.FieldHeight * scale - height;
+            var caption = Ae2SettingsLayout.CaptionBounds(Ae2SettingsLayout.FieldWidth * scale,
+                Math.Min(FieldContentHeight * scale, height), scale, field: true);
+            caption.Y += top;
+            return (top, height, caption);
+        }
+
+        internal static Ae2Image Option(bool enabled, bool hovered, bool pressed, bool selected) => !enabled ? Ae2Image.SettingsOptionDisabled
+            : pressed ? Ae2Image.SettingsOptionPressed
+            : hovered ? Ae2Image.SettingsOptionHover
+            : selected ? Ae2Image.SettingsOptionSelected : Ae2Image.SettingsOption;
+
+        internal static (int Top, int Height, (int X, int Y, int Width, int Height) Caption, uint Ink) OptionLayout(Ae2Image face, int scale)
+        {
+            // Lift neither the hit rectangle nor the bottom of the rail. The face and
+            // caption each move one more pixel from rest to hover to press.
+            var (offset, ink) = face switch
+            {
+                Ae2Image.SettingsOptionHover => (1, 0xFF294F70u),
+                Ae2Image.SettingsOptionPressed => (2, 0xFF263D5Bu),
+                Ae2Image.SettingsOptionDisabled => (2, 0xFFBEC2D2u),
+                _ => (0, 0xFF171920u)
+            };
+            var top = offset * scale;
+            var height = Ae2SettingsLayout.OptionHeight * scale;
+            var caption = Ae2SettingsLayout.CaptionBounds(Ae2SettingsLayout.FieldWidth * scale, height, scale, field: false);
+            caption.Y += top;
+            return (top, height - top, caption, ink);
+        }
     }
 
     internal static class Ae2ToggleAppearance
@@ -76,11 +152,18 @@ namespace UnknownInventoryTerminal
 
     internal static class Ae2ToolbarAppearance
     {
-        // AE2 IconButton: hover takes precedence over focus and moves the face and icon together.
+        // Toolbar buttons use the atlas' four visual states: normal, focused, pressed and disabled.
+        // Keep the old overload for callers that only have hover/focus information.
         internal static Ae2Image Face(bool hovered, bool focused) => hovered ? Ae2Image.ButtonHover :
             focused ? Ae2Image.ButtonFocus : Ae2Image.Button;
 
-        internal static int OffsetY(Ae2Image face) => face == Ae2Image.ButtonHover ? 1 : 0;
+        internal static Ae2Image Face(bool hovered, bool focused, bool pressed, bool enabled) => !enabled
+            ? Ae2Image.ButtonDisabled
+            : pressed ? Ae2Image.ButtonPressed
+            : hovered ? Ae2Image.ButtonHover
+            : focused ? Ae2Image.ButtonFocus : Ae2Image.Button;
+
+        internal static int OffsetY(Ae2Image face) => face is Ae2Image.ButtonHover or Ae2Image.ButtonPressed or Ae2Image.ButtonDisabled ? 1 : 0;
 
         // Icon crops may have unequal transparent margins. Measure their visible pixels, not the crop rectangle.
         internal static (int X, int Y, int Width, int Height)? VisibleBounds(int width, int height, Func<int, int, byte> alpha)
@@ -113,6 +196,19 @@ namespace UnknownInventoryTerminal
         internal const uint HoverBorder = 0xFFDAFFFF;
     }
 
+    internal static class Ae2UnavailableSlotBadge
+    {
+        // The transparent atlas padding is removed before the visible icon is centered at
+        // its native aspect ratio inside the slot.
+        internal static (int X, int Y, int Width, int Height) Bounds(
+            (int Width, int Height) visible, int scale)
+        {
+            var cell = Ae2TerminalLayout.Pitch * scale;
+            return ((cell - visible.Width * scale) / 2, (cell - visible.Height * scale) / 2,
+                visible.Width * scale, visible.Height * scale);
+        }
+    }
+
     internal static class Ae2NineSlice
     {
         // Source cuts stay in texels; destination cuts reserve whole UI pixels at the terminal scale.
@@ -142,6 +238,8 @@ namespace UnknownInventoryTerminal
                 return false;
 
             var relative = id.Substring(TexturePrefix.Length);
+            // Keep the resource layout aligned with NeoForge: every runtime texture lives below textures/gui/.
+            // Subdirectories are allowed so terminal, settings, storage and fluid artwork can stay grouped by use.
             if (!relative.StartsWith("gui/", StringComparison.Ordinal))
                 return false;
             foreach (var part in relative.Substring(0, relative.Length - 4).Split('/'))

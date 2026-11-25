@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Globalization;
 using TMPro;
@@ -14,7 +16,7 @@ namespace UnknownInventoryTerminal
         private readonly Ae2TerminalSkin _skin;
         private readonly TerminalModalInput _input;
         private readonly RectTransform _root, _amountViewport, _lane;
-        private readonly Image _frame, _amountFace, _railLeft, _railMiddle, _railRight, _thumb;
+        private readonly Image _frame, _frameTopBorder, _amountFace, _railLeft, _railMiddle, _railRight, _thumb;
         private readonly TextMeshProUGUI _title, _amountText, _limit;
         private readonly TMP_InputField _amount;
         private readonly Slider _slider;
@@ -39,6 +41,12 @@ namespace UnknownInventoryTerminal
             MakeHitSurface(backdrop);
             _frame = Picture(backdrop.transform, "Transfer frame");
             _skin.Apply(_frame, Ae2Image.SettingsBackground, Ae2TerminalSkin.Shell);
+            // Keep the hand-drawn top edge on its own simple image. Unity's sliced Image can
+            // drop the four-pixel top border when the modal is resized to a non-native height.
+            _frameTopBorder = Picture(_frame.transform, "Transfer frame top border");
+            _frameTopBorder.sprite = _skin.GetRows(Ae2Image.SettingsBackground, 0, 124, 4);
+            _frameTopBorder.type = Image.Type.Simple;
+            _frameTopBorder.color = _frameTopBorder.sprite ? Color.white : Ae2TerminalSkin.Shell;
             _title = Label(_frame.transform, "Transfer title", TextAlignmentOptions.Left);
             _title.fontStyle = FontStyles.Bold;
 
@@ -251,6 +259,7 @@ namespace UnknownInventoryTerminal
                 _frame.type = Image.Type.Sliced;
                 _frame.pixelsPerUnitMultiplier = 1f / _scale;
             }
+            Place(_frameTopBorder.rectTransform, 0, 0, Width, 4);
             Place(_title.rectTransform, Inset, 5, Width - 2 * Inset, 13);
             _title.fontSize = 9 * _scale;
             Place((RectTransform)_amount.transform, Inset, 23, 53, 12);
@@ -338,8 +347,8 @@ namespace UnknownInventoryTerminal
                 var face = state switch
                 {
                     SelectionState.Disabled => Ae2Image.SettingsOptionDisabled,
-                    SelectionState.Pressed or SelectionState.Selected => Ae2Image.SettingsOptionSelected,
-                    SelectionState.Highlighted => Ae2Image.SettingsOptionHover,
+                    SelectionState.Selected => Ae2Image.SettingsOptionSelected,
+                    SelectionState.Pressed or SelectionState.Highlighted => Ae2Image.SettingsOptionHover,
                     _ => Ae2Image.SettingsOption
                 };
                 _skin.Apply(_face, face, state == SelectionState.Disabled ? Ae2TerminalSkin.Slot : Ae2TerminalSkin.Focus);

@@ -7,7 +7,7 @@
 | 文件 | AssemblyVersion | 长度 | SHA-256 |
 |---|---:|---:|---|
 | `BepInEx/plugins/CUCoreLib.dll` | `1.1.0.0` | `1,222,144` | `C0F064260B2671D02BF802C460AA346C6B858EC9269F2FF93439EBABAA940AA3` |
-| `BepInEx/plugins/Together/CasualtiesMP.dll` | `5.5.3.0` | `2,546,176` | `880A8E4E190E38DF2625D303A504EF20263D7B27A31DD1F01A91512F9B6481A7` |
+| `BepInEx/plugins/Together/CasualtiesMP.dll` | `5.5.4.0` | `2,697,216` | `606A7A9B3467CFBB916B41B86697EDB97C82508EE7FFE15432CCB7B08549CF41` |
 
 哈希来自 `Get-FileHash -Algorithm SHA256`；版本来自 `AssemblyName.GetAssemblyName`。Together 上游仓库可供概念参考，但本表和下文均以本机 DLL / 本机反编译为证据。
 
@@ -107,6 +107,12 @@ Input.GetKeyDown(KeyBinds.GetBind("casualtiestogether_chat"))
 ### 容器间液体转移
 
 终端只识别本地库存中的两个具体液体容器；聚合格需先展开选实例。原版 `HandleReleaseDragging` 仍处理拾取检查和拖拽收尾。确认时重新核对两个实例的归属、液体存量及目标容量，再将所选 mL 交给原版 `LiquidTransfer.Finish`；不直接写液体栈。Together 5.5.4.0 的本机 DLL 已静态核对：`Finish` 的 postfix 使用 `transferFrom`、`transferTo` 和 `ml` 发送原有转移消息。联机时如果未装载该钩子或库存对象未注册，终端拒绝提交，不走仅本地修改的回退路径。
+
+### 客机倒空背包液体
+
+当前安装的 Together 5.5.4.0 `PlayerCamera_HandleWhileDragging_MultiplayerPatch` 在客机以原有消息 75 报告液体容器的剩余量，主机接收器按物品同步 ID、客户端角色、可达性和当前容量验证后执行剩余差额。`ItemSync` 的本机实现支持通过 `Carried` / 背包关系定位同一角色携带的容器，所以物品不需要先拿在手上；主机不需要安装 UnknownInventoryTerminal，但必须运行兼容的 Together。终端在客机开始倒液前检查该 postfix 实际已安装、世界已就绪且物品已注册；否则拒绝本地修改。倒液开始时预置 Together 的现有状态标记，覆盖第一次原版倒液就将容器清空的情况；同步仍使用 Together 消息，不新增协议。
+
+这只是针对本机已安装 DLL 的静态与代码路径核对，不保证其他 Together 版本或主机接收校验结果，也不表示远端已确认。未实测小于 0.5 mL 的残量、浸水状态、网络中断、主机拒绝/回弹、其他物品操作与倒液中途交错；这些场景需在双机游戏中确认。
 
 实机验收：用具体实例、固定栏和手持槽互拖，分别验证取消、转移指定 mL、混合液体比例、转移上限和失去物品归属。输入框获焦后点窗口空白，再分别点击输入框、滑块和两个按钮；确认第一次点击就有响应。按 Esc 或点击「取消」后，确认该次点击不落到库存，下次点击可以立即操作库存，再次打开转移框也能编辑。最后在 Together 客户端复测双方体积一致，确认没有打开第二层原版转移窗口，也没有移动物品本身（原版超重掉落规则除外）。
 

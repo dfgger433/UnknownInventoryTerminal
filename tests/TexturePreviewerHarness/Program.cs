@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -45,6 +46,7 @@ internal static class Program
             if (Environment.GetEnvironmentVariable("UIT_PREVIEW_SNAPSHOT") is { Length: > 0 } snapshot) SaveComposite(window, snapshot);
             Console.WriteLine("Asset root and atlas layout passed: source textures preferred; five crops including independent scrollers.");
             Console.WriteLine("Composite passed: board, toolbar states, scroll thumb and shared tooltip frame render at 2x.");
+            DropdownPreview.Check(style, sourceRoot);
         }
         finally
         {

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 $ErrorActionPreference = 'Stop'
 $project = Join-Path $PSScriptRoot 'TexturePreviewer.csproj'
 & dotnet run --project $project -c Release

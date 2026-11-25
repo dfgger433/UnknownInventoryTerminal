@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -9,8 +11,8 @@ namespace UnknownInventoryTerminal
 {
     internal static class TerminalText
     {
-        internal const string English = "en";
-        internal const string Chinese = "zh-CN";
+        internal const string English = "en_us";
+        internal const string Chinese = "zh_cn";
         private static IReadOnlyDictionary<string, string> _fallback = new Dictionary<string, string>();
         private static IReadOnlyDictionary<string, string> _english = new Dictionary<string, string>();
         private static readonly Dictionary<string, IReadOnlyDictionary<string, string>> Translations = new(StringComparer.OrdinalIgnoreCase);
@@ -21,7 +23,7 @@ namespace UnknownInventoryTerminal
         internal static void Initialize(string pluginPath, Action<string> warn)
         {
             var assembly = typeof(TerminalText).Assembly;
-            using var fallback = assembly.GetManifestResourceStream("UnknownInventoryTerminal.Lang.en.json")!;
+            using var fallback = assembly.GetManifestResourceStream("UnknownInventoryTerminal.Lang.en_us.json")!;
             using var reader = new StreamReader(fallback);
             _fallback = Parse(reader.ReadToEnd());
             var directory = Path.Combine(Path.GetDirectoryName(pluginPath) ?? "", "Lang");
@@ -61,6 +63,8 @@ namespace UnknownInventoryTerminal
         {
             foreach (var id in _languages)
                 if (string.Equals(id, language, StringComparison.OrdinalIgnoreCase)) return id;
+            if (string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)) return English;
+            if (string.Equals(language, "zh-CN", StringComparison.OrdinalIgnoreCase)) return Chinese;
             return English;
         }
 

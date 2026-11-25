@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 namespace UnknownInventoryTerminal
 {
     internal enum TerminalDragStep { Wait, Cancel, Drain, StopDrain, Use }
@@ -23,7 +25,9 @@ namespace UnknownInventoryTerminal
         {
             if (!overEligibleTarget || cancelPressed) return TerminalDragStep.Cancel;
             if (action == TerminalDragAction.Use) return leftPressed ? TerminalDragStep.Use : TerminalDragStep.Wait;
-            if (leftPressed && leftHeld) return TerminalDragStep.Drain;
+            // Native draining is incremental. The first click starts it, then every held
+            // frame continues the same native call until release or cancellation.
+            if (leftHeld && (leftPressed || draining)) return TerminalDragStep.Drain;
             return draining && !leftHeld ? TerminalDragStep.StopDrain : TerminalDragStep.Wait;
         }
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using BepInEx.Configuration;
 using CUCoreLib.Data;
 using CUCoreLib.Registries;
@@ -46,7 +48,7 @@ namespace UnknownInventoryTerminal
         internal static void Initialize(ConfigFile config)
         {
             _language = config.Bind(ConfigSection, LanguageSetting, TerminalText.English,
-                "Display language for the inventory terminal (en or zh-CN).");
+                "Display language for the inventory terminal (en_us or zh_cn).");
             TerminalText.Select(_language.Value);
             _language.SettingChanged += (_, _) =>
             {

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System;
 using System.Linq;
 using UnknownInventoryTerminal;
@@ -18,7 +19,8 @@ internal static class Program
             ("Close restores borrowed menu state and releases added CanvasGroups", CloseRestoresMenus),
             ("Close and reopen in one frame reuse added components safely", SameFrameReopen),
             ("Destroyed shield and scene roots can be replaced without leaking menu leases", DestroyedRootsAndSceneChange),
-            ("Close restores tooltip and drag visuals without hiding or replacing them", ClosePreservesVisuals),
+            ("Close restores the drag cursor without hiding or replacing it", ClosePreservesDragVisual),
+            ("Native tooltips keep their own Canvas and visibility across close, reopen and scene replacement", NativeTooltipRemainsGameOwned),
             ("Control hints render above item and native visuals without consuming input", TooltipLayers),
             ("Transparent hit surfaces do not depend on sprite alpha or transparent mesh culling", TransparentHitSurface),
             ("Fixed cell hits relay only to live native buttons without changing pointer coordinates", RelayNativeItemHit),
@@ -171,37 +173,65 @@ internal static class Program
         Check(!newBlocker && !nextRadial.GetComponent<CanvasGroup>(), "dispose should destroy the shield and release the scene's new lease");
     }
 
-    private static void ClosePreservesVisuals()
+    private static void ClosePreservesDragVisual()
     {
         var cursor = new GameObject("Active drag cursor", typeof(Image));
         var image = cursor.GetComponent<Image>();
-        var tooltip = new GameObject("Tooltip", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(Image));
-        var tooltipCanvas = tooltip.GetComponent<Canvas>();
-        tooltipCanvas.enabled = false;
-        tooltipCanvas.sortingLayerID = 5;
-        tooltipCanvas.sortingOrder = 12;
-        var tooltipRaycaster = tooltip.GetComponent<GraphicRaycaster>();
-        var tooltipImage = tooltip.GetComponent<Image>();
         PlayerCamera.main = new PlayerCamera { dragImage = image };
-        GlobalDark.main = new GlobalDark { tooltipRect = tooltip.GetComponent<RectTransform>() };
         var shield = new InputShield();
 
         shield.SetVisible(true);
         Check(image.enabled && !image.raycastTarget && cursor.GetComponent<Canvas>().sortingOrder == TerminalCanvasOrder.NativeVisuals &&
               !shield.IsBlocker(cursor), "active drag visual should render above the terminal and not accept input");
-        Check(tooltipCanvas.enabled && tooltipCanvas.overrideSorting && tooltipCanvas.sortingLayerID == 0 &&
-              tooltipCanvas.sortingOrder == TerminalCanvasOrder.NativeVisuals && !tooltipRaycaster.enabled && !tooltipImage.raycastTarget,
-            "borrowed tooltip canvas should render above the terminal without intercepting input");
         shield.SetVisible(false);
         Object.EndFrame();
 
         Check(ReferenceEquals(image, PlayerCamera.main.dragImage) && image && image.enabled && image.raycastTarget &&
               !cursor.GetComponent<Canvas>(), "close should restore the drag cursor without hiding or replacing it");
-        Check(ReferenceEquals(tooltipCanvas, tooltip.GetComponent<Canvas>()) && !tooltipCanvas.enabled &&
-              !tooltipCanvas.overrideSorting && tooltipCanvas.sortingLayerID == 5 && tooltipCanvas.sortingOrder == 12 &&
-              tooltipRaycaster.enabled && tooltipImage.raycastTarget,
-            "borrowed tooltip canvas, raycaster and graphic should recover exactly");
         shield.Dispose();
+    }
+
+    private static void NativeTooltipRemainsGameOwned()
+    {
+        var tooltip = new GameObject("Hidden native tooltip", typeof(RectTransform), typeof(Image));
+        tooltip.SetActive(false);
+        GlobalDark.main = new GlobalDark { tooltipRect = tooltip.GetComponent<RectTransform>() };
+        var shield = new InputShield();
+
+        shield.SetVisible(true);
+        Check(!tooltip.GetComponent<Canvas>() && !tooltip.activeSelf && tooltip.GetComponent<Image>().raycastTarget,
+            "opening the terminal must not add a Canvas or change the native tooltip");
+        tooltip.SetActive(true); // GlobalDark can show UI/extension hints while the terminal is open.
+        shield.SetVisible(true);
+        shield.SetVisible(false);
+        shield.SetVisible(true);
+        Object.EndFrame();
+        Check(tooltip.activeSelf && !tooltip.GetComponent<Canvas>(),
+            "same-frame close/reopen must leave the game-owned tooltip rendering through its original parent");
+
+        var replacement = new GameObject("Replacement native tooltip", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(Image));
+        var canvas = replacement.GetComponent<Canvas>();
+        canvas.enabled = false;
+        canvas.overrideSorting = true;
+        canvas.sortingLayerID = 5;
+        canvas.sortingOrder = 12;
+        GlobalDark.main.tooltipRect = replacement.GetComponent<RectTransform>();
+        shield.SetVisible(true);
+        Check(!canvas.enabled && canvas.overrideSorting && canvas.sortingLayerID == 5 && canvas.sortingOrder == 12 &&
+              replacement.GetComponent<GraphicRaycaster>().enabled && replacement.GetComponent<Image>().raycastTarget,
+            "refresh and scene replacement must not borrow an existing tooltip Canvas or its raycasters");
+        canvas.enabled = true; // A live game/other-mod change must not be rolled back to a snapshot.
+        canvas.sortingOrder = 21;
+        replacement.SetActive(false);
+        shield.SetVisible(false);
+        shield.Dispose();
+        Object.EndFrame();
+        Check(ReferenceEquals(canvas, replacement.GetComponent<Canvas>()) && canvas.enabled && canvas.overrideSorting &&
+              canvas.sortingLayerID == 5 && canvas.sortingOrder == 21 && !replacement.activeSelf,
+            "close and dispose must preserve the current game-owned tooltip state");
+        replacement.SetActive(true);
+        Check(replacement.activeInHierarchy && canvas.isActiveAndEnabled,
+            "the next native hover can display the tooltip after terminal teardown");
     }
 
     private static void TooltipLayers()

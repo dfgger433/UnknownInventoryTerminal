@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -670,12 +672,37 @@ namespace UnknownInventoryTerminal
             _dirty = true;
         }
 
+        internal bool TryReorderPinnedItem(Item item, Vector2 pointer)
+        {
+            if (!_hasPinnedRow || !_pins.Contains(item) || !_pinnedRow ||
+                !RectTransformUtility.RectangleContainsScreenPoint(_pinnedRow, pointer, null) ||
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(_pinnedRow, pointer, null, out var local)) return false;
+
+            var column = Mathf.Clamp(Mathf.FloorToInt(local.x / (Ae2TerminalLayout.Pitch * _layout.Scale)),
+                0, Ae2TerminalLayout.Columns - 1);
+            var destination = Mathf.Min(_pins.Page * Ae2TerminalLayout.Columns + column, _pins.Count - 1);
+            _pins.Move(item, destination);
+            _dirty = true;
+            return true;
+        }
+
+        internal void RefreshPinnedItems() => Synchronize();
+
         private void MovePinPage(int direction)
         {
-            if (InteractionInProgress() || !_hasPinnedRow || _pins.PageCount <= 1) return;
+            if ((!IsPinnedReorderDrag() && InteractionInProgress()) || !_hasPinnedRow || _pins.PageCount <= 1) return;
             _pins.MovePage(direction);
             _dirty = true;
             Synchronize();
+        }
+
+        private bool IsPinnedReorderDrag()
+        {
+            var camera = PlayerCamera.main;
+            if (!camera || !camera.dragItem) return false;
+            var item = camera.dragItem;
+            return _pins.Contains(item!) && Plugin.IsTerminalDrag(camera, item!) &&
+                GameInventoryAdapter.Owns(camera.body, item!);
         }
 
         private static TerminalDragAction AvailableDragActions(PlayerCamera camera, Item item) =>
@@ -778,7 +805,8 @@ namespace UnknownInventoryTerminal
 
         private void Synchronize()
         {
-            if (!_visible || !_dirty || !PlayerCamera.main || !PlayerCamera.main.body || InteractionInProgress()) return;
+            if (!_visible || !_dirty || !PlayerCamera.main || !PlayerCamera.main.body ||
+                (InteractionInProgress() && !IsPinnedReorderDrag())) return;
             EnsureRoot();
             var body = PlayerCamera.main.body;
             _pins.SetOwner(body);

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,7 +24,9 @@ namespace UnknownInventoryTerminal
         private readonly Dictionary<string, Texture2D?> _textures = new Dictionary<string, Texture2D?>();
         private readonly Dictionary<Ae2Image, Ae2ImageRegion?> _regions = new Dictionary<Ae2Image, Ae2ImageRegion?>();
         private readonly Dictionary<Ae2Image, (int X, int Y, int Width, int Height)?> _visibleBounds = new();
+        private readonly Dictionary<(Ae2Image Face, bool Open, uint Ink), Texture2D?> _dropdownFrames = new();
         private readonly Dictionary<Ae2Image, Sprite> _sprites = new Dictionary<Ae2Image, Sprite>();
+        private readonly Dictionary<Ae2Image, Sprite?> _visibleSprites = new();
         private readonly Dictionary<(Ae2Image, int, int, int), Sprite> _slices = new();
         private Ae2ScreenStyle? _style;
         private bool _loadedStyle;
@@ -109,6 +113,57 @@ namespace UnknownInventoryTerminal
             return bounds;
         }
 
+        internal void DrawDropdownFrame(Rect bounds, Ae2Image id, bool open, uint ink, uint fallbackFill)
+        {
+            // Bake the state ink into a cached copy of the crop. The frame and arrow then
+            // go through one IMGUI blit with exactly the same sampling, opacity and transform.
+            var key = (id, open, ink);
+            if (!_dropdownFrames.TryGetValue(key, out var frame))
+                _dropdownFrames[key] = frame = CreateDropdownFrame(id, open, ink, fallbackFill);
+            if (frame) GUI.DrawTexture(bounds, frame, ScaleMode.StretchToFill);
+            else Draw(bounds, id, Argb(fallbackFill));
+        }
+
+        private Texture2D? CreateDropdownFrame(Ae2Image id, bool open, uint ink, uint fallbackFill)
+        {
+            var color = Argb(ink);
+            Color[] pixels;
+            int width, height;
+            if (Resolve(id) is { } region)
+            {
+                width = region.Width;
+                height = region.Height;
+                // Unity returns rows bottom-up; the shared atlas rules use a top-left origin.
+                var atlas = _textures[region.Texture]!;
+                pixels = atlas.GetPixels(region.X, atlas.height - region.Y - height, width, height);
+                if (!Ae2DropdownAppearance.TryPaintChevron(width, height, open,
+                    (x, y) => PackArgb(pixels[Index(x, y)]), (x, y) => pixels[Index(x, y)] = color)) return null;
+            }
+            else
+            {
+                width = Ae2SettingsLayout.FieldWidth;
+                height = Ae2DropdownAppearance.BundledFieldHeight(id);
+                pixels = new Color[width * height];
+                Array.Fill(pixels, Argb(fallbackFill));
+                for (var column = 0; column < Ae2DropdownAppearance.ChevronWidth; column++)
+                    pixels[Index(Ae2DropdownAppearance.ChevronLeft + column,
+                        Ae2DropdownAppearance.ChevronTop + Ae2DropdownAppearance.ChevronRow(open, column))] = color;
+            }
+
+            var frame = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                name = "UIT.AE2.Dropdown." + id, filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp
+            };
+            frame.SetPixels(pixels);
+            frame.Apply(false, true);
+            return frame;
+
+            int Index(int x, int y) => (height - 1 - y) * width + x;
+        }
+
+        private static uint PackArgb(Color32 pixel) =>
+            ((uint)pixel.a << 24) | ((uint)pixel.r << 16) | ((uint)pixel.g << 8) | pixel.b;
+
         internal bool Draw(Rect bounds, Ae2Image id, Color fallback)
         {
             if (Event.current.type != EventType.Repaint) return true;
@@ -179,6 +234,24 @@ namespace UnknownInventoryTerminal
             return sprite;
         }
 
+        // Crop transparent atlas padding so an overlay can be stretched without leaving a
+        // small icon or its neighboring atlas pixels in the slot.
+        internal Sprite? GetVisibleSprite(Ae2Image id)
+        {
+            if (_visibleSprites.TryGetValue(id, out var cached)) return cached;
+            if (Resolve(id) is not { } region || VisibleBounds(id) is not { } visible)
+            {
+                _visibleSprites[id] = null;
+                return null;
+            }
+            var texture = _textures[region.Texture]!;
+            var top = texture.height - region.Y - visible.Y - visible.Height;
+            var sprite = Sprite.Create(texture, new Rect(region.X + visible.X, top, visible.Width, visible.Height),
+                new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
+            _visibleSprites[id] = sprite;
+            return sprite;
+        }
+
         // Images are used exactly as cut from their PNG: no slicing or tiling.
         internal void Apply(Image image, Ae2Image id, Color fallback)
         {
@@ -199,9 +272,10 @@ namespace UnknownInventoryTerminal
         }
 
         // Shared by ordinary toolbar buttons and fixed use/drain hit targets.
-        internal bool ApplyToolbarFace(Image image, Image glyph, Vector2 origin, Ae2Image icon, int scale, bool hovered, bool focused)
+        internal bool ApplyToolbarFace(Image image, Image glyph, Vector2 origin, Ae2Image icon, int scale,
+            bool hovered, bool focused, bool pressed = false, bool enabled = true)
         {
-            var face = Ae2ToolbarAppearance.Face(hovered, focused);
+            var face = Ae2ToolbarAppearance.Face(hovered, focused, pressed, enabled);
             var offset = Ae2ToolbarAppearance.OffsetY(face);
             var size = SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
             NativeFlatInventoryPanel.Position(image.rectTransform, new Rect(origin.x, origin.y + offset * scale,
@@ -273,13 +347,17 @@ namespace UnknownInventoryTerminal
         public void Dispose()
         {
             foreach (var sprite in _sprites.Values) if (sprite) UnityEngine.Object.Destroy(sprite);
+            foreach (var sprite in _visibleSprites.Values) if (sprite) UnityEngine.Object.Destroy(sprite);
             foreach (var sprite in _slices.Values) if (sprite) UnityEngine.Object.Destroy(sprite);
             foreach (var texture in _textures.Values) if (texture) UnityEngine.Object.Destroy(texture);
+            foreach (var frame in _dropdownFrames.Values) if (frame) UnityEngine.Object.Destroy(frame);
             _sprites.Clear();
+            _visibleSprites.Clear();
             _slices.Clear();
             _textures.Clear();
             _regions.Clear();
             _visibleBounds.Clear();
+            _dropdownFrames.Clear();
         }
     }
 }

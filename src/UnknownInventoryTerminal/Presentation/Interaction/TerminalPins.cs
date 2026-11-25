@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 
@@ -9,8 +11,24 @@ namespace UnknownInventoryTerminal
         private readonly List<TItem> _items = new();
         private TOwner? _owner;
         internal int Page { get; private set; }
+        internal int Count => _items.Count;
         internal int PageCount => (_items.Count + pageSize - 1) / pageSize;
         internal bool Contains(TItem item) => IndexOf(item) >= 0;
+
+        // Move the pinned item to the requested list position.
+        internal bool Move(TItem item, int destinationIndex)
+        {
+            var sourceIndex = IndexOf(item);
+            if (sourceIndex < 0) return false;
+
+            destinationIndex = Math.Min(Math.Max(destinationIndex, 0), _items.Count - 1);
+            if (destinationIndex == sourceIndex) return false;
+
+            _items.RemoveAt(sourceIndex);
+            _items.Insert(destinationIndex, item);
+            Page = destinationIndex / pageSize;
+            return true;
+        }
 
         private int IndexOf(TItem item)
         {

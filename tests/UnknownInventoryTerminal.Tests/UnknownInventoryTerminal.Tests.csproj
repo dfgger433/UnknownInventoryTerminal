@@ -28,6 +28,7 @@
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Equipment\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\SettingsPopupLayout.cs" Link="SettingsPopupLayout.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\UI\Settings\Ae2SettingsControls.cs" Link="Ae2SettingsControls.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\UI\Tooltip\TerminalItemTooltipContent.cs" Link="TerminalItemTooltipContent.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\TerminalItemTooltipLayout.cs" Link="TerminalItemTooltipLayout.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Tooltip\TerminalTooltipText.cs" Link="TerminalTooltipText.cs" />

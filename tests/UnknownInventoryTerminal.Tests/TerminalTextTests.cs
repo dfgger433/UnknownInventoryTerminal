@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -53,12 +54,21 @@ public sealed class TerminalTextTests
         TerminalText.Get("slot.custom", "Custom slot").Should().Be("Custom slot");
         TerminalText.Get("missing.key").Should().Be("missing.key");
         ResolveLanguage("XX").Should().Be("xx");
-        ResolveLanguage("unknown").Should().Be("en");
+        ResolveLanguage("unknown").Should().Be("en_us");
     }
 
     [TestMethod]
-    [DataRow("en", "Terminal language", "Container placement")]
-    [DataRow("zh-CN", "终端语言", "容器放置规则")]
+    public void LegacyLanguageIdsResolveToCurrentFileNames()
+    {
+        SetLanguages("en_us", "zh_cn");
+
+        ResolveLanguage("en").Should().Be("en_us");
+        ResolveLanguage("zh-CN").Should().Be("zh_cn");
+    }
+
+    [TestMethod]
+    [DataRow("en_us", "Terminal language", "Container placement")]
+    [DataRow("zh_cn", "终端语言", "容器放置规则")]
     public void SettingsReadPlainFieldLabelsEvenWithLegacyFormatKeys(string language, string languageTitle, string placementTitle)
     {
         var shipped = TerminalText.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Lang", language + ".json")));
@@ -71,8 +81,8 @@ public sealed class TerminalTextTests
     }
 
     [TestMethod]
-    [DataRow("en", "Keep item after action")]
-    [DataRow("zh-CN", "动作后保留物品")]
+    [DataRow("en_us", "Keep item after action")]
+    [DataRow("zh_cn", "动作后保留物品")]
     public void KeepDraggingToggleHasALocalizedLabelAndActionDescription(string language, string label)
     {
         var shipped = TerminalText.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Lang", language + ".json")));
@@ -80,7 +90,7 @@ public sealed class TerminalTextTests
         var description = shipped["settings.KeepDraggingAfterUse.description"];
         (description.Contains("Drain", StringComparison.Ordinal) || description.Contains("倒液", StringComparison.Ordinal))
             .Should().BeTrue();
-        description.Should().Contain(language == "en" ? "once" : "一次");
+        description.Should().Contain(language == "en_us" ? "once" : "一次");
     }
 
     private static Dictionary<string, string> Dict(params (string Key, string Value)[] entries)

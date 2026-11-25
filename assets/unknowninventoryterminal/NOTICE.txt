@@ -1,3 +1,10 @@
+Code and artwork license scope
+
+Unknown Inventory Terminal's first-party code is licensed under GNU GPL
+version 3 only (GPL-3.0-only); see LICENSE at the project root. The GPL does
+not relicense the textures below or any third-party dependencies. These
+textures retain their respective licenses and attribution requirements.
+
 Applied Energistics 2 GUI textures
 
 Copyright (c) 2020 Ridanisaurus Rid
@@ -8,32 +15,65 @@ https://creativecommons.org/licenses/by-nc-sa/3.0/
 License text: https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode
 
 Source: https://github.com/AppliedEnergistics/Applied-Energistics-2/tree/f0ee8bf4bf35431b9f43788401aa609ca2adbcef/src/main/resources/assets/ae2/textures
-Original files: guis/text_field.png, guis/cpu_selector.png,
-gui/sprites/button.png, gui/sprites/button_highlighted.png,
-gui/sprites/big_scroller.png, gui/sprites/big_scroller_disabled.png,
-and gui/sprites/vertical_buttons_bg.png. Local copies are organized under
-textures/gui/{widgets,settings,storage}/ and named for their use.
-textures/gui/terminal/terminal_background.png, textures/gui/terminal/terminal_controls.png,
-and textures/gui/widgets/vertical_button_bar_bottom.png contain local edits to
-AE2 artwork. textures/gui/widgets/vertical_button_bar_variant.png is a
-pixel-level reconstruction from the archived 21x26 session table; the deleted
-original PNG byte stream was not recovered.
-textures/gui/widgets/drop_down_list.png was supplied by the terminal project operator.
-The local textures/gui/widgets/transparent_button.png is not an AE2 asset. The mod slices, scales and
-rearranges the AE2 textures at runtime in its own UI; the texture artwork and those adaptations are subject to
-the same CC BY-NC-SA 3.0 terms. Do not use them commercially without permission.
-No Minecraft or Applied Energistics 2 runtime or source code is bundled.
+Upstream attribution and license: https://github.com/AppliedEnergistics/Applied-Energistics-2/blob/f0ee8bf4bf35431b9f43788401aa609ca2adbcef/README.md#license
+
+In the mappings below, AE2 paths are relative to the upstream textures/
+folder; local paths are relative to this project's textures/gui/ folder.
+
+Unmodified PNGs (AE2 -> local):
+- guis/text_field.png -> widgets/text_field.png
+- guis/cpu_selector.png -> settings/cpu_selector.png
+- guis/checkbox.png -> settings/toggle.png
+- gui/sprites/button.png -> widgets/button.png
+- gui/sprites/button_highlighted.png -> widgets/button_highlighted.png
+- gui/sprites/big_scroller.png -> storage/scroll_thumb.png
+- gui/sprites/big_scroller_disabled.png -> storage/scroll_thumb_disabled.png
+- gui/sprites/vertical_buttons_bg.png -> widgets/vertical_button_bar.png
+
+Adapted PNGs (AE2 -> local):
+- guis/terminal.png -> terminal/terminal_background.png (reworked layout)
+- guis/states.png -> terminal/terminal_controls.png (edited button/icon atlas)
+- guis/background.png -> settings/settings_background.png (resized and edited)
+- gui/sprites/vertical_buttons_bg.png -> widgets/vertical_button_bar_bottom.png
+  (edited seam) and widgets/vertical_button_bar_variant.png (reconstructed from
+  a 21x26 pixel table; the previous variant's PNG bytes were not recovered)
+- gui/sprites/button.png, gui/sprites/button_highlighted.png, and
+  gui/sprites/button_disabled.png -> widgets/drop_down_list.png (operator-
+  supplied atlas; matching button faces cropped to 112 pixels and arranged
+  into field/option states, with chevrons and row edits)
+
+The mod slices, scales, and rearranges the artwork at runtime. Keep the
+attribution and license with copies; identify changes and share adaptations
+under the applicable ShareAlike terms. Do not use the artwork commercially
+without permission. No Minecraft or AE2 runtime or Java source is bundled.
+
+Other GUI files
+
+textures/gui/widgets/transparent_button.png is a local, fully transparent
+placeholder, not an AE2 asset.
 
 Modernity-GTNH-UI fluid slider textures
 
-Credit: Modernity-GTNH-UI contributors (CreativeCore GUI textures added by WanQueen).
-Texture history: https://github.com/ModernityGTNH/Modernity-GTNH-UI/commit/12f56bb47098643843f2b62560892957745dbf33
+Credit: Modernity-GTNH-UI contributors, including Ranzu (initial import of
+CreativeCore originals) and WanQueen (revised the PNGs used here).
+Initial import: https://github.com/ModernityGTNH/Modernity-GTNH-UI/commit/a7effc62ce7152a3c6d68eeca10a8e82206761d1
+CreativeCore originals (N247S): https://github.com/GTNH-Museum/CreativeCore/commit/ae74070df07f486387c6b20b32e2616bff346902
+WanQueen's revision: https://github.com/ModernityGTNH/Modernity-GTNH-UI/commit/12f56bb47098643843f2b62560892957745dbf33
 Source: https://github.com/ModernityGTNH/Modernity-GTNH-UI/tree/2ab52b96da3d81419fbd7b99ed941e301fda9298/assets/creativecore/textures/gui
 Original files: SliderRail.png and Slider.png, copied byte-for-byte as
 textures/gui/fluid/fluid_slider_rail.png and textures/gui/fluid/fluid_slider_thumb.png.
 
-The upstream README states CC BY-NC-SA 3.0, while the upstream LICENSE.txt
-contains the CC BY-NC-SA 4.0 International text. This discrepancy is retained
-and not resolved here; these assets retain the upstream noncommercial and
-share-alike terms. See licenses/modernity/LICENSE.txt for the unmodified
-upstream license text. This notice makes no statement about the license of the project as a whole.
+Modernity-GTNH-UI license recorded for this material: Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International.
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+See licenses/modernity/LICENSE.txt for the unmodified upstream license text.
+Keep creator/source credits and license notices; identify changes, retain
+prior modification notices, and use applicable ShareAlike terms for shared
+adaptations. Commercial use requires separate permission.
+
+This does not establish CC BY-NC-SA 4.0 permission for the CreativeCore
+originals or clear any rights carried into the revised PNGs. The historical
+CreativeCore snapshot includes GPLv3 and no separate CC grant for these PNGs
+was found: https://github.com/GTNH-Museum/CreativeCore/blob/1f850a3fdcca0f0e589d940d6432ed8740caa95a/LICENSE
+Confirm permission covering any retained CreativeCore material, or replace
+the sliders before public redistribution. This is not a project-wide license.

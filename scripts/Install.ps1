@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 param([string]$GameRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path)
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -11,8 +12,9 @@ $langSubdir = 'Lang'
 $files = @(
     'UnknownInventoryTerminal.dll',
     'UnknownInventoryTerminal.Core.dll',
-    (Join-Path $langSubdir 'en.json'),
-    (Join-Path $langSubdir 'zh-CN.json'),
+    'LICENSE',
+    (Join-Path $langSubdir 'en_us.json'),
+    (Join-Path $langSubdir 'zh_cn.json'),
     (Join-Path $assetSubdir 'NOTICE.txt'),
     (Join-Path $assetSubdir 'licenses\modernity\LICENSE.txt'),
     (Join-Path $assetSubdir 'screens\terminals\terminal.json'),
@@ -47,7 +49,7 @@ foreach ($file in $files) {
 $sourceLanguages = Join-Path $sourceDir $langSubdir
 $destinationLanguages = Join-Path $destinationDir $langSubdir
 foreach ($language in Get-ChildItem -LiteralPath $sourceLanguages -Filter '*.json' -File) {
-    if ($language.Name -in @('en.json', 'zh-CN.json')) { continue }
+    if ($language.Name -in @('en_us.json', 'zh_cn.json')) { continue }
     $destination = Join-Path $destinationLanguages $language.Name
     if (Test-Path -LiteralPath $destination) { continue }
     New-Item -ItemType Directory -Path $destinationLanguages -Force | Out-Null

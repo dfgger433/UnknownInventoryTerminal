@@ -12,12 +12,13 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UnknownInventoryTerminal.Core\UnknownInventoryTerminal.Core.csproj" />
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\NOTICE.txt" Link="assets\unknowninventoryterminal\NOTICE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\licenses\modernity\LICENSE.txt" Link="assets\unknowninventoryterminal\licenses\modernity\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\screens\**\*.json" Link="assets\unknowninventoryterminal\screens\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\assets\unknowninventoryterminal\textures\**\*.png" Link="assets\unknowninventoryterminal\textures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\Lang\*.json" Link="Lang\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <EmbeddedResource Include="..\..\Lang\en.json" LogicalName="UnknownInventoryTerminal.Lang.en.json" />
+    <EmbeddedResource Include="..\..\Lang\en_us.json" LogicalName="UnknownInventoryTerminal.Lang.en_us.json" />
     <Reference Include="$(Managed)\UnityEngine*.dll"><Private>false</Private></Reference>
     <Reference Include="$(Managed)\Unity.TextMeshPro.dll"><Private>false</Private></Reference>
     <Reference Include="$(Managed)\Assembly-CSharp.dll"><Private>false</Private></Reference>
@@ -25,8 +26,6 @@
     <Reference Include="$(GameRoot)\BepInEx\core\0Harmony.dll"><Private>false</Private></Reference>
     <Reference Include="$(GameRoot)\BepInEx\plugins\CUCoreLib.dll"><Private>false</Private></Reference>
     <Reference Include="Newtonsoft.Json"><HintPath>$(Managed)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
-    <!-- Historical WebUI bridge source is kept for reference, but the terminal is native-only. -->
-    <Compile Remove="WebUiBridge.cs;WebUiSpriteIcons.cs" />
   </ItemGroup>
   <Target Name="GeneratePluginVersion" BeforeTargets="CoreCompile">
     <PropertyGroup>

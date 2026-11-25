@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using FluentAssertions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -77,7 +78,7 @@ public sealed class TerminalDragGestureTests
     }
 
     [TestMethod]
-    public void DrainRequiresANewClickAndNeverRepeatsWhileHeld()
+    public void DrainContinuesWhileHeldAndStopsAfterRelease()
     {
         TerminalDragStep AtButton(bool pressed, bool held, bool draining) =>
             TerminalDragGesture.Step(TerminalDragAction.Drain, true, false, pressed, held, draining);
@@ -85,7 +86,7 @@ public sealed class TerminalDragGestureTests
         AtButton(false, false, false).Should().Be(TerminalDragStep.Wait);
         AtButton(false, true, false).Should().Be(TerminalDragStep.Wait);
         AtButton(true, true, false).Should().Be(TerminalDragStep.Drain);
-        AtButton(false, true, true).Should().Be(TerminalDragStep.Wait, "holding after the initial click does not repeat the drain");
+        AtButton(false, true, true).Should().Be(TerminalDragStep.Drain, "native draining continues on each held frame");
         AtButton(false, false, true).Should().Be(TerminalDragStep.StopDrain);
         AtButton(true, true, false).Should().Be(TerminalDragStep.Drain, "a later click starts one more drain step");
     }

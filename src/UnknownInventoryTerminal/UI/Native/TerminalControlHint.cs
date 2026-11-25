@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;

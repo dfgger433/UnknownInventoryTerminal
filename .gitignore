@@ -1,12 +1,8 @@
 **/bin/
 **/obj/
 dist/
-web/dist/
-web/node_modules/
 research/
 TestResults/
-tests/web-terminal-smoke.png
-tests/web-terminal-mobile-smoke.png
 .vs/
 *.user
 *.suo
@@ -14,3 +10,5 @@ tests/web-terminal-mobile-smoke.png
 *.dll
 *.pdb
 .env
+/.agents/worktrees/
+/贴图/

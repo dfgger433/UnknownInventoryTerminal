@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -103,8 +105,8 @@ namespace UnknownInventoryTerminal
             if (search.Contains(_pointer)) _hint.Offer(search, TerminalText.Get("terminal.searchHint"), below: true);
         }
 
-        internal void DrawButton(TerminalButton button, TerminalButton focused, Ae2Image icon, string hint, string fallback,
-            bool visible = true, bool hintBelow = false)
+        internal void DrawButton(TerminalButton button, TerminalButton focused, TerminalButton pressed, Ae2Image icon, string hint, string fallback,
+            bool visible = true, bool hintBelow = false, bool enabled = true)
         {
             ref var visual = ref _buttons[(int)button];
             if (!visible)
@@ -121,7 +123,8 @@ namespace UnknownInventoryTerminal
             var (x, y) = TerminalButtonInput.Origin(button);
             var hit = Area(x, y, Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight);
             var hovered = hit.Contains(_pointer);
-            var iconVisible = _skin.ApplyToolbarFace(visual.Face, visual.Icon, hit.position, icon, _layout.Scale, hovered, focused == button);
+            var iconVisible = _skin.ApplyToolbarFace(visual.Face, visual.Icon, hit.position, icon, _layout.Scale,
+                hovered, focused == button, pressed == button, enabled);
             visual.Fallback.gameObject.SetActive(!iconVisible);
             if (!iconVisible)
             {

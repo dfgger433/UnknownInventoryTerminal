@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
@@ -24,7 +26,9 @@ namespace UnknownInventoryTerminal
         private bool TryGetContainers(out WaterContainerItem from, out WaterContainerItem to)
         {
             from = to = null!;
-            return Plugin.CanInteract(Camera) && Camera.body == Body && Body.allowUseItem &&
+            // The native drag start already performed the one-shot use permission check.
+            // Re-reading allowUseItem here can run its mood-dependent random gate again.
+            return Plugin.CanInteract(Camera) && Camera.body == Body &&
                 Source && Destination && Source != Destination && Destination.id != "craftingbottle" &&
                 GameInventoryAdapter.Owns(Body, Source) && GameInventoryAdapter.Owns(Body, Destination) &&
                 Source.TryGetComponent(out from) && from && Destination.TryGetComponent(out to) && to &&

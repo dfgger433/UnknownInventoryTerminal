@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,6 +19,6 @@ namespace UnknownInventoryTerminal
         };
 
         internal void Draw(Ae2TerminalSkin skin, int scale, bool hovered, bool armed) =>
-            skin.ApplyToolbarFace(Face, Icon, Vector2.zero, IconArt, scale, hovered, armed);
+            skin.ApplyToolbarFace(Face, Icon, Vector2.zero, IconArt, scale, hovered, focused: false, pressed: armed);
     }
 }

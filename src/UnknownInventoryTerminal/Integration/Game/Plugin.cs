@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -166,6 +168,16 @@ namespace UnknownInventoryTerminal
         }
 
         internal static void TogglePin(PlayerCamera camera, Item item) => Instance?._nativePanel?.TogglePin(camera.body, item);
+
+        internal static bool ReorderPinnedItem(PlayerCamera camera, Item item, Vector2 pointer)
+        {
+            var panel = Instance?._nativePanel;
+            if (!CanInteract(camera) || !IsTerminalDrag(camera, item) || !GameInventoryAdapter.Owns(camera.body, item) ||
+                panel?.TryReorderPinnedItem(item, pointer) != true) return false;
+            CancelDrag(camera);
+            panel.RefreshPinnedItems();
+            return true;
+        }
 
         internal static void UpdateDragActions(PlayerCamera camera)
         {
@@ -468,7 +480,7 @@ namespace UnknownInventoryTerminal
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleInput", nameof(PlayerCameraPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleDragging", nameof(DraggingPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "HandleWhileDragging", nameof(WhileDraggingPrefix), log);
-            ready &= Patch(harmony, typeof(PlayerCamera), "HandleMouseOver", nameof(MouseOverPrefix), log, nameof(MouseOverPostfix));
+            ready &= Patch(harmony, typeof(PlayerCamera), "HandleWorldHover", nameof(WorldHoverPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromWorld", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPerformWorldActions", nameof(WorldPrefix), log);
             ready &= Patch(harmony, typeof(PlayerCamera), "TryPickupFromUI", nameof(PickupPrefix), log, nameof(PickupPostfix));
@@ -523,28 +535,13 @@ namespace UnknownInventoryTerminal
             return true;
         }
 
-        private static bool MouseOverPrefix(PlayerCamera __instance, List<RaycastResult> uiCasts,
-            ref UsableObject usableObject, out bool __state)
+        private static bool WorldHoverPrefix(ref UsableObject usableObject)
         {
-            __state = false;
             if (!Plugin.BlocksGameplay) return true;
+            // HandleMouseOver still resets the native world outline. GlobalDark owns UI
+            // tooltips independently; neither path needs a borrowed radialOpen or cast list.
             usableObject = null!;
-            if (__instance.hoverSquare) __instance.hoverSquare.enabled = false;
-            // Keep the game's UI-hover/UITooltip path alive while suppressing its world-hover
-            // branch. This matters after Together has focused a local body: returning false
-            // skips the native tooltip update and leaves the last tooltip hidden or stale.
-            __state = __instance.radialOpen;
-            // Keep HandleMouseOver on its UI-only branch. It treats an empty cast list as
-            // permission to probe the world, so add a non-hit sentinel for blank/shielded
-            // terminal areas instead of allowing world hover through the modal.
-            __instance.radialOpen = false;
-            if (uiCasts.Count == 0) uiCasts.Add(default);
-            return true;
-        }
-
-        private static void MouseOverPostfix(PlayerCamera __instance, bool __state)
-        {
-            if (Plugin.BlocksGameplay) __instance.radialOpen = __state;
+            return false;
         }
         private static bool DraggingPrefix(PlayerCamera __instance, ref List<RaycastResult> uiCasts)
         {
@@ -558,6 +555,8 @@ namespace UnknownInventoryTerminal
             if (_pendingAction is { } pending && pending.Camera == __instance)
             {
                 // A new native drag supersedes a pending action, never clears the new item.
+                // While an action is armed, the synthetic native call owns the frame; otherwise
+                // vanilla/Together can run a second HandleWhileDragging without the captured item.
                 if (__instance.dragItem) CancelPendingAction(__instance);
                 else if (HandlePendingAction(__instance, pending)) return false;
             }
@@ -624,6 +623,7 @@ namespace UnknownInventoryTerminal
             internal TerminalDragAction ActionLayout { get; } = actionLayout;
             internal bool FromTerminal { get; } = fromTerminal;
             internal bool Draining { get; set; }
+            internal bool MultiplayerDrain { get; set; }
             internal bool ResumeDragAfterAction { get; set; }
         }
 
@@ -665,10 +665,14 @@ namespace UnknownInventoryTerminal
                     // Moving off the action and starting a new drag in the same frame should work.
                     return overTarget;
                 case TerminalDragStep.Wait:
-                    return false;
+                    return true;
                 case TerminalDragStep.StopDrain:
-                    var stopped = pending.Draining && RunNativeDrain(pending, new List<RaycastResult>());
+                    var canFinishDrain = !pending.MultiplayerDrain || camera && camera.body == pending.Body &&
+                        GameInventoryAdapter.Owns(pending.Body, pending.Item) && GameInventoryAdapter.IsTogetherClient &&
+                        GameInventoryAdapter.CanSyncFluidDrain(pending.Item);
+                    var stopped = pending.Draining && canFinishDrain && RunNativeDrain(pending, new List<RaycastResult>());
                     pending.Draining = false;
+                    if (!stopped && pending.MultiplayerDrain) GameInventoryAdapter.ResetFluidDrainSync();
                     var keepAfterDrain = stopped && SettingsBridge.KeepDraggingAfterUse && IsOverPendingAction(camera, pending);
                     if (keepAfterDrain)
                     {
@@ -676,22 +680,36 @@ namespace UnknownInventoryTerminal
                         CompleteAction(camera, pending, pending.ResumeDragAfterAction && DragKeyHeld(camera));
                     }
                     else CancelPendingAction(camera);
-                    return false;
+                    return true;
                 case TerminalDragStep.Use:
                     // Clear first: use may consume the item, open a modal or run another mod's hooks.
                     CancelPendingAction(camera);
-                    if (!pending.Body.DoPickupCheck(pending.Item)) return false;
+                    if (!pending.Body.DoPickupCheck(pending.Item)) return true;
                     pending.Body.UseItem(pending.Item); // Includes Together's native use hook.
                     CompleteAction(camera, pending, resumeDrag);
-                    return false;
+                    return true;
                 case TerminalDragStep.Drain:
+                    if (!GameInventoryAdapter.CanStartFluidDrain(pending.Item))
+                    {
+                        CancelPendingAction(camera);
+                        camera.DoAlert(TerminalText.Get("fluidDrain.unavailable"));
+                        return true;
+                    }
+                    pending.MultiplayerDrain = GameInventoryAdapter.IsTogetherClient;
+                    if (!GameInventoryAdapter.PrepareFluidDrainSync(pending.Item))
+                    {
+                        GameInventoryAdapter.ResetFluidDrainSync();
+                        CancelPendingAction(camera);
+                        camera.DoAlert(TerminalText.Get("fluidDrain.unavailable"));
+                        return true;
+                    }
                     pending.ResumeDragAfterAction = resumeDrag || DragKeyHeld(camera);
                     pending.Draining = true;
                     var drainHit = new RaycastResult { gameObject = camera.liquidDrainObject, screenPosition = Input.mousePosition };
                     if (!RunNativeDrain(pending, new List<RaycastResult> { drainHit }) ||
                         Plugin.DragActionAtPointer(camera, pending.Item, out _, pending.Action, pending.ActionLayout) != pending.Action)
                         CancelPendingAction(camera);
-                    return false;
+                    return true;
             }
             return false;
         }
@@ -722,11 +740,21 @@ namespace UnknownInventoryTerminal
         {
             if (_pendingAction is not { } pending || !ReferenceEquals(pending.Camera, camera)) return;
             _pendingAction = null;
-            // Together sends the resulting amount when the native drain hover ends. End it
-            // before discarding the pending item.
-            if (pending.Draining && camera && camera.body == pending.Body &&
-                GameInventoryAdapter.Owns(camera.body, pending.Item) && GameInventoryAdapter.IsTogetherClient)
-                RunNativeDrain(pending, new List<RaycastResult>());
+            // Together reports its final liquid amount when the native drain hover ends.
+            // Keep the captured item and body until that existing hook has run.
+            if (pending.Draining && pending.MultiplayerDrain)
+            {
+                if (camera && camera.body == pending.Body && GameInventoryAdapter.Owns(pending.Body, pending.Item) &&
+                    GameInventoryAdapter.IsTogetherClient && GameInventoryAdapter.CanSyncFluidDrain(pending.Item))
+                {
+                    if (!RunNativeDrain(pending, new List<RaycastResult>()))
+                    {
+                        GameInventoryAdapter.ResetFluidDrainSync();
+                        Plugin.Log.LogWarning("Could not finish Together liquid drain synchronization.");
+                    }
+                }
+                else GameInventoryAdapter.ResetFluidDrainSync();
+            }
             Plugin.UpdateDragActions(camera);
         }
 
@@ -807,6 +835,8 @@ namespace UnknownInventoryTerminal
             if (uiCasts.Count == 1 && Plugin.TryGetDragAction(uiCasts[0].gameObject, out _))
             { Plugin.CancelDrag(__instance); return false; }
             var pointer = (Vector2)Input.mousePosition;
+            if (Vector2.Distance(pointer, __instance.clickPos) >= 10f && !Input.GetMouseButtonDown(1) &&
+                Plugin.ReorderPinnedItem(__instance, source, pointer)) return false;
             if (Plugin.CanDiscardAtPointer(__instance, source, pointer))
             {
                 uiCasts = new DiscardRelease(__instance, source);
@@ -956,6 +986,9 @@ namespace UnknownInventoryTerminal
             AccessTools.Method(ItemSyncType, "ItemCanBeIgnoredForNetwork", new[] { typeof(Item) });
         private static readonly MethodInfo? TransferPostfix = AccessTools.TypeByName("Together.LiquidTransfer_Finish_MultiplayerPatch") is { } patch ?
             AccessTools.Method(patch, "Postfix", new[] { typeof(LiquidTransfer) }) : null;
+        private static readonly Type? DrainPatchType = AccessTools.TypeByName("Together.PlayerCamera_HandleWhileDragging_MultiplayerPatch");
+        private static readonly MethodInfo? DrainPostfix = DrainPatchType == null ? null : AccessTools.Method(DrainPatchType, "Postfix");
+        private static readonly FieldInfo? DrainingLiquid = DrainPatchType == null ? null : AccessTools.Field(DrainPatchType, "draining_liquid");
         private static readonly MethodInfo? NetworkWorldReady = AccessTools.TypeByName("Together.Multiplayer") is { } multiplayer ?
             AccessTools.Method(multiplayer, "IsNetworkActiveAndIsWorldGenerated", Type.EmptyTypes) : null;
 
@@ -979,6 +1012,57 @@ namespace UnknownInventoryTerminal
 
             static bool IsRegistered(Item item) => IgnoreForNetwork?.Invoke(null, new object[] { item }) is false &&
                 TryGetSyncInfo?.Invoke(null, new object?[] { item, null }) is true;
+        }
+
+        internal static bool CanStartFluidDrain(Item item) => item && item.TryGetComponent<WaterContainerItem>(out var liquid) &&
+            liquid && liquid.CurrentTotal > 0f && CanSyncFluidDrain(item);
+
+        internal static bool CanSyncFluidDrain(Item item)
+        {
+            if (!item || !item.TryGetComponent<WaterContainerItem>(out var liquid) || !liquid) return false;
+            if (NetType == null) return true;
+            try
+            {
+                if (NetworkRunning?.GetValue(null) is not bool running) return false;
+                if (!running) return true;
+                if (NetworkClient?.GetValue(null) is not bool isClient) return false;
+                if (!isClient) return true;
+                return NetworkWorldReady?.Invoke(null, null) is true && DrainPostfix != null && DrainingLiquid != null &&
+                    Harmony.GetPatchInfo(AccessTools.Method(typeof(PlayerCamera), "HandleWhileDragging"))?.Postfixes
+                        .Any(patch => patch.PatchMethod == DrainPostfix) == true &&
+                    IgnoreForNetwork?.Invoke(null, new object[] { item }) is false &&
+                    TryGetSyncInfo?.Invoke(null, new object?[] { item, null }) is true;
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning("Together fluid drain preflight failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        internal static bool PrepareFluidDrainSync(Item item)
+        {
+            if (!IsTogetherClient) return true;
+            if (!CanSyncFluidDrain(item) || DrainingLiquid == null) return false;
+            try
+            {
+                // The Together postfix reports only a true-to-false drain transition. Prime its
+                // existing latch so even a first-frame drain to zero emits the vanilla MP message.
+                if (DrainingLiquid.GetValue(null) is false) DrainingLiquid.SetValue(null, true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning("Could not prepare Together liquid drain synchronization: " + ex.Message);
+                return false;
+            }
+        }
+
+        internal static void ResetFluidDrainSync()
+        {
+            if (!IsTogetherClient) return;
+            try { DrainingLiquid?.SetValue(null, false); }
+            catch (Exception ex) { Plugin.Log.LogWarning("Could not reset Together liquid drain state: " + ex.Message); }
         }
 
         internal static bool IsTogetherClient

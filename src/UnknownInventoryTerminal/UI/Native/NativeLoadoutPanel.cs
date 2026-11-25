@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -17,10 +19,12 @@ namespace UnknownInventoryTerminal
         internal int MainIndex = -1;
         internal string? EquipmentId;
         internal Image Face = null!, Highlight = null!;
+        internal Image? UnavailableBadge;
         internal TextMeshProUGUI Caption = null!;
         internal InvButton? Button;
         internal NativeLoadoutPanel Owner = null!;
         internal bool DragEligible;
+        internal bool BaseUnavailable;
 
         public void OnPointerEnter(PointerEventData e) => Owner.Hover(this);
         public void OnPointerExit(PointerEventData e) => Owner.Leave(this);
@@ -32,9 +36,14 @@ namespace UnknownInventoryTerminal
 
         internal bool IsCurrent(PlayerCamera camera) => isActiveAndEnabled && Body && Body == camera.body;
 
-        internal bool CanEquip(PlayerCamera camera, Item source) => IsCurrent(camera) && EquipmentId != null &&
-            source && source.Stats.wearable && Ae2EquipmentSlots.ClaimsSlot(source.Stats.wearSlotId, EquipmentId) &&
-            !string.IsNullOrEmpty(source.Stats.desiredWearLimb) && Body!.LimbByName(source.Stats.desiredWearLimb);
+        // Hover/drag feedback is type-based: a matching wearable highlights even when
+        // the target limb is currently unavailable. The release path uses CanEquip below.
+        internal bool MatchesEquipmentType(PlayerCamera camera, Item source) => IsCurrent(camera) && EquipmentId != null &&
+            source && source.Stats.wearable && Ae2EquipmentSlots.ClaimsSlot(source.Stats.wearSlotId, EquipmentId);
+
+        internal bool CanEquip(PlayerCamera camera, Item source) => MatchesEquipmentType(camera, source) &&
+            !string.IsNullOrEmpty(source.Stats.desiredWearLimb) &&
+            Body!.LimbByName(source.Stats.desiredWearLimb) is { } limb && !limb.dismembered;
     }
 
     internal sealed class LoadoutWheel : MonoBehaviour, IScrollHandler
@@ -133,7 +142,7 @@ namespace UnknownInventoryTerminal
         {
             foreach (var cell in _equipmentCells)
             {
-                cell.DragEligible = source is Item item && item && cell.CanEquip(camera, item);
+                cell.DragEligible = source is Item item && item && cell.MatchesEquipmentType(camera, item);
                 UpdateHighlight(cell);
             }
         }
@@ -144,6 +153,7 @@ namespace UnknownInventoryTerminal
             {
                 cell.DragEligible = false;
                 UpdateHighlight(cell);
+                UpdateUnavailableBadge(cell, cell.BaseUnavailable);
             }
         }
 
@@ -173,9 +183,18 @@ namespace UnknownInventoryTerminal
             UpdateHighlight(cell);
         }
 
-        private static void UpdateHighlight(LoadoutCell cell) =>
-            cell.Highlight.gameObject.SetActive(cell.DragEligible || cell == cell.Owner._hover &&
-                (cell.MainIndex >= 0 || cell.EquipmentId != null));
+        private static void UpdateHighlight(LoadoutCell cell)
+        {
+            var active = cell.DragEligible || cell == cell.Owner._hover &&
+                (cell.MainIndex >= 0 || cell.EquipmentId != null);
+            cell.Highlight.gameObject.SetActive(active);
+            if (!active) return;
+
+            // Keep the ordinary cyan hover/drag outline visible above a static red
+            // unavailable marker. Slot labels remain the topmost text when present.
+            cell.Highlight.transform.SetAsLastSibling();
+            if (cell.Caption && cell.Caption.gameObject.activeSelf) cell.Caption.transform.SetAsLastSibling();
+        }
 
         internal void Refresh(Body body)
         {
@@ -203,10 +222,11 @@ namespace UnknownInventoryTerminal
             for (var i = 0; i < _layout.MainRows * columns; ++i)
             {
                 var index = _mainRow * columns + i;
-                var valid = index < mainCount && body.slots[index];
+                var slot = index < mainCount ? body.slots[index] : null;
                 var cell = Cell(_mainCells, _main, i);
-                Bind(cell, body, valid ? index : -1, null, valid ? body.GetItem(index) : null,
-                    valid ? index.ToString(CultureInfo.InvariantCulture) : "", valid && body.slots[index].isHand && body.handSlot == index);
+                Bind(cell, body, slot ? index : -1, null, slot ? body.GetItem(index) : null,
+                    slot ? index.ToString(CultureInfo.InvariantCulture) : "", slot && slot!.isHand && body.handSlot == index,
+                    unavailable: slot && !slot!.canPickUp);
             }
             for (var i = 0; i < _layout.EquipmentRows * columns; ++i)
             {
@@ -215,10 +235,43 @@ namespace UnknownInventoryTerminal
                 var cell = Cell(_equipmentCells, _worn, i);
                 Item? item = null;
                 if (id != null && !exact.TryGetValue(id, out item)) multi.TryGetValue(id, out item);
-                Bind(cell, body, -1, id, item, item ? "" : id == null ? "" : SlotLabel(id), false);
+                Bind(cell, body, -1, id, item, item ? "" : id == null ? "" : SlotLabel(id), false,
+                    unavailable: EquipmentUnavailable(body, id, item));
             }
             HideExtra(_mainCells, _layout.MainRows * columns);
             HideExtra(_equipmentCells, _layout.EquipmentRows * columns);
+        }
+
+        private static bool EquipmentUnavailable(Body body, string? slotId, Item? item)
+        {
+            if (slotId == null) return false;
+
+            // A populated equipment cell uses the actual worn item's target limb.
+            if (item)
+            {
+                var stats = item!.Stats;
+                var limb = string.IsNullOrEmpty(stats.desiredWearLimb) ? null : body.LimbByName(stats.desiredWearLimb);
+                return !stats.wearable || !Ae2EquipmentSlots.ClaimsSlot(stats.wearSlotId, slotId) ||
+                    !limb || limb!.dismembered;
+            }
+
+            // Empty cells have no Item instance. Use every registered wearable definition
+            // that can claim this cell; only mark it when all possible target limbs are gone.
+            var targetLimbs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Item.GlobalItems != null)
+                foreach (var info in Item.GlobalItems.Values)
+                    if (info.wearable && Ae2EquipmentSlots.ClaimsSlot(info.wearSlotId, slotId) &&
+                        !string.IsNullOrEmpty(info.desiredWearLimb)) targetLimbs.Add(info.desiredWearLimb);
+            foreach (var id in ItemRegistry.GetRegisteredItemIds())
+                if (ItemRegistry.TryGetCustomInfo(id, out var info) && info.wearable &&
+                    Ae2EquipmentSlots.ClaimsSlot(info.wearSlotId, slotId) && !string.IsNullOrEmpty(info.desiredWearLimb))
+                    targetLimbs.Add(info.desiredWearLimb);
+
+            return targetLimbs.Count > 0 && targetLimbs.All(name =>
+            {
+                var limb = body.LimbByName(name);
+                return !limb || limb.dismembered;
+            });
         }
 
         private LoadoutCell Cell(List<LoadoutCell> cells, Transform parent, int i)
@@ -245,12 +298,13 @@ namespace UnknownInventoryTerminal
             return result;
         }
 
-        private void Bind(LoadoutCell cell, Body body, int index, string? id, Item? item, string caption, bool activeHand)
+        private void Bind(LoadoutCell cell, Body body, int index, string? id, Item? item, string caption, bool activeHand, bool unavailable = false)
         {
             cell.Body = body;
             cell.MainIndex = index;
             cell.EquipmentId = id;
             cell.DragEligible = false;
+            cell.BaseUnavailable = unavailable;
             UpdateHighlight(cell);
             var scale = _layout.Scale;
             // The slot art underneath comes from terminal.png; only the active hand gets a translucent highlight.
@@ -273,10 +327,47 @@ namespace UnknownInventoryTerminal
             }
             else if (cell.Button) cell.Button!.gameObject.SetActive(false);
             cell.Caption.transform.SetAsLastSibling();
+            UpdateUnavailableBadge(cell, unavailable);
             cell.Caption.text = caption;
             cell.Caption.fontSize = (index >= 0 ? 6 : 5) * scale;
             cell.Caption.alignment = index >= 0 ? TextAlignmentOptions.BottomRight : TextAlignmentOptions.Center;
             NativeFlatInventoryPanel.Stretch(cell.Caption.rectTransform, Vector2.one * scale, -Vector2.one * 2 * scale);
+        }
+
+        private void UpdateUnavailableBadge(LoadoutCell cell, bool unavailable)
+        {
+            // The number in the lower-right corner is the slot label, not part of the
+            // unavailable state; hide it while the full-slot marker is shown.
+            cell.Caption.gameObject.SetActive(!unavailable);
+            if (!unavailable)
+            {
+                if (cell.UnavailableBadge) cell.UnavailableBadge!.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!cell.UnavailableBadge)
+            {
+                var badge = NativeFlatInventoryPanel.Add(cell.transform, "Unavailable slot", typeof(Image)).GetComponent<Image>();
+                badge.raycastTarget = false;
+                cell.UnavailableBadge = badge;
+            }
+            var overlay = cell.UnavailableBadge!;
+            overlay.sprite = _skin.GetVisibleSprite(Ae2Image.UnavailableSlotBadge);
+            overlay.type = Image.Type.Simple;
+            overlay.preserveAspect = true;
+            overlay.color = overlay.sprite ? Color.white : Color.clear;
+            var visible = _skin.VisibleBounds(Ae2Image.UnavailableSlotBadge);
+            if (!overlay.sprite || visible is not { } visibleBounds)
+            {
+                overlay.gameObject.SetActive(false);
+                return;
+            }
+            // Keep the red prohibition icon at its native aspect ratio while centering
+            // it in the slot. This child never receives raycasts or drag/drop hits.
+            overlay.transform.SetAsLastSibling();
+            var size = Ae2UnavailableSlotBadge.Bounds((visibleBounds.Width, visibleBounds.Height), _layout.Scale);
+            NativeFlatInventoryPanel.Position(overlay.rectTransform, new Rect(size.X, size.Y, size.Width, size.Height));
+            overlay.gameObject.SetActive(true);
         }
 
         private InvButton? CreateButton(LoadoutCell cell)

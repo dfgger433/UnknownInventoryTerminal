@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -29,7 +30,7 @@ public sealed class Ae2ScreenStyleTests
             region.Border.Should().Be(image switch
             {
                 Ae2Image.SettingsBackground => 4,
-                Ae2Image.Tooltip => 3,
+                Ae2Image.Tooltip or Ae2Image.SettingsOptionPressed => 3,
                 Ae2Image.SettingsOption or Ae2Image.SettingsOptionDisabled or Ae2Image.SettingsOptionHover or Ae2Image.SettingsOptionSelected => 2,
                 _ => 0
             });
@@ -50,11 +51,12 @@ public sealed class Ae2ScreenStyleTests
     [TestMethod]
     [DataRow((int)Ae2Image.SettingsDropDownClosed, 0, 0, 20)]
     [DataRow((int)Ae2Image.SettingsDropDownClosedDisabled, 0, 32, 18)]
-    [DataRow((int)Ae2Image.SettingsDropDownClosedHover, 0, 96, 18)]
-    [DataRow((int)Ae2Image.SettingsDropDownClosedPressed, 0, 64, 19)]
+    [DataRow((int)Ae2Image.SettingsDropDownClosedHover, 0, 64, 19)]
+    [DataRow((int)Ae2Image.SettingsDropDownClosedPressed, 0, 96, 18)]
     [DataRow((int)Ae2Image.SettingsDropDownOpen, 112, 64, 19)]
     [DataRow((int)Ae2Image.SettingsDropDownOpenDisabled, 112, 32, 18)]
-    [DataRow((int)Ae2Image.SettingsDropDownOpenHover, 112, 96, 18)]
+    [DataRow((int)Ae2Image.SettingsDropDownOpenHover, 112, 64, 19)]
+    [DataRow((int)Ae2Image.SettingsDropDownOpenPressed, 112, 96, 18)]
     [DataRow((int)Ae2Image.SettingsOption, 0, 128, 19)]
     [DataRow((int)Ae2Image.SettingsOptionDisabled, 0, 160, 17)]
     [DataRow((int)Ae2Image.SettingsOptionHover, 112, 192, 17)]
@@ -88,16 +90,89 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    public void SettingsStatesGiveDisabledAndHoverDistinctSprites()
+    [DataRow(true, false, false, false, (int)Ae2Image.SettingsOption, 0, 0xFF171920u)]
+    [DataRow(true, false, false, true, (int)Ae2Image.SettingsOptionSelected, 0, 0xFF171920u)]
+    [DataRow(true, true, false, false, (int)Ae2Image.SettingsOptionHover, 1, 0xFF294F70u)]
+    [DataRow(true, true, false, true, (int)Ae2Image.SettingsOptionHover, 1, 0xFF294F70u)]
+    [DataRow(true, true, true, false, (int)Ae2Image.SettingsOptionPressed, 2, 0xFF263D5Bu)]
+    [DataRow(true, true, true, true, (int)Ae2Image.SettingsOptionPressed, 2, 0xFF263D5Bu)]
+    [DataRow(false, true, true, true, (int)Ae2Image.SettingsOptionDisabled, 2, 0xFFBEC2D2u)]
+    public void ExpandedOptionCaptionFollowsTheSameStateAsTheFace(bool enabled, bool hovered, bool pressed, bool selected,
+        int image, int offset, uint expectedInk)
     {
-        Ae2DropdownAppearance.Field(false, false, true, true).Should().Be(Ae2Image.SettingsDropDownClosedDisabled);
-        Ae2DropdownAppearance.Field(false, true, true, false).Should().Be(Ae2Image.SettingsDropDownClosedHover);
-        Ae2DropdownAppearance.Field(true, true, false, false).Should().Be(Ae2Image.SettingsDropDownOpen);
-        Ae2DropdownAppearance.Field(true, true, true, false).Should().Be(Ae2Image.SettingsDropDownOpenHover);
-        Ae2DropdownAppearance.Option(false, true, true).Should().Be(Ae2Image.SettingsOptionDisabled);
-        Ae2DropdownAppearance.Option(true, false, true).Should().Be(Ae2Image.SettingsOptionSelected);
-        Ae2DropdownAppearance.Option(true, true, true).Should().Be(Ae2Image.SettingsOptionHover);
-        Ae2DropdownAppearance.Option(true, false, false).Should().Be(Ae2Image.SettingsOption);
+        var face = Ae2DropdownAppearance.Option(enabled, hovered, pressed, selected);
+        face.Should().Be((Ae2Image)image);
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        {
+            var (top, height, caption, ink) = Ae2DropdownAppearance.OptionLayout(face, scale);
+            top.Should().Be(offset * scale);
+            (top + height).Should().Be(Ae2SettingsLayout.OptionHeight * scale);
+            caption.Should().Be((4 * scale, top + scale, 104 * scale, 15 * scale));
+            ink.Should().Be(expectedInk);
+        }
+    }
+
+    [TestMethod]
+    public void ExpandedOptionPressUsesTheButtonAtlasWithBordersAndFitsItsRow()
+    {
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.SettingsOptionPressed, out var region).Should().BeTrue();
+        style.TryGet(Ae2Image.ButtonPressed, out var toolbar).Should().BeTrue();
+        (region.Texture, region.X, region.Y, region.Width, region.Height)
+            .Should().Be((toolbar.Texture, toolbar.X, toolbar.Y, toolbar.Width, toolbar.Height));
+        using var png = PngPixels.Read(TextureFilePath(region.Texture));
+        for (var x = region.X; x < region.X + region.Width; x++)
+        {
+            png.Alpha(x, region.Y).Should().Be(255);
+            png.Alpha(x, region.Y + region.Height - 1).Should().Be(255);
+        }
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        {
+            var (top, height, caption, _) = Ae2DropdownAppearance.OptionLayout(Ae2Image.SettingsOptionPressed, scale);
+            height.Should().BeGreaterThan(2 * region.Border * scale);
+            (caption.Y + caption.Height).Should().BeLessThan(top + height);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false, true, false, false, (int)Ae2Image.SettingsDropDownClosed, 0, 0xFF413F54u)]
+    [DataRow(false, true, true, false, (int)Ae2Image.SettingsDropDownClosedHover, 1, 0xFF294F70u)]
+    [DataRow(false, true, true, true, (int)Ae2Image.SettingsDropDownClosedPressed, 2, 0xFF263D5Bu)]
+    [DataRow(false, false, true, true, (int)Ae2Image.SettingsDropDownClosedDisabled, 2, 0xFFBEC2D2u)]
+    [DataRow(true, true, false, false, (int)Ae2Image.SettingsDropDownOpen, 1, 0xFF413F54u)]
+    [DataRow(true, true, true, false, (int)Ae2Image.SettingsDropDownOpenHover, 1, 0xFF294F70u)]
+    [DataRow(true, true, true, true, (int)Ae2Image.SettingsDropDownOpenPressed, 2, 0xFF263D5Bu)]
+    [DataRow(true, false, true, true, (int)Ae2Image.SettingsDropDownOpenDisabled, 2, 0xFFBEC2D2u)]
+    public void DropdownFieldUsesOneStateForItsFaceAndContents(bool open, bool enabled, bool hover, bool pressed,
+        int image, int offset, uint ink)
+    {
+        var visual = Ae2DropdownAppearance.Field(open, enabled, hover, pressed);
+        visual.Face.Should().Be((Ae2Image)image);
+        visual.Ink.Should().Be(ink);
+        var style = ReadBundledStyle();
+        style.TryGet(visual.Face, out var region).Should().BeTrue();
+        using var png = PngPixels.Read(TextureFilePath(region.Texture));
+        uint Pixel(int x, int y)
+        {
+            // The PNG reader returns packed ABGR; the appearance helper uses ARGB.
+            var abgr = png.Pixel(region.X + x, region.Y + y);
+            return (abgr & 0xFF00FF00u) | ((abgr & 0xFFu) << 16) | ((abgr >> 16) & 0xFFu);
+        }
+        var painted = new HashSet<(int X, int Y)>();
+        Ae2DropdownAppearance.TryPaintChevron(region.Width, region.Height, open, Pixel, (x, y) => painted.Add((x, y)))
+            .Should().BeTrue();
+        painted.Should().HaveCount(9).And.Contain((98, open ? 6 : 10));
+        Ae2DropdownAppearance.TryPaintChevron(region.Width, region.Height, !open, Pixel,
+            (_, _) => Assert.Fail("A custom or mismatched chevron must not be partially recolored.")).Should().BeFalse();
+        Pixel(80, 8).Should().Be(visual.FallbackFill);
+        Ae2DropdownAppearance.BundledFieldHeight(visual.Face).Should().Be(region.Height);
+        foreach (var scale in new[] { 1, 2, 3, 4 })
+        {
+            var (top, height, caption) = Ae2DropdownAppearance.FieldLayout(region.Height, scale);
+            top.Should().Be(offset * scale);
+            (caption.Y + caption.Height / 2).Should().Be(top + 8 * scale);
+            (top + height).Should().Be(Ae2SettingsLayout.FieldHeight * scale);
+        }
     }
 
     [TestMethod]
@@ -214,7 +289,7 @@ public sealed class Ae2ScreenStyleTests
     }
 
     [TestMethod]
-    public void ModernityLicenseIsPreservedVerbatimAndDiscrepancyIsDocumented()
+    public void CodeAndArtworkLicensesStaySeparateAndCreativeCorePermissionIsDocumented()
     {
         var repository = FindRepositoryRoot(AppContext.BaseDirectory);
         var licensePath = Path.Combine(repository, "assets", "unknowninventoryterminal", "licenses", "modernity", "LICENSE.txt");
@@ -225,15 +300,22 @@ public sealed class Ae2ScreenStyleTests
             .Should().Be("1349A4B6148492B44F629E64EED676612E234FE9A839E4F3B277C1482C8849F1");
         Encoding.UTF8.GetString(licenseBytes).Should().StartWith("Attribution-NonCommercial-ShareAlike 4.0 International");
 
+        var codeLicense = File.ReadAllText(Path.Combine(repository, "LICENSE"));
+        codeLicense.Should().Contain("GNU GENERAL PUBLIC LICENSE").And.Contain("Version 3, 29 June 2007")
+            .And.Contain("END OF TERMS AND CONDITIONS");
         var notice = File.ReadAllText(Path.Combine(repository, "assets", "unknowninventoryterminal", "NOTICE.txt"));
-        notice.Should().Contain("CC BY-NC-SA 3.0").And.Contain("CC BY-NC-SA 4.0");
         var normalizedNotice = System.Text.RegularExpressions.Regex.Replace(notice, @"\s+", " ");
-        normalizedNotice.Should().Contain("This notice makes no statement about the license of the project as a whole.");
+        normalizedNotice.Should().Contain("GPL-3.0-only").And.Contain("does not relicense the textures")
+            .And.Contain("https://creativecommons.org/licenses/by-nc-sa/3.0/")
+            .And.Contain("https://creativecommons.org/licenses/by-nc-sa/4.0/")
+            .And.Contain("does not establish CC BY-NC-SA 4.0 permission for the CreativeCore originals");
 
         var project = File.ReadAllText(Path.Combine(repository, "src", "UnknownInventoryTerminal", "UnknownInventoryTerminal.csproj"));
+        project.Should().Contain("Include=\"..\\..\\LICENSE\" Link=\"LICENSE\"");
         project.Should().Contain("assets\\unknowninventoryterminal\\licenses\\modernity\\LICENSE.txt");
         project.Should().Contain("assets\\unknowninventoryterminal\\textures\\%(RecursiveDir)");
         var installer = File.ReadAllText(Path.Combine(repository, "scripts", "Install.ps1"));
+        installer.Should().Contain("'LICENSE',");
         installer.Should().Contain("licenses\\modernity\\LICENSE.txt");
         installer.Should().Contain("textures\\gui\\fluid\\fluid_slider_rail.png");
         installer.Should().Contain("textures\\gui\\fluid\\fluid_slider_thumb.png");
@@ -305,6 +387,22 @@ public sealed class Ae2ScreenStyleTests
             png.Alpha(left, row.Y).Should().Be(255);
             png.Pixel(left + 9, row.Y + 7).Should().NotBe(png.Pixel(left + 3, row.Y + 7));
         }
+    }
+
+    [TestMethod]
+    public void ToolbarHasDistinctPressedAndDisabledStates()
+    {
+        Ae2ToolbarAppearance.Face(false, false, false, true).Should().Be(Ae2Image.Button);
+        Ae2ToolbarAppearance.Face(false, true, false, true).Should().Be(Ae2Image.ButtonFocus);
+        Ae2ToolbarAppearance.Face(true, false, false, true).Should().Be(Ae2Image.ButtonHover);
+        Ae2ToolbarAppearance.Face(true, true, true, true).Should().Be(Ae2Image.ButtonPressed);
+        Ae2ToolbarAppearance.Face(false, false, true, false).Should().Be(Ae2Image.ButtonDisabled);
+
+        var style = ReadBundledStyle();
+        style.TryGet(Ae2Image.ButtonPressed, out var pressed).Should().BeTrue();
+        style.TryGet(Ae2Image.ButtonDisabled, out var disabled).Should().BeTrue();
+        (pressed.X, pressed.Y, pressed.Width, pressed.Height).Should().Be((181, 65, 18, 19));
+        (disabled.X, disabled.Y, disabled.Width, disabled.Height).Should().Be((199, 65, 18, 19));
     }
 
     [TestMethod]

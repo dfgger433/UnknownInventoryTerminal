@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,7 +77,12 @@ namespace UnknownInventoryTerminal
             if (!Visible) return;
             if (_closeRequested) return;
             FitToScreen();
-            if (modalOwnsInput) _buttons.Reset();
+            if (modalOwnsInput)
+            {
+                _settingsControls.CancelFieldPress();
+                _settingsControls.CancelOptionPress();
+                _buttons.Reset();
+            }
             else UpdateButtons();
             if (_closeRequested || SettingsOpen) return;
             ConfigureNativePanel();
@@ -178,13 +185,14 @@ namespace UnknownInventoryTerminal
             Draw(TerminalButton.Direction, _descending ? Ae2Image.SortDescending : Ae2Image.SortAscending,
                 _descending ? "terminal.sortAscending" : "terminal.sortDescending", _descending ? "v" : "^");
             var style = TerminalText.Format("terminal.style.current", TerminalText.Get("terminal.style." + _layout.Style));
-            chrome.DrawButton(TerminalButton.Style, _buttons.Focused, StyleIcon(_layout.Style), style, style);
+            chrome.DrawButton(TerminalButton.Style, _buttons.Focused, _buttons.Pressed, StyleIcon(_layout.Style), style, style);
             Draw(TerminalButton.Return, Ae2Image.Back, "terminal.button.return", "<", visible: _canReturn());
             var settings = TerminalText.Get("terminal.button.toggle");
-            chrome.DrawButton(TerminalButton.Settings, _buttons.Focused, Ae2Image.Settings, settings, settings);
+            chrome.DrawButton(TerminalButton.Settings, _buttons.Focused, _buttons.Pressed, Ae2Image.Settings, settings, settings);
 
             void Draw(TerminalButton button, Ae2Image icon, string key, string fallback, bool visible = true, bool hintBelow = false) =>
-                chrome.DrawButton(button, _buttons.Focused, icon, TerminalText.Get(key), fallback, visible, hintBelow);
+                chrome.DrawButton(button, _buttons.Focused, _buttons.Pressed, icon, TerminalText.Get(key), fallback, visible, hintBelow,
+                    enabled: visible);
         }
 
         private Rect SettingsBounds
@@ -213,6 +221,8 @@ namespace UnknownInventoryTerminal
 
         private void ToggleDropdown(SettingsDropdown dropdown)
         {
+            _settingsControls.CancelFieldPress();
+            _settingsControls.CancelOptionPress();
             _expanded = _expanded == dropdown ? SettingsDropdown.None : dropdown;
             _optionScroll = 0;
         }
@@ -257,6 +267,7 @@ namespace UnknownInventoryTerminal
                         DrawOptions(list, rows, PlacementOptions, ContainerPlacement.Mode,
                             mode => SettingsBridge.ChoiceLabel("ContainerPlacement", mode.ToString()), mode => ContainerPlacement.Mode = mode);
                 }
+                else _settingsControls.CancelOptionPress();
             }
             finally { GUI.EndGroup(); }
 
@@ -280,14 +291,17 @@ namespace UnknownInventoryTerminal
             _optionScroll = Mathf.Clamp(_optionScroll, 0, maxScroll);
             if (maxScroll > 0 && ev.type == EventType.ScrollWheel && bounds.Contains(ev.mousePosition))
             {
+                _settingsControls.CancelOptionPress();
                 _optionScroll = Mathf.Clamp(_optionScroll + Math.Sign(ev.delta.y), 0, maxScroll);
                 ev.Use();
             }
+            _settingsControls.CancelHiddenOptionPress(_optionScroll, rows);
             for (var i = 0; i < rows; i++)
             {
-                var option = options[_optionScroll + i];
+                var index = _optionScroll + i;
+                var option = options[index];
                 var row = new Rect(bounds.x, bounds.y + i * pitch, bounds.width, pitch);
-                if (!_settingsControls.Option(row, scale, label(option), _settingsStyle!, EqualityComparer<T>.Default.Equals(option, selected))) continue;
+                if (!_settingsControls.Option(index, row, scale, label(option), _settingsStyle!, EqualityComparer<T>.Default.Equals(option, selected))) continue;
                 apply(option);
                 ToggleDropdown(SettingsDropdown.None);
                 break;
@@ -307,7 +321,8 @@ namespace UnknownInventoryTerminal
             var ev = Event.current;
             if (ev.type != EventType.Repaint) return;
             var scale = _layout.Scale;
-            var face = Ae2ToolbarAppearance.Face(hit.Contains(ev.mousePosition), _buttons.Focused == button);
+            var face = Ae2ToolbarAppearance.Face(hit.Contains(ev.mousePosition), _buttons.Focused == button,
+                _buttons.Pressed == button, enabled: true);
             var offset = Ae2ToolbarAppearance.OffsetY(face);
             var faceSize = _skin.SourceSize(face) ?? new Vector2Int(Ae2TerminalLayout.ButtonWidth, Ae2TerminalLayout.ButtonHeight - offset);
             var faceRect = new Rect(hit.x, hit.y + offset * scale, faceSize.x * scale, faceSize.y * scale);
