@@ -17,4 +17,4 @@
 dotnet test .\tests\UnknownInventoryTerminal.Tests\UnknownInventoryTerminal.Tests.csproj
 ```
 
-0.4.5 在 .NET SDK 10.0.401 上的结果：70 项通过（其中 22 项为屏幕资源测试），0 失败，0 跳过。测试会校验 PNG 的尺寸和裁切边界，不替代 Unity 实机渲染验收。Core 目标仍为 `netstandard2.1`。
+当前在 .NET SDK 10 上的结果：281 项测试全部通过（覆盖核心库存投影、搜索匹配、AE2 屏幕样式与 JSON 边界、拖拽手势、工具提示排版、设置面板布局及按键控制等），0 失败，0 跳过。测试会校验 PNG 的尺寸和裁切边界，不替代 Unity 实机渲染验收。Core 目标仍为 `netstandard2.1`。
