@@ -1,6 +1,6 @@
 # 第三方许可审计与发布清单
 
-范围：当前 Unity 原生终端的源码、随包资源、构建和安装清单；用本机输出作交叉核对。历史网页版本和独立贴图预览器不算当前模组包。本记录区分已核实的许可与待确认的权利，不代替权利人的授权。
+范围：当前 Unity 原生终端的源码、随包资源、构建和安装清单；用本机输出作交叉核对。独立贴图预览器不随模组打包。若另行分发历史版本或完整 Git 历史，须核对其中仍含的第三方材料及其许可。本记录区分已核实的许可与待确认的权利，不代替权利人的授权。
 
 ## 自有源码可以选什么许可证？
 
@@ -43,7 +43,7 @@
 | Together、Just Unknown Characters | 可选联机兼容、可选拼音匹配；分别参考 [Together 上游的 LGPL-2.1 正文](https://github.com/creaturefeaturelarry/casualties-together/blob/main/LICENSE)（不视为已经与本机 5.5.4 二进制逐版对上）和 [JUC 自有源码的 MIT](https://github.com/XeronOwO/Just-Unknown-Characters/blob/master/LICENSE)。JUC 的拼音字典另有 [PinIn](https://github.com/Towdium/PinIn) 来源；本模组通过接口调用，不复制字典。 |
 | Unknown Enough Items（UEI）和 NeoForge | [UEI](https://github.com/MAakber/Unknown-Enough-Items)是输入拦截的参考，上游为 [MIT](https://github.com/MAakber/Unknown-Enough-Items/blob/main/LICENSE)，与本项目的工具提示实现无关。[兼容性记录](COMPATIBILITY.md)有同一补丁入口的简化示例；当前实现没有引用 UEI DLL。如确认发布的代码或文档重用了实质性源码，随相应内容保留原版权与 MIT 全文。[NeoForge](https://docs.neoforged.net/docs/1.21.1/misc/resourcelocation/)仅用于参考目录和资源命名约定。 |
 | MSTest、Microsoft.NET.Test.Sdk、FluentAssertions、开发用 Json.NET | [测试项目](../tests/UnknownInventoryTerminal.Tests/UnknownInventoryTerminal.Tests.csproj#L9-L15)使用的 MSTest、Test SDK、Json.NET 13.0.3 包声明 MIT。**[FluentAssertions 8.6.0](https://www.nuget.org/packages/FluentAssertions/8.6.0) 不是 MIT**：该 NuGet 包随附 Xceed 非商业社区许可。商业开发或 CI 不要默认沿用社区许可；取得适用商业许可或改用 MSTest 自带断言等替代品。不要把测试输出打进模组。 |
-| TexturePreviewer、历史 OreUI / WebUI | [贴图预览器](../tools/TexturePreviewer/TexturePreviewer.csproj)是独立本地 WPF 工具；如单独发布其[自包含程序](../tools/TexturePreviewer/Publish-TexturePreviewer.ps1)，需另外检查 .NET/WPF 运行时、原生库、Json.NET 和随包声明。[早期网页前端](webui-ae2-terminal.md)曾含 [MPL-2.0 的 OreUI](https://github.com/katorlys/OreUI/blob/main/LICENSE) 及字体；当前原生包不含这些文件。公开包含旧提交的完整 Git 历史或再发旧网页制品时，仍须另查 MPL 的通知及相应源码要求，并核实字体和其他素材的单独权利。 |
+| TexturePreviewer | [贴图预览器](../tools/TexturePreviewer/TexturePreviewer.csproj)是独立本地 WPF 工具；如单独发布其[自包含程序](../tools/TexturePreviewer/Publish-TexturePreviewer.ps1)，需另外检查 .NET/WPF 运行时、原生库、Json.NET 和随包声明。 |
 
 ## 发布前检查
 
