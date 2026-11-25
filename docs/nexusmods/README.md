@@ -39,6 +39,10 @@
 4. **语言选项。** 本模组界面内置 English / 简体中文；Nexus 页面语言建议选 English，并在描述里保留简体中文段落，方便中文玩家阅读。
 5. **截图与视频。** 本文件夹不包含截图。需要上传媒体素材时请在游戏内自行截图，不要使用仓库中与界面无关的贴图源文件。
 
+## 宣传图素材（本地草稿）
+
+`../../artwork/nexusmods/` 中的 1300×372 头图与 1920×1080 主图是基于离线界面预览 `../../TestResults/terminal-namespace-preview.png` 制作的产品视觉稿，均明确标注「非实机截图」，不能替代当前版本的游戏内截图。公开上传前，建议另拍 0.5.0 当前构建的实机画面，并核对 Nexus 上传器的裁切预览。两张图复用了 Applied Energistics 2 的 GUI 素材：Ridanisaurus Rid、AlgorithmX2 等；素材许可为 CC BY-NC-SA 3.0。改动包括从离线预览裁切、最近邻放大并编排至原创宣传构图。若公开分发，请一并注明来源及上述作者、将改编图按 CC BY-NC-SA 3.0 共享，并遵守署名、非商业及相同方式共享条件；商用须另获许可。详见 `../../assets/unknowninventoryterminal/NOTICE.txt`。
+
 ## 维护约定
 
 - 模组功能变化时，先更新 [README](../../README.md) 与 [CHANGELOG](../CHANGELOG.md)，再同步本文件夹的 `description.*` 与 `changelog-*.bbcode.txt`，避免 Nexus 页面与实际功能不一致。
