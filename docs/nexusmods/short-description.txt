@@ -1,0 +1,7 @@
+# NexusMods「Short description」候选文本
+# 字段上限 255 字符（含空格）；每段一行，直接整行复制即可。
+# 当前实测长度：英文 230 字符，简体中文 90 字符，均在限制内。
+
+A native Unity inventory terminal for Casualties: Unknown: a searchable 6-column storage grid, expanded equipment slots, precise fluid transfer, a pin bar and quick drag actions. Client-side; optional Together multiplayer support.
+
+《Casualties: Unknown》Unity 原生物品终端：六列可搜索聚合仓储、装备栏扩展、液体精确转移、固定栏与快捷拖拽动作；纯客户端，可选 Together 联机兼容。

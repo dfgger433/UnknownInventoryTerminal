@@ -82,3 +82,4 @@ Casualties Unknown 的客户端背包物品终端。本项目提供 Unity 原生
 - [兼容性依据和未实测风险](docs/COMPATIBILITY.md)
 - [终端界面与物品 API（含接入示例）](docs/TERMINAL-API.md)
 - [外部搜索 API](docs/SEARCH-API.md)
+- [NexusMods 发布文案（描述、权限与更新记录）](docs/nexusmods/README.md)

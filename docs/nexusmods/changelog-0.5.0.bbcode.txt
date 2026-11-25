@@ -1,0 +1,17 @@
+[b]0.5.0[/b]
+
+[b]Changes[/b]
+[list][*]Fixed vanilla tooltip state release when the terminal closes. The terminal no longer borrows or mutates the vanilla tooltip Canvas, menu state or raycast list, and keeps its own item tooltip.
+[*]Pinned items can now be dragged to reorder them. A reorder that crosses pages switches to the page of the item without moving the underlying items.
+[*]Client fluid draining reuses Together's existing synchronisation messages and keeps the sync check at the boundary where a container is emptied on the first pour. The host does not need UIT but needs a compatible Together version.
+[*]The "Keep item after action" toggle moved to the left of its label; open and closed hover animations are unchanged and the whole row stays clickable.
+[*]While dragging, the left action bar now lists only the actions that are currently valid; during a hold or confirmation state the selected button stays in place.
+[*]Restored the 21x26 variant of [i]vertical_buttons_bg_2.png[/i] and added it to the screen configuration and the installation manifest. The rebuilt file is pixel-tested but is not the original PNG bytes.[/list]
+
+[b]简体中文[/b]
+[list][*]修复终端退出后的原版悬浮框状态释放；终端不再借用或修改原版悬浮框的 Canvas，也不再临时改写菜单状态或射线列表，并保留终端自绘物品提示。
+[*]支持拖动固定栏中的物品调整顺序；跨页重排后会切换到物品所在页，不移动实际物品。
+[*]客机从背包倒空液体时复用 Together 的既有同步消息，并在首次倒液即清空容器的边界上保持同步校验；主机无需安装本模组，但需运行兼容的 Together。
+[*]设置页「动作后保留物品」开关移到文字左侧，保留开、关状态各自的悬停滑块动画，仍可点击整行切换。
+[*]拖动时左侧动作栏只排列当前可用的按钮；进入确认状态时，所选按钮留在原位。
+[*]恢复 [i]vertical_buttons_bg_2.png[/i] 的 21×26 像素变体，并加入屏幕资源配置和安装清单；该重建文件像素已测试，但不是原始 PNG 字节。[/list]
