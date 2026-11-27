@@ -17,9 +17,6 @@ namespace UnknownInventoryTerminal
         internal Item Source { get; } = source;
         internal Item Destination { get; } = destination;
 
-        internal static bool IsPair(Item source, Item destination) => source && destination && source != destination &&
-            source.GetComponent<WaterContainerItem>() && destination.GetComponent<WaterContainerItem>();
-
         internal int MaximumMl() => TryGetContainers(out var from, out var to)
             ? TerminalFluidAmount.MaximumMl(from.CurrentTotal, to.SpaceLeft) : 0;
 

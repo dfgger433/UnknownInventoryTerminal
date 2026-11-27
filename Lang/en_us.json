@@ -52,6 +52,7 @@
   "fluidTransfer.cancel": "Cancel",
   "fluidTransfer.unavailable": "Transfer unavailable. Check both containers and try again.",
   "fluidDrain.unavailable": "Liquid drain cannot be safely synchronized in this session; no liquid was changed.",
+  "itemInteraction.unavailable": "This item interaction cannot be synchronized in this session; no items were changed.",
   "terminal.status": "{0} / {1} items   |   {2} groups",
   "terminal.unavailable": "Inventory unavailable. Check the BepInEx log, then reopen the terminal.",
   "inventory.back": "< Groups",

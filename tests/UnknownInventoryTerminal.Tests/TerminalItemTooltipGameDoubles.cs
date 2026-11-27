@@ -4,26 +4,52 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using UnityEngine;
 
-// Minimal stand-ins for the live item, native formatter and global liquid definitions.
+// Minimal stand-ins for live items, inventory actions, tooltips and global liquid definitions.
 internal sealed class Item
 {
     internal ItemInfo Stats { get; init; } = new();
     internal string fullName { get; init; } = "Item";
     internal float totalWeight { get; init; }
     internal WaterContainerItem? Liquid { get; init; }
+    internal Container? Container { get; init; }
+    internal BatteryItem? battery { get; init; }
     internal Func<Item, (string, string)>? NativeTooltip { get; init; }
+
+    internal T? GetComponent<T>() where T : class => Liquid as T ?? Container as T;
 
     internal bool TryGetComponent<T>([NotNullWhen(true)] out T? component) where T : class
     {
-        component = Liquid as T;
+        component = GetComponent<T>();
         return component != null;
     }
 }
 
-internal sealed class ItemInfo
+internal class ItemInfo
 {
     internal string description { get; init; } = "Description";
     internal Recognition rec { get; init; } = new();
+    internal HashSet<string> Tags { get; } = new();
+    internal bool HasTag(string tag) => Tags.Contains(tag);
+}
+
+internal class BatteryInfo : ItemInfo
+{
+    internal float maxCharge { get; init; }
+}
+
+internal sealed class BatteryItem
+{
+    internal bool hasBattery { get; init; }
+    internal float maxAllowedCharge { get; init; } = 50f;
+    public static implicit operator bool(BatteryItem? battery) => battery != null;
+}
+
+internal sealed class Container;
+
+internal sealed class Body
+{
+    internal Func<Item, Item, bool> CanCombineItems { get; init; } = (_, _) => false;
+    internal bool CanCombine(Item target, Item source) => CanCombineItems(target, source);
 }
 
 internal sealed class Recognition

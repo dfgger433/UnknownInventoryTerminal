@@ -828,15 +828,17 @@ namespace UnknownInventoryTerminal
             uiCasts = Plugin.FilterHits(uiCasts);
             // Revalidate before passing any target to the game's release path.
             var source = __instance.dragItem;
-            if (!Plugin.CanInteract(__instance) || !GameInventoryAdapter.Owns(__instance.body, source))
+            if (!Application.isFocused || !Plugin.CanInteractWithDragActions(__instance) ||
+                !GameInventoryAdapter.Owns(__instance.body, source))
             { Plugin.CancelDrag(__instance); return false; }
             // DraggingPrefix owns action clicks/releases. A stale visual raycast must not fall
             // through to the inventory drop path if the item is no longer eligible.
             if (uiCasts.Count == 1 && Plugin.TryGetDragAction(uiCasts[0].gameObject, out _))
             { Plugin.CancelDrag(__instance); return false; }
+            if (Input.GetMouseButtonDown(1)) { Plugin.CancelDrag(__instance); return false; }
             var pointer = (Vector2)Input.mousePosition;
-            if (Vector2.Distance(pointer, __instance.clickPos) >= 10f && !Input.GetMouseButtonDown(1) &&
-                Plugin.ReorderPinnedItem(__instance, source, pointer)) return false;
+            var moved = (pointer - __instance.clickPos).sqrMagnitude >= 100f;
+            if (moved && Plugin.ReorderPinnedItem(__instance, source, pointer)) return false;
             if (Plugin.CanDiscardAtPointer(__instance, source, pointer))
             {
                 uiCasts = new DiscardRelease(__instance, source);
@@ -844,62 +846,84 @@ namespace UnknownInventoryTerminal
             }
             if (Plugin.IsTerminalPoint(pointer))
             {
-                var moved = Vector2.Distance(pointer, __instance.clickPos) >= 10f;
-                var top = uiCasts.FirstOrDefault().gameObject;
-                if (moved && !Input.GetMouseButtonDown(1) && Plugin.CanInteractWithDragActions(__instance) &&
-                    Plugin.IsTerminalDrag(__instance, source) && top && Plugin.IsInventorySurface(top) &&
-                    top.TryGetComponent<InvButton>(out var fluidTarget) &&
-                    fluidTarget.GetItem() is { } destination && TerminalFluidTransfer.IsPair(source, destination))
+                var topHit = uiCasts.FirstOrDefault();
+                var top = topHit.gameObject;
+                var topSlot = top ? top.GetComponentInParent<LoadoutCell>() : null;
+                // Only the real top item can receive an interaction, never the representative
+                // of an aggregate tile or a button underneath another terminal control.
+                if (moved && Plugin.IsTerminalDrag(__instance, source) && top && Plugin.IsInventorySurface(top) &&
+                    (!topSlot || topSlot!.IsCurrent(__instance)) && top.TryGetComponent<InvButton>(out var itemButton) &&
+                    itemButton.isActiveAndEnabled && itemButton.GetItem() is { } destination &&
+                    GameInventoryAdapter.Owns(__instance.body, destination))
                 {
-                    // Together's release hook also expects a registered drag item. Never hand it a
-                    // locally valid liquid pair that the active network cannot synchronize.
-                    if (!GameInventoryAdapter.CanSyncFluidTransfer(source, destination))
-                    {
-                        Plugin.CancelDrag(__instance);
-                        __instance.DoAlert(TerminalText.Get("fluidTransfer.unavailable"));
-                        return false;
-                    }
-                    // Even if the bottle is full or the source is empty, this is not a bag drop or slot swap.
-                    uiCasts = new FluidRelease(new TerminalFluidTransfer(__instance, source, destination));
-                    return true;
+                    var interaction = TerminalItemDrop.Classify(__instance.body, source, destination);
+                    if (interaction != TerminalItemInteraction.None)
+                        return RouteItemDrop(__instance, source, destination, interaction, topHit, ref uiCasts);
                 }
+
                 var slotHit = uiCasts.Find(hit => hit.gameObject && hit.gameObject.GetComponentInParent<LoadoutCell>());
                 if (slotHit.gameObject)
                 {
                     var slot = slotHit.gameObject.GetComponentInParent<LoadoutCell>();
                     var target = slot.Button;
-                    var equip = moved && slot.CanEquip(__instance, source);
-                    if (slot.IsCurrent(__instance) && (equip ||
-                        (target && target!.gameObject.activeInHierarchy && Plugin.ValidHit(ButtonHit(slotHit, target)) &&
-                            (moved ? CanDropOnLoadout(__instance, slot, target, source) : target.GetItem() == source))))
+                    if (slot.CanEquip(__instance, source) && moved)
                     {
-                        uiCasts = new List<RaycastResult> { equip ? slotHit : ButtonHit(slotHit, target!) };
+                        // The root explicitly requests equip; a child InvButton requests an item action.
+                        slotHit.gameObject = slot.gameObject;
+                        uiCasts = new List<RaycastResult> { slotHit };
+                        return true;
+                    }
+                    if (slot.IsCurrent(__instance) && target && target!.gameObject.activeInHierarchy &&
+                        Plugin.ValidHit(ButtonHit(slotHit, target)) &&
+                        (moved ? CanDropOnLoadout(__instance, slot, target, source) : target.GetItem() == source))
+                    {
+                        uiCasts = new List<RaycastResult> { ButtonHit(slotHit, target) };
                         return true;
                     }
                     Plugin.CancelDrag(__instance);
                     return false;
                 }
-            }
-            // Only the searchable storage grid uses the configured automatic container destination.
-            if (Plugin.IsTerminalPoint(pointer))
-            {
-                var destination = uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject))
+
+                // Only the searchable storage grid uses the configured automatic container destination.
+                var automaticTarget = uiCasts.Exists(hit => Plugin.IsInventorySurface(hit.gameObject))
                     ? Plugin.ResolveTerminalDrop(__instance) : null;
-                if (destination)
+                if (automaticTarget)
                 {
                     var hit = uiCasts.FirstOrDefault(result => result.module != null);
-                    hit.screenPosition = Input.mousePosition;
-                    uiCasts = new List<RaycastResult> { ButtonHit(hit, destination!) };
+                    hit.screenPosition = pointer;
+                    uiCasts = new List<RaycastResult> { ButtonHit(hit, automaticTarget!) };
                     return true;
                 }
                 // A click on its own storage tile can complete through the native release path.
-                if (Vector2.Distance(Input.mousePosition, __instance.clickPos) < 10f &&
-                    uiCasts.Exists(hit => hit.gameObject && hit.gameObject.TryGetComponent<InvButton>(out var button) &&
-                        button.GetItem() == __instance.dragItem)) return true;
+                if (!moved && uiCasts.Exists(hit => hit.gameObject && hit.gameObject.TryGetComponent<InvButton>(out var button) &&
+                    button.GetItem() == source)) return true;
             }
             // Blank content and non-discard releases over the shield do not change inventory.
             Plugin.CancelDrag(__instance);
             return false;
+        }
+
+        private static bool RouteItemDrop(PlayerCamera camera, Item source, Item target, TerminalItemInteraction interaction,
+            RaycastResult targetHit, ref List<RaycastResult> uiCasts)
+        {
+            if (interaction == TerminalItemInteraction.Battery && !TerminalItemDrop.CanApplyBattery(source, target))
+            {
+                Plugin.CancelDrag(camera);
+                return false; // A no-op battery drop must not become a swap or a bag move.
+            }
+            if (!GameInventoryAdapter.CanSyncItemDrop(interaction, source, target))
+            {
+                Plugin.CancelDrag(camera);
+                camera.DoAlert(TerminalText.Get(interaction == TerminalItemInteraction.Fluid
+                    ? "fluidTransfer.unavailable" : "itemInteraction.unavailable"));
+                return false;
+            }
+            // Give the exact InvButton to native HandleReleaseDragging. The game performs
+            // pickup checks, the actual action, and cleanup; Together sees the same target.
+            uiCasts = interaction == TerminalItemInteraction.Fluid
+                ? new FluidRelease(new TerminalFluidTransfer(camera, source, target))
+                : new List<RaycastResult> { targetHit };
+            return true;
         }
         private static RaycastResult ButtonHit(RaycastResult hit, InvButton button)
         {
@@ -958,7 +982,7 @@ namespace UnknownInventoryTerminal
             }
             if (!Plugin.CanInteract(__instance) || uiCasts.Count == 0 || !uiCasts[0].gameObject) return true;
             var source = __instance.dragItem;
-            var slot = uiCasts[0].gameObject.GetComponentInParent<LoadoutCell>();
+            var slot = uiCasts[0].gameObject.GetComponent<LoadoutCell>();
             if (!slot || Vector2.Distance(Input.mousePosition, __instance.clickPos) < 10f ||
                 !slot.CanEquip(__instance, source)) return true;
             // Call the native wear method inside HandleReleaseDragging so CCL's conflict
@@ -986,32 +1010,55 @@ namespace UnknownInventoryTerminal
             AccessTools.Method(ItemSyncType, "ItemCanBeIgnoredForNetwork", new[] { typeof(Item) });
         private static readonly MethodInfo? TransferPostfix = AccessTools.TypeByName("Together.LiquidTransfer_Finish_MultiplayerPatch") is { } patch ?
             AccessTools.Method(patch, "Postfix", new[] { typeof(LiquidTransfer) }) : null;
+        private static readonly MethodInfo? NativeInventoryAction = AccessTools.Method(typeof(PlayerCamera), "TryPerformInventoryAction");
+        private static readonly MethodInfo? TogetherInventoryPrefix = AccessTools.TypeByName("Together.PlayerCamera_TryPerformInventoryAction_MultiplayerPatch") is { } inventoryPatch ?
+            AccessTools.Method(inventoryPatch, "Prefix") : null;
+        private static readonly MethodInfo? NativeCombine = AccessTools.Method(typeof(Body), nameof(Body.CombineItems));
+        private static readonly MethodInfo? TogetherCombinePrefix = AccessTools.TypeByName("Together.Body_CombineItems_MultiplayerPatch") is { } combinePatch ?
+            AccessTools.Method(combinePatch, "Prefix") : null;
         private static readonly Type? DrainPatchType = AccessTools.TypeByName("Together.PlayerCamera_HandleWhileDragging_MultiplayerPatch");
         private static readonly MethodInfo? DrainPostfix = DrainPatchType == null ? null : AccessTools.Method(DrainPatchType, "Postfix");
         private static readonly FieldInfo? DrainingLiquid = DrainPatchType == null ? null : AccessTools.Field(DrainPatchType, "draining_liquid");
         private static readonly MethodInfo? NetworkWorldReady = AccessTools.TypeByName("Together.Multiplayer") is { } multiplayer ?
             AccessTools.Method(multiplayer, "IsNetworkActiveAndIsWorldGenerated", Type.EmptyTypes) : null;
 
-        internal static bool CanSyncFluidTransfer(Item source, Item destination)
+        internal static bool CanSyncFluidTransfer(Item source, Item destination) =>
+            CanSyncItemDrop(TerminalItemInteraction.Fluid, source, destination);
+
+        internal static bool CanSyncItemDrop(TerminalItemInteraction interaction, Item source, Item destination)
         {
             if (NetType == null) return true;
             try
             {
                 if (NetworkRunning?.GetValue(null) is not bool running) return false;
                 if (!running) return true;
-                // In multiplayer, don't mutate local liquid if Together cannot announce it.
-                return NetworkWorldReady?.Invoke(null, null) is true && TransferPostfix != null &&
-                    Harmony.GetPatchInfo(TerminalFluidTransfer.NativeFinish)?.Postfixes.Any(patch => patch.PatchMethod == TransferPostfix) == true &&
-                    IsRegistered(source) && IsRegistered(destination);
+                // Do not enter a native action whose Together hook could fall through to a local mutation.
+                if (NetworkWorldReady?.Invoke(null, null) is not true || !IsRegistered(source) || !IsRegistered(destination))
+                    return false;
+                return interaction switch
+                {
+                    TerminalItemInteraction.Fluid => TransferPostfix != null &&
+                        Harmony.GetPatchInfo(TerminalFluidTransfer.NativeFinish)?.Postfixes.Any(patch => patch.PatchMethod == TransferPostfix) == true,
+                    TerminalItemInteraction.Battery => HasPrefix(NativeInventoryAction, TogetherInventoryPrefix),
+                    TerminalItemInteraction.Combine => HasPrefix(NativeCombine, TogetherCombinePrefix),
+                    _ => false
+                };
             }
             catch (Exception ex)
             {
-                Plugin.Log.LogWarning("Together fluid transfer preflight failed: " + ex.Message);
+                Plugin.Log.LogWarning("Together item drop preflight failed: " + ex.Message);
                 return false;
             }
 
-            static bool IsRegistered(Item item) => IgnoreForNetwork?.Invoke(null, new object[] { item }) is false &&
-                TryGetSyncInfo?.Invoke(null, new object?[] { item, null }) is true;
+            static bool IsRegistered(Item item)
+            {
+                if (IgnoreForNetwork?.Invoke(null, new object[] { item }) is not false) return false;
+                var args = new object?[] { item, null };
+                return TryGetSyncInfo?.Invoke(null, args) is true && args[1] != null;
+            }
+
+            static bool HasPrefix(MethodInfo? native, MethodInfo? hook) => native != null && hook != null &&
+                Harmony.GetPatchInfo(native)?.Prefixes.Any(patch => patch.PatchMethod == hook) == true;
         }
 
         internal static bool CanStartFluidDrain(Item item) => item && item.TryGetComponent<WaterContainerItem>(out var liquid) &&

@@ -52,6 +52,7 @@
   "fluidTransfer.cancel": "取消",
   "fluidTransfer.unavailable": "容器状态已变化，无法转移。",
   "fluidDrain.unavailable": "当前联机无法安全同步倒液，液体未更改。",
+  "itemInteraction.unavailable": "当前联机无法同步这次物品交互，物品未更改。",
   "terminal.status": "{0} / {1} 件物品   |   {2} 组",
   "terminal.unavailable": "无法读取物品栏。请查看 BepInEx 日志后重试。",
   "inventory.back": "< 返回分组",

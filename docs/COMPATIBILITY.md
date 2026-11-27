@@ -90,13 +90,21 @@ Input.GetKeyDown(KeyBinds.GetBind("casualtiestogether_chat"))
 
 本机 Together 反编译确认：
 
-1. `Together.PlayerCamera_TryPerformInventoryAction_MultiplayerPatch` patch `PlayerCamera.TryPerformInventoryAction(PlayerCamera, ref bool, RaycastResult, List<RaycastResult>)`。它验证 `InvButton` 与 UI overlap，再处理电池操作、容器装入/倒入、组合、装备槽交换等路径。
+1. `Together.PlayerCamera_TryPerformInventoryAction_MultiplayerPatch` 补丁挂在 `PlayerCamera.TryPerformInventoryAction(RaycastResult, List<RaycastResult>)`。它验证 `InvButton` 与 UI overlap，再处理电池操作、容器装入/倒入、组合、装备槽交换等路径。
 2. `Container.LoadItem(Item)` 的 Together postfix 在 `PlayerCamera_TryPerformInventoryAction_MultiplayerPatch.is_inside_TryPerformInventoryAction` 为真且有 `ItemSync` 信息时加入 `ItemSync.ItemContainerChanged`。
 3. `Container.UnloadItem(Item, Body)` 的 Together prefix 同样在上述 inventory-action 作用域内登记 `ItemSync.ItemContainerChanged`。
 4. `ItemSync.Client_AnnounceContainerChange(SyncInfo)` 批量发送容器变更；`ItemSync.ItemGetContainerInfo(Item)` 将物品映射为身体槽、穿戴、表面库存或普通 `Container`，并携带 `syncId` / container version 等信息。
 5. Together 的 `ItemSync.SafeUnloadItem` 在卸载后若当前打开的容器相同，会调用 `PlayerCamera.main.RepopulateContainer()`；原版 `Container.LoadItem/UnloadItem` 和 `PlayerCamera.RepopulateContainer` 是 UI 状态的安全边界。
 
 因此“Original item menu”和“Drag with original controls”必须最终调用原版 `PlayerCamera`/`InvButton`/`Container` 路径（或在主线程模拟同一原版调用），不得从终端直接修改 transform、parent 或仅修改本地列表来宣称已同步。主机无需安装额外 mod 的前提是：客户端动作仍进入 Together 已有的原版 inventory-action patch 与 `ItemSync` 路径；本终端本身不新增网络消息。
+
+### 拖放到另一件物品
+
+将实际物品拖到另一件具体物品上时，电池拆装及原版 `Body.CanCombine` 认可的组合优先于自动入包和槽位移动。终端只转交目标 `InvButton`，仍由 `HandleReleaseDragging` 执行拾取检查，再由 `TryPerformInventoryAction` 完成操作。聚合格不是物品目标；液体转移、固定栏重排和普通容器放置沿用终端规则。
+
+已静态核对本机 Together **5.5.5.0**（SHA-256 `42DB2CB04FF204EBC83F1B3FB81B02BF977CD37088458429C4094C6660B040EC`）。电池拆装和物品组合走 Together 原有 Harmony 钩子，不新增消息。联机中如果世界未就绪、任一物品未注册或缺少相应钩子，终端取消这次交互，不回退到槽位移动或仅本地修改。
+
+实机验收：用带 `tool` 标签的工具分别拖放到仓储、手持槽和固定栏中装有电池的设备，确认设备失去电池、工具不被移动；再插回尺寸合适的电池。验证尺寸不符、电池仓已占用及对同一实例松手不会触发拆装或槽位移动。联机时需确认主客机的电池和库存状态一致。
 
 ### 拖出终端丢弃
 
