@@ -1,3 +1,4 @@
 # Keep the upstream license texts unchanged across checkouts.
 /LICENSE text eol=lf
 /assets/unknowninventoryterminal/licenses/modernity/LICENSE.txt -text
+/scripts/licenses/LGPL-3.0.txt -text
