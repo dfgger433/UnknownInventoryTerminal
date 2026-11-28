@@ -28,7 +28,7 @@ namespace UnknownInventoryTerminal
         private sealed class TilePointer : MonoBehaviour, IPointerClickHandler
         {
             internal NativeFlatInventoryPanel Owner = null!;
-            internal (string Type, string Parent)? Group;
+            internal (string Type, string? LiquidContents)? Group;
             internal int Count;
             internal InvButton? ItemButton;
             public void OnPointerClick(PointerEventData e)
@@ -65,7 +65,7 @@ namespace UnknownInventoryTerminal
         private readonly Ae2TerminalSkin _skin;
         private readonly NativeLoadoutPanel _loadout;
         private readonly TerminalPins<Body, Item> _pins = new(Ae2TerminalLayout.Columns);
-        private readonly Dictionary<(string Key, TileKind Kind), Tile> _tiles = new();
+        private readonly Dictionary<(string Key, TileKind Kind, string? LiquidContents), Tile> _tiles = new();
         private RectTransform? _pinnedRow;
         private Image? _pinnedGutter, _grooveTop, _pinnedHighlight;
         private TextMeshProUGUI? _pinPageLabel;
@@ -108,7 +108,7 @@ namespace UnknownInventoryTerminal
         private Ae2Image _actionBarArt = Ae2Image.VerticalButtonsBg;
         private TerminalDragAction _dragActionLayout;
         private IReadOnlyList<InventoryEntry> _entries = Array.Empty<InventoryEntry>();
-        private (string Type, string Parent)? _selectionKey;
+        private (string Type, string? LiquidContents)? _selectionKey;
         private Rect _bounds, _windowBounds, _scrollTrackBounds;
         private Ae2TerminalLayout _layout = new Ae2TerminalLayout(1280, 720);
         private Rect BoardBounds => new Rect(_windowBounds.x + _layout.BoardLeft, _windowBounds.y,
@@ -789,10 +789,10 @@ namespace UnknownInventoryTerminal
             MoveToRow(row);
         }
 
-        private (string Type, string Parent) RowKey(InventoryRow row) =>
-            (row.First.TypeId, "");
+        private static (string Type, string? LiquidContents) RowKey(InventoryRow row) =>
+            (row.First.TypeId, row.First.LiquidContentsKey);
 
-        private void ChangeSelection((string Type, string Parent)? key)
+        private void ChangeSelection((string Type, string? LiquidContents)? key)
         {
             _selectionKey = key;
             _scrollRow = 0;
@@ -835,21 +835,21 @@ namespace UnknownInventoryTerminal
                 _log.LogWarning("Native ContainerItem prefab is unavailable; flat interaction is disabled.");
                 _prefabWarning = true;
             }
-            var liveKeys = new HashSet<(string Key, TileKind Kind)>();
+            var liveKeys = new HashSet<(string Key, TileKind Kind, string? LiquidContents)>();
             var selection = _selectionKey.HasValue ? rows.FirstOrDefault(row => RowKey(row) == _selectionKey.Value) : null;
             if (selection == null) _selectionKey = null;
             var index = 0;
             if (prefab && selection != null)
             {
                 foreach (var entry in selection.Instances)
-                    Bind(prefab, (entry.InstanceKey, TileKind.Instance), (Item)entry.NativeItem, null, 1, ref index, liveKeys);
+                    Bind(prefab, (entry.InstanceKey, TileKind.Instance, null), (Item)entry.NativeItem, null, 1, ref index, liveKeys);
             }
             else if (prefab)
             {
                 foreach (var row in ordered)
                 {
                     var key = RowKey(row);
-                    Bind(prefab, (key.Type, TileKind.Group), (Item)row.First.NativeItem, row.Count > 1 ? key : null,
+                    Bind(prefab, (key.Type, TileKind.Group, key.LiquidContents), (Item)row.First.NativeItem, row.Count > 1 ? key : null,
                         row.Count, ref index, liveKeys);
                 }
             }
@@ -858,7 +858,7 @@ namespace UnknownInventoryTerminal
             {
                 index = 0;
                 foreach (var item in _pins.VisibleItems())
-                    Bind(prefab, (GameInventoryAdapter.Key(item), TileKind.Pinned), item, null, 1, ref index, liveKeys);
+                    Bind(prefab, (GameInventoryAdapter.Key(item), TileKind.Pinned, null), item, null, 1, ref index, liveKeys);
             }
             foreach (var key in _tiles.Keys.Where(key => !liveKeys.Contains(key)).ToArray())
             {
@@ -872,9 +872,9 @@ namespace UnknownInventoryTerminal
             _dirty = false;
         }
 
-        private void Bind(GameObject prefab, (string Key, TileKind Kind) key, Item item,
-            (string Type, string Parent)? group, int count, ref int index,
-            HashSet<(string Key, TileKind Kind)> liveKeys)
+        private void Bind(GameObject prefab, (string Key, TileKind Kind, string? LiquidContents) key, Item item,
+            (string Type, string? LiquidContents)? group, int count, ref int index,
+            HashSet<(string Key, TileKind Kind, string? LiquidContents)> liveKeys)
         {
             try
             {

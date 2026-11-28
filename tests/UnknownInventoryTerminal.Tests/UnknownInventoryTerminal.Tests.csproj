@@ -25,6 +25,7 @@
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalDragGesture.cs" Link="TerminalDragGesture.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Integration\Game\TerminalItemDrop.cs" Link="TerminalItemDrop.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalFluidAmount.cs" Link="TerminalFluidAmount.cs" />
+    <Compile Include="..\..\src\UnknownInventoryTerminal\Integration\Game\LiquidContentsSnapshot.cs" Link="LiquidContentsSnapshot.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Interaction\TerminalPins.cs" Link="TerminalPins.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Equipment\Ae2EquipmentSlots.cs" Link="Ae2EquipmentSlots.cs" />
     <Compile Include="..\..\src\UnknownInventoryTerminal\Presentation\Layout\SettingsRowColumns.cs" Link="SettingsRowColumns.cs" />

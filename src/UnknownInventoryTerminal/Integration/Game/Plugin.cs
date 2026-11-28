@@ -1162,7 +1162,7 @@ namespace UnknownInventoryTerminal
                 if (!containerItem) continue;
                 var sprite = item.GetComponent<SpriteRenderer>();
                 result.Add(new InventoryEntry(Key(item), item.id, item.fullName, Key(container), containerItem.fullName,
-                    item, sprite ? sprite.sprite : null));
+                    item, sprite ? sprite.sprite : null, LiquidContentsSnapshot.CaptureKey(item)));
             }
             return result.AsReadOnly();
         }

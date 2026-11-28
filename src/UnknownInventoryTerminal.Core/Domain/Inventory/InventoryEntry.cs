@@ -19,6 +19,19 @@ namespace UnknownInventoryTerminal.Core
         /// <param name="icon">Optional native sprite or texture.</param>
         public InventoryEntry(string instanceKey, string typeId, string displayName,
             string containerKey, string containerName, object nativeItem, object? icon = null)
+            : this(instanceKey, typeId, displayName, containerKey, containerName, nativeItem, icon, null) { }
+
+        /// <summary>Creates an immutable projection that includes the contents of a liquid container.</summary>
+        /// <param name="instanceKey">Unique identity within the current game process.</param>
+        /// <param name="typeId">Case-sensitive game item ID.</param>
+        /// <param name="displayName">Current localized item name.</param>
+        /// <param name="containerKey">Unique parent container identity.</param>
+        /// <param name="containerName">Human-readable parent path.</param>
+        /// <param name="nativeItem">Real item reference; never a reconstructed item.</param>
+        /// <param name="icon">Optional native sprite or texture.</param>
+        /// <param name="liquidContentsKey">Canonical key for the liquid types present; empty for an empty container, null when not applicable.</param>
+        public InventoryEntry(string instanceKey, string typeId, string displayName,
+            string containerKey, string containerName, object nativeItem, object? icon, string? liquidContentsKey)
         {
             if (string.IsNullOrEmpty(instanceKey)) throw new ArgumentException("Instance key is required.", nameof(instanceKey));
             InstanceKey = instanceKey;
@@ -28,6 +41,7 @@ namespace UnknownInventoryTerminal.Core
             ContainerName = containerName ?? throw new ArgumentNullException(nameof(containerName));
             NativeItem = nativeItem ?? throw new ArgumentNullException(nameof(nativeItem));
             Icon = icon;
+            LiquidContentsKey = liquidContentsKey;
         }
         /// <summary>Unique instance identity, independent of type ID.</summary>
         public string InstanceKey { get; }
@@ -43,14 +57,16 @@ namespace UnknownInventoryTerminal.Core
         public object NativeItem { get; }
         /// <summary>Native sprite or texture; null when unavailable.</summary>
         public object? Icon { get; }
+        /// <summary>Canonical liquid-type key; empty for empty liquid containers, null for other items.</summary>
+        public string? LiquidContentsKey { get; }
     }
 
     /// <summary>Display grouping mode. Neither mode mutates native inventories.</summary>
     public enum InventoryViewMode
     {
-        /// <summary>Combine all instances with the same exact item type ID.</summary>
+        /// <summary>Combine instances with the same exact item type ID and liquid contents key.</summary>
         Merged,
-        /// <summary>Keep containers distinct and group types inside each container.</summary>
+        /// <summary>Keep parent containers distinct and group by item type and liquid contents within each.</summary>
         ByContainer
     }
 
@@ -72,7 +88,7 @@ namespace UnknownInventoryTerminal.Core
     /// <summary>Builds filtered, sorted display rows without changing the source snapshot.</summary>
     public static class InventoryProjection
     {
-        /// <summary>Deduplicates instance identities, filters, then groups by exact type and parent identity.</summary>
+        /// <summary>Deduplicates instance identities, filters, then groups by exact type, liquid contents and optional parent identity.</summary>
         /// <param name="source">Snapshot of native item projections.</param>
         /// <param name="mode">Merged or by-container view.</param>
         /// <param name="search">Search matcher registry.</param>
@@ -86,12 +102,14 @@ namespace UnknownInventoryTerminal.Core
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var matches = search.Compile(query);
             var entries = source.Where(e => seen.Add(e.InstanceKey) && matches(e));
-            return Array.AsReadOnly(entries.GroupBy(e => new { e.TypeId, Parent = mode == InventoryViewMode.ByContainer ? e.ContainerKey : "" })
+            return Array.AsReadOnly(entries.GroupBy(e => (e.TypeId, e.LiquidContentsKey,
+                    Parent: mode == InventoryViewMode.ByContainer ? e.ContainerKey : ""))
                 .Select(g => new InventoryRow(g.OrderBy(e => e.InstanceKey, StringComparer.Ordinal)))
                 .OrderBy(r => mode == InventoryViewMode.ByContainer ? r.First.ContainerName : "", StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.First.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.First.TypeId, StringComparer.Ordinal)
-                .ThenBy(r => r.First.ContainerKey, StringComparer.Ordinal).ToArray());
+                .ThenBy(r => mode == InventoryViewMode.ByContainer ? r.First.ContainerKey : "", StringComparer.Ordinal)
+                .ThenBy(r => r.First.LiquidContentsKey, StringComparer.Ordinal).ToArray());
         }
     }
 }
